@@ -8,11 +8,11 @@ class DeepLDiff::Request
   def_delegators :DeepLDiff, :api, :cache_store, :rate_limiter
   def_delegators :"DeepLDiff::Linearizer", :linearize, :restore
 
-  def initialize(values, options)
+  def initialize(values, from: nil, to: nil, **options)
     @values = values
-    # #from and #to consume their keys so the rest can go to the API as-is.
-    # Copy first: the caller's hash is theirs, and it is often frozen.
-    @options = options.dup
+    @from = from
+    @to = to
+    @options = options
   end
 
   def call
@@ -25,14 +25,10 @@ class DeepLDiff::Request
 
   private
 
-  attr_reader :values, :options
+  attr_reader :values, :options, :to
 
   def from
-    @from ||= options.delete(:from) || detect_language
-  end
-
-  def to
-    @to ||= options.delete(:to) { nil }
+    @from ||= detect_language
   end
 
   # A detected language arrives as a String while :to is usually a Symbol, so

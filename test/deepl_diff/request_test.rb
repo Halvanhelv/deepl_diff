@@ -96,28 +96,18 @@ class RequestTest < Minitest::Test
     assert_equal [[%w[One Black So Red that], :en, :ru, {}]], api.calls
   end
 
-  # The options hash belongs to the caller. Consuming :from and :to out of it
-  # broke the second call with the same hash, and blew up outright on a frozen
-  # one -- which is what a hash of settings kept in a constant is.
-  def test_leaves_the_callers_options_hash_alone
+  # Keyword arguments collect a fresh hash on every call, which is what
+  # made the 2.1.0 fix for the consumed-hash bug unnecessary here.
+  def test_a_splatted_options_hash_survives_repeated_calls
     options = { from: :en, to: :ru }
 
     DeepLDiff.api = FakeApi.new(["Какая-то строка", "Какая-то строка"])
     DeepLDiff.cache_store = FakeCacheStore.new
 
     2.times do
-      assert_equal "Какая-то строка", DeepLDiff::Request.new("Some string", options).call
+      assert_equal "Какая-то строка", DeepLDiff.translate("Some string", **options)
     end
     assert_equal({ from: :en, to: :ru }, options)
-  end
-
-  def test_accepts_a_frozen_options_hash
-    DeepLDiff.api = FakeApi.new(["Какая-то строка"])
-    DeepLDiff.cache_store = FakeCacheStore.new
-
-    result = DeepLDiff::Request.new("Some string", { from: :en, to: :ru }.freeze).call
-
-    assert_equal "Какая-то строка", result
   end
 
   # A detected language comes back as a String while :to is usually a Symbol,
@@ -128,7 +118,7 @@ class RequestTest < Minitest::Test
     DeepLDiff.api = api
     DeepLDiff.cache_store = FakeCacheStore.new
 
-    result = DeepLDiff::Request.new("привет", { to: :ru }).call
+    result = DeepLDiff::Request.new("привет", to: :ru).call
 
     assert_equal "привет", result
     assert_equal 1, api.calls.size, "only the detection call should be made"
@@ -139,7 +129,7 @@ class RequestTest < Minitest::Test
     DeepLDiff.cache_store = FakeCacheStore.new
 
     error = assert_raises(DeepLDiff::Request::Error) do
-      DeepLDiff::Request.new({ a: "One", b: "Two" }, { from: :en, to: :ru }).call
+      DeepLDiff::Request.new({ a: "One", b: "Two" }, from: :en, to: :ru).call
     end
 
     assert_match(/returned 1 translations for 2 values/, error.message)
@@ -154,7 +144,7 @@ class RequestTest < Minitest::Test
       DeepLDiff.api = api
       DeepLDiff.cache_store = FakeCacheStore.new
 
-      assert_equal value, DeepLDiff::Request.new(value, { from: :en, to: :ru }).call
+      assert_equal value, DeepLDiff::Request.new(value, from: :en, to: :ru).call
       assert_empty api.calls
     end
   end
@@ -164,7 +154,7 @@ class RequestTest < Minitest::Test
     DeepLDiff.api = api
     DeepLDiff.cache_store = FakeCacheStore.new
 
-    assert_nil DeepLDiff::Request.new(nil, { from: :en, to: :ru }).call
+    assert_nil DeepLDiff::Request.new(nil, from: :en, to: :ru).call
     assert_empty api.calls
   end
 
@@ -174,7 +164,7 @@ class RequestTest < Minitest::Test
     DeepLDiff.api = FakeApi.new(%w[Один])
     DeepLDiff.cache_store = FakeCacheStore.new
 
-    result = DeepLDiff::Request.new({ a: "One", n: 42, skip: nil }, { from: :en, to: :ru }).call
+    result = DeepLDiff::Request.new({ a: "One", n: 42, skip: nil }, from: :en, to: :ru).call
 
     assert_equal({ a: "Один", n: 42, skip: "" }, result)
   end
@@ -186,7 +176,7 @@ class RequestTest < Minitest::Test
     DeepLDiff.api = api
     DeepLDiff.cache_store = FakeCacheStore.new
 
-    DeepLDiff::Request.new({ a: "One", b: "Two" }, { from: :en, to: :ru }).call
+    DeepLDiff::Request.new({ a: "One", b: "Two" }, from: :en, to: :ru).call
 
     assert_equal 2, api.calls.size, "one call per text at a batch size of 1"
   end
@@ -200,6 +190,6 @@ class RequestTest < Minitest::Test
     DeepLDiff.api = api
     DeepLDiff.cache_store = FakeCacheStore.new
 
-    [DeepLDiff::Request.new(values, { from: :en, to: :ru }).call, api]
+    [DeepLDiff::Request.new(values, from: :en, to: :ru).call, api]
   end
 end
