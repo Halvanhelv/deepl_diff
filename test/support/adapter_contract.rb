@@ -11,9 +11,12 @@ module AdapterContract
   end
 
   def test_translate_preserves_order
-    result = adapter.translate(%w[first second], from: :en, to: :ru)
+    texts = %w[first second third]
+    individually = texts.map { |text| adapter.translate([text], from: :en, to: :ru).first }
+    batched = adapter.translate(texts, from: :en, to: :ru)
 
-    refute_equal result[0], result[1]
+    assert_equal 3, batched.size
+    assert_equal individually, batched
   end
 
   def test_translate_accepts_provider_options
