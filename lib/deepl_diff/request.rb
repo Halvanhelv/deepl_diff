@@ -100,7 +100,11 @@ class DeepLDiff::Request
   # (groups less 2k sym)
   # => [[ ..., "Good", "Boy", ... ]]
   def chunks
-    @chunks ||= DeepLDiff::Chunker.new(text_tokens_texts).call
+    @chunks ||= DeepLDiff::Chunker.new(
+      text_tokens_texts,
+      limit: api.max_request_size,
+      count_limit: api.max_batch_size
+    ).call
   end
 
   # Translates/loads from cache values from each chunk

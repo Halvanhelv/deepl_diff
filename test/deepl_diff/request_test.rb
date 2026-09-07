@@ -9,11 +9,13 @@ class RequestTest < Minitest::Test
   # Records what it was asked to translate so the call can be asserted on,
   # and answers with a canned response.
   class FakeApi
-    attr_reader :calls
+    attr_reader :calls, :max_request_size, :max_batch_size
 
-    def initialize(response, detected: nil)
+    def initialize(response, detected: nil, max_request_size: 1_000_000, max_batch_size: 1_000_000)
       @response = response
       @detected = detected
+      @max_request_size = max_request_size
+      @max_batch_size = max_batch_size
       @calls = []
     end
 
@@ -21,7 +23,8 @@ class RequestTest < Minitest::Test
       @calls << [text, from, to, options]
       return Detection.new(@detected) if from.nil?
 
-      @response.map { |value| Translation.new(value) }
+      taken = @response.shift(Array(text).size)
+      taken.map { |value| Translation.new(value) }
     end
   end
 
@@ -99,7 +102,7 @@ class RequestTest < Minitest::Test
   def test_leaves_the_callers_options_hash_alone
     options = { from: :en, to: :ru }
 
-    DeepLDiff.api = FakeApi.new(["Какая-то строка"])
+    DeepLDiff.api = FakeApi.new(["Какая-то строка", "Какая-то строка"])
     DeepLDiff.cache_store = FakeCacheStore.new
 
     2.times do
@@ -174,6 +177,18 @@ class RequestTest < Minitest::Test
     result = DeepLDiff::Request.new({ a: "One", n: 42, skip: nil }, { from: :en, to: :ru }).call
 
     assert_equal({ a: "Один", n: 42, skip: "" }, result)
+  end
+
+  # Proves the generalisation took effect rather than merely being
+  # described: an adapter declaring tiny limits must change the batching.
+  def test_batches_according_to_the_limits_the_adapter_declares
+    api = FakeApi.new(%w[Один Два], max_batch_size: 1)
+    DeepLDiff.api = api
+    DeepLDiff.cache_store = FakeCacheStore.new
+
+    DeepLDiff::Request.new({ a: "One", b: "Two" }, { from: :en, to: :ru }).call
+
+    assert_equal 2, api.calls.size, "one call per text at a batch size of 1"
   end
 
   private
