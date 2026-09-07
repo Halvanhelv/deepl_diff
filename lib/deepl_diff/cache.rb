@@ -1,9 +1,13 @@
 # frozen_string_literal: true
 
 class DeepLDiff::Cache
-  def initialize(from, to)
+  DIGEST_LENGTH = 8
+
+  def initialize(from, to, provider:, options: {})
     @from = from
     @to = to
+    @provider = provider
+    @options = options
   end
 
   def cached_and_missing(values)
@@ -22,7 +26,7 @@ class DeepLDiff::Cache
 
   private
 
-  attr_reader :from, :to
+  attr_reader :from, :to, :provider, :options
 
   def store_value(value, translation)
     cache_store.write(key(value), translation)
@@ -31,7 +35,27 @@ class DeepLDiff::Cache
 
   def key(value)
     hash = Digest::MD5.hexdigest(value.strip) # No matter how much spaces
-    "#{from}:#{to}:#{hash}"
+
+    [provider, language(from), language(to), options_digest, hash].compact.join(":")
+  end
+
+  # "EN" and :en are the same language; without this they are two entries
+  # for identical work.
+  def language(code)
+    code.to_s.downcase
+  end
+
+  # Two calls differing only in formality or glossary are two different
+  # translations and must not share a key.
+  def options_digest
+    return @options_digest if defined?(@options_digest)
+
+    @options_digest =
+      if options.empty?
+        nil
+      else
+        Digest::MD5.hexdigest(options.sort_by { |key, _| key.to_s }.inspect)[0, DIGEST_LENGTH]
+      end
   end
 
   def cache_store

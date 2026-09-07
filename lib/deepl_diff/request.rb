@@ -171,7 +171,7 @@ class DeepLDiff::Request
   end
 
   def cache
-    @cache ||= DeepLDiff::Cache.new(from, to)
+    @cache ||= DeepLDiff::Cache.new(from, to, provider: api.cache_key, options: options)
   end
 
   def check_rate_limit(values)
