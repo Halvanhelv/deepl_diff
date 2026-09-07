@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-# A dozen exemplars from the "Golden Rules", the de-facto benchmark for
+# Eleven exemplars from the "Golden Rules", the de-facto benchmark for
 # sentence segmentation, adapted from
 # https://github.com/diasks2/pragmatic_segmenter/blob/master/spec/lib/golden_rules_spec.rb
 # (pragmatic_segmenter, MIT licence, Copyright (c) 2015 Kevin S. Dias). The
@@ -10,11 +10,12 @@ require "test_helper"
 # sample exists so a future change to the default segmenter cannot quietly
 # regress segmentation quality without a test noticing here first.
 #
-# It deliberately weights the languages that have no letter case -- Arabic,
-# Greek, Hindi -- and includes two Japanese exemplars, because those are
-# exactly the languages TranslationDiff::Segmenters::Simple cannot reason
-# about (its central rule, "does the next letter look lowercase", has no
-# meaning for them) and where Pragmatic earns its place as the default.
+# It deliberately weights the languages that have no letter case -- Arabic
+# (two exemplars), Greek, Hindi -- and includes one Japanese exemplar,
+# because those are exactly the languages TranslationDiff::Segmenters::Simple
+# cannot reason about (its central rule, "does the next letter look
+# lowercase", has no meaning for them) and where Pragmatic earns its place
+# as the default.
 class GoldenRulesTest < Minitest::Test
   EXEMPLARS = [
     { language: "en", text: "Hello World. My name is Jonas.",

@@ -182,6 +182,14 @@ Two segmenters ship with this gem:
   unit instead of three. That shape does not arise in this gem's actual
   input -- HTML list items are separated by markup into distinct text nodes
   already -- so the point is a deliberate trade, not a regression to chase.
+
+  Language codes are normalised before reaching `pragmatic_segmenter`:
+  downcased, with any region subtag after `-` or `_` dropped, and checked
+  against the codes `pragmatic_segmenter` actually has rules for, falling
+  back to English otherwise. DeepL -- this gem's own flagship adapter --
+  sends codes exactly like `"RU"` and `"EN-GB"`; without normalising,
+  `pragmatic_segmenter`'s own lookup is case-sensitive and region-blind, so
+  those would silently miss their rule set entirely.
 - **`TranslationDiff::Segmenters::Simple`** is a zero-dependency, in-house
   segmenter. It splits conservatively on punctuation followed by whitespace,
   guarded by a handful of signals (a known abbreviation, an initial, digits on
@@ -200,15 +208,22 @@ segmented text to build its sample, so segmentation cannot wait for it -- and
 languages (Russian abbreviations, for one). `Simple` ignores the argument
 entirely; its rules are language-neutral.
 
-`Pragmatic` raises `TranslationDiff::Segmenters::Pragmatic::Error` (a
-`TranslationDiff::Error`) if a sentence `pragmatic_segmenter` returns cannot be
-found, in order, in the newline-shadowed text -- rather than guessing at an
-offset and silently corrupting the document. Newline shadowing closes the
-most common way this could happen, but not every way: `pragmatic_segmenter`'s
-cleaner unconditionally deletes certain formatting artefacts it treats as
-noise (an inline-formatting marker left by some PDF/OCR extraction tools, for
-one), in every language, independent of newlines -- this is what the raise
-still protects against.
+`pragmatic_segmenter`'s cleaner rewrites the sentences it hands back in ways
+shadowing does not cover -- it collapses runs of three or more spaces, and it
+respaces abbreviations like `"Ph.D."` into `"Ph. D."`, among other things --
+so the sentence `Pragmatic` gets back does not always appear verbatim in the
+source any more. `Pragmatic` never guesses at an offset it cannot verify: it
+walks the returned sentences in order, keeps every offset it locates, and
+stops at the first one it cannot. The unrecoverable remainder of the text
+then stands as one final unit instead of being sliced further. This is a
+*coarsening*, not a failure -- the text still translates correctly, the cache
+unit is just larger than it could have been -- and it is silent by design,
+the same way a segmenter simply not splitting a node has always been
+acceptable. `TranslationDiff::Segmenters::Pragmatic::Error` (a
+`TranslationDiff::Error`) still exists and is still raised, but only if
+`Pragmatic` itself computes offsets that violate its own postcondition
+(starting at 0, strictly increasing, all within the text) -- not by ordinary
+use of `pragmatic_segmenter`, however it rewrites a sentence.
 
 ## Errors
 
@@ -226,9 +241,9 @@ TranslationDiff::Error
 ├── TranslationDiff::Chunker::Error        # a single value is larger than the
 │                                           # adapter's max_request_size
 ├── TranslationDiff::Segmenters::Pragmatic::Error
-│                                           # a sentence pragmatic_segmenter
-│                                           # returned cannot be found in the
-│                                           # source text
+│                                           # Pragmatic computed offsets that
+│                                           # violate its own postcondition --
+│                                           # not raised by ordinary use
 └── TranslationDiff::RedisRateLimiter::RateLimitExceeded
 ```
 

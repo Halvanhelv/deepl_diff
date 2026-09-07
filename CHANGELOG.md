@@ -41,7 +41,13 @@ First release under the name **translation_diff**. This gem was published as
   language and falls back to English rules without one, which can
   mis-segment other languages (Russian abbreviations, for one); `from:` is
   the only way a caller supplies it, and only when segmentation happens
-  before language detection would need to run.
+  before language detection would need to run. `Segmenters::Pragmatic`
+  normalises the code first -- downcased, region subtag dropped -- and falls
+  back to English for anything `pragmatic_segmenter` does not recognise
+  afterward. Without this, DeepL's own codes (`"RU"`, `"EN-GB"`) missed their
+  rule set entirely: `pragmatic_segmenter`'s lookup is case-sensitive and
+  region-blind, so this gem's own flagship adapter was hitting the broken
+  path on every call.
 
 ### Added
 
@@ -58,10 +64,19 @@ First release under the name **translation_diff**. This gem was published as
   (76 -> 75: a bare list of items separated by single newlines, with no
   punctuation, now segments as one unit instead of three) -- a deliberate
   trade, since that shape does not arise in this gem's actual input. It
-  recovers offsets from the strings `pragmatic_segmenter` returns by
-  locating each one in the shadow, in order; if a returned sentence cannot
-  be found there, it raises `TranslationDiff::Segmenters::Pragmatic::Error`
-  rather than guessing at an offset and silently corrupting the document.
+  recovers offsets from the strings `pragmatic_segmenter` returns by locating
+  each one in the shadow, in order, and keeps every offset it locates; the
+  first sentence it cannot locate (`pragmatic_segmenter`'s cleaner also
+  collapses runs of three or more spaces and respaces abbreviations such as
+  `"Ph.D."`, among other things it rewrites) ends the search, and the
+  unrecoverable remainder of the text stands as one final unit. This is a
+  coarsening, not a failure -- every offset it ever emits has been verified,
+  so the cache unit is simply larger, never wrong. It never guesses an
+  offset it did not verify. `TranslationDiff::Segmenters::Pragmatic::Error`
+  exists for the one case that would still be silent corruption -- offsets
+  it computed itself violating their own postcondition (start at 0, strictly
+  increase, stay within the text) -- not for ordinary `pragmatic_segmenter`
+  rewriting.
 - `TranslationDiff::Segmenters::Simple` (formerly `TranslationDiff::Segmenter`,
   renamed and moved to its own namespace alongside `Pragmatic`), the
   zero-dependency, in-house sentence segmenter this gem shipped with before

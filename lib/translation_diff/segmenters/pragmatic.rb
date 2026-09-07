@@ -11,26 +11,34 @@ require "pragmatic_segmenter"
 # corpus -- and the gap is worst on exactly the languages Simple cannot
 # reason about at all: Arabic, Hindi, Armenian, Greek, because they have no
 # letter case for Simple's central "does the next letter look lowercase"
-# rule to use. (The `pragmatic_segmenter` library itself scores 78/80 on
-# this corpus. The three-point difference is not a bug -- two exemplars are
-# ones where the library's cleaner silently rewrites the source, e.g.
-# deleting a raw newline it treats as a PDF line-wrap artefact, which this
-# class refuses to do invisibly; see #recover_offsets. The third is the
-# deliberate cost of newline shadowing below: one English exemplar shaped
-# like a bare, punctuation-free list separated by single newlines segments
-# as one unit instead of three. That shape does not arise in this gem's
-# actual input -- HTML list items are separated by markup into distinct text
-# nodes already, so a newline inside one text node is incidental source
-# formatting, essentially always -- and it is a missed boundary, the
-# harmless direction, traded away to close a false-split error class that
-# does arise in real input. See #shadow_newlines.)
+# rule to use.
 #
 # `pragmatic_segmenter` returns sentence strings, not offsets, and drops the
 # whitespace between them. This gem reassembles the source document from
 # offsets (see TranslationDiff::Segmenters::Simple), so the strings have to
 # be turned back into split points by finding each one in the source, in
 # order, starting the search where the previous one left off.
+#
+# That recovery is only as good as the assumption that each returned
+# sentence still appears verbatim in the text pragmatic_segmenter was given
+# -- and pinned version 0.3.24's cleaner does not preserve that in every
+# case. It collapses runs of three or more spaces inside a sentence, it
+# respaces "Ph.D." into "Ph. D.", and (language-specific) its Japanese rules
+# delete a "\n" that follows "の". None of these are rare: an English
+# sentence mentioning a degree, or HTML indented with more than two spaces,
+# hits one of them routinely. #recover_offsets does not raise when this
+# happens. It recovers every offset it can verify, in order, and stops at
+# the first sentence it cannot -- the unverifiable remainder of the text
+# stands as one final unit instead. This is a coarsening, not a fallback:
+# every offset this class ever emits has been proved to exist at that
+# position in the source, so the document reassembles exactly either way:
+# the cache unit is just bigger when recovery stops early.
 class TranslationDiff::Segmenters::Pragmatic
+  # Raised only if #split_offsets itself computed offsets that violate its
+  # own postcondition (start at 0, strictly increasing, all within the
+  # text) -- not by ordinary use of pragmatic_segmenter, however it rewrites
+  # a sentence. Kept as public API: it is documented in the README's error
+  # tree, and a caller may already rescue it.
   class Error < TranslationDiff::Error; end
 
   # pragmatic_segmenter defaults to English rules when no language is given.
@@ -55,7 +63,9 @@ class TranslationDiff::Segmenters::Pragmatic
     sentences = segment(shadow, language)
     return [0] if sentences.size <= 1
 
-    recover_offsets(text, shadow, sentences)
+    offsets = recover_offsets(shadow, sentences)
+    assert_valid_offsets(text, offsets)
+    offsets
   end
 
   private
@@ -75,56 +85,93 @@ class TranslationDiff::Segmenters::Pragmatic
   # The fix is to segment a shadow copy with single newlines replaced by a
   # single space, then recover offsets against that shadow and slice the
   # *original* text at them. "\n" and " " are both one character, so the
-  # shadow is guaranteed the same length as the source and every offset
-  # recovered from it is valid in the source too -- the guard below asserts
-  # that rather than assuming it, so a future change to the substitution
-  # cannot silently corrupt a document.
+  # shadow is always the same length as the source and every offset
+  # recovered from it is a valid index into the source too -- there is no
+  # length check here because a one-character-for-one-character `gsub`
+  # cannot produce one; #assert_valid_offsets checks the postcondition this
+  # class actually depends on instead.
   def shadow_newlines(text)
-    shadow = text.gsub(SINGLE_NEWLINE, " ")
-    return shadow if shadow.length == text.length
+    text.gsub(SINGLE_NEWLINE, " ")
+  end
 
-    raise Error, "newline shadowing changed the text length (#{text.length} -> " \
-                 "#{shadow.length}) -- refusing to recover offsets against a " \
-                 "shadow of a different shape than the source. text: #{text.inspect}"
+  # Normalises a caller-supplied language code to one pragmatic_segmenter
+  # actually has rules for: downcased, with any region subtag dropped
+  # (DeepL, this gem's own flagship adapter, sends uppercase codes such as
+  # "EN" and "EN-GB"; PragmaticSegmenter::Languages.get_language_by_code is
+  # case-sensitive and knows nothing about region subtags, so "RU" and
+  # "ru-RU" would otherwise silently fall through to Common, not even to the
+  # documented English fallback). An unrecognised code, once normalised,
+  # falls back to DEFAULT_LANGUAGE explicitly, landing on English rules
+  # rather than on Common.
+  def normalize_language(language)
+    code = language.to_s.downcase.split(/[-_]/, 2).first
+    return DEFAULT_LANGUAGE unless PragmaticSegmenter::Languages::LANGUAGE_CODES.key?(code)
+
+    code
   end
 
   def segment(shadow, language)
-    PragmaticSegmenter::Segmenter.new(text: shadow, language: language || DEFAULT_LANGUAGE).segment
+    PragmaticSegmenter::Segmenter.new(text: shadow, language: normalize_language(language)).segment
   end
 
   # Recovers split points by scanning the shadow for each sentence
   # pragmatic_segmenter returned, in order, each search starting where the
-  # previous sentence's match ended. This is only valid because the
-  # sentences are known (measured, not assumed) to appear verbatim and in
-  # order in the shadow -- but that is a property of a third-party library's
-  # output, not a guarantee, so a sentence that cannot be found raises
-  # rather than silently falling back to something plausible. A silent
-  # fallback here would corrupt the document: offsets feed straight into
-  # slicing the original text back apart.
+  # previous sentence's match ended. Every sentence located this way
+  # contributes a verified offset. The first sentence that cannot be
+  # located -- because pragmatic_segmenter's cleaner rewrote it, see the
+  # class comment -- ends the walk: the offsets collected so far are
+  # returned, and the remainder of the text becomes one final unit rather
+  # than being sliced on a guess.
   #
-  # Shadowing shrinks this raise's surface (it fixed the one confirmed real
-  # trigger -- see test/translation_diff/segmenters/pragmatic_test.rb) but
-  # does not make it unreachable: it protects only against this gem's own
-  # newline-related assumptions, not against whatever else a future
-  # pragmatic_segmenter release's cleaner might rewrite.
-  def recover_offsets(text, shadow, sentences)
-    offsets = [0]
+  # An empty sentence, or one that resolves to the cursor's current position
+  # without advancing past it, is skipped rather than walked into: an empty
+  # match would otherwise emit the same offset twice in a row (a
+  # non-increasing "boundary" that is not a boundary at all) and could stall
+  # the cursor forever.
+  def recover_offsets(shadow, sentences)
     cursor = 0
+    starts = []
 
-    sentences.each_with_index do |sentence, index|
-      start = shadow.index(sentence, cursor)
-      raise Error, not_found_message(text, sentence) if start.nil?
+    sentences.each do |sentence|
+      match = locate(shadow, sentence, cursor)
+      break if match == :unlocatable
+      next unless match
 
-      offsets << start unless index.zero?
-      cursor = start + sentence.length
+      starts << match[0]
+      cursor = match[1]
     end
 
-    offsets
+    # The first located sentence's own start is never a split point -- it is
+    # where offset 0 already covers -- only the ones after it are.
+    [0] + starts.drop(1)
   end
 
-  def not_found_message(text, sentence)
-    "pragmatic_segmenter returned a sentence that cannot be located, in order, " \
-      "in the newline-shadowed source text -- refusing to guess at offsets. " \
-      "sentence: #{sentence.inspect}, text: #{text.inspect}"
+  # Returns [start, next_cursor] for a sentence found at or after cursor;
+  # :unlocatable if it cannot be found at all (ending the walk in
+  # #recover_offsets); or nil to skip it without moving the cursor (an empty
+  # sentence, or one that resolves to the cursor's current position without
+  # advancing past it).
+  def locate(shadow, sentence, cursor)
+    return nil if sentence.empty?
+
+    start = shadow.index(sentence, cursor)
+    return :unlocatable if start.nil?
+
+    next_cursor = start + sentence.length
+    next_cursor > cursor ? [start, next_cursor] : nil
+  end
+
+  # The postcondition every caller of #split_offsets depends on: offsets
+  # start at 0, strictly increase, and every one is a valid index into the
+  # text. #recover_offsets is built to guarantee this by construction: this
+  # asserts it rather than trusting that construction forever, since a wrong
+  # offset here would silently corrupt the document it feeds back into.
+  def assert_valid_offsets(text, offsets)
+    return if offsets.first.zero? &&
+              offsets.each_cons(2).all? { |a, b| a < b } &&
+              offsets.all? { |offset| offset < text.length }
+
+    raise Error, "computed offsets #{offsets.inspect} do not start at 0, strictly increase, and stay " \
+                 "within the text -- refusing to hand them back. text: #{text.inspect}"
   end
 end
