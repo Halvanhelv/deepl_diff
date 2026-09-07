@@ -31,7 +31,7 @@ First release under the name **translation_diff**. This gem was published as
   [`pragmatic_segmenter`](https://github.com/diasks2/pragmatic_segmenter) gem
   (MIT, zero dependencies of its own) -- so `ox` and `pragmatic_segmenter` are
   now the gem's only two runtime dependencies. Measured against a sample of
-  the Golden Rules corpus, the default now scores 76/80 against punkt's
+  the Golden Rules corpus, the default now scores 75/80 against punkt's
   38/80 and the old in-house segmenter's 47/80; the gap is largest on
   languages with no letter case at all -- Arabic, Hindi, Armenian, Greek --
   which the in-house segmenter cannot reason about by design (see
@@ -46,11 +46,22 @@ First release under the name **translation_diff**. This gem was published as
 ### Added
 
 - `TranslationDiff::Segmenters::Pragmatic`, the default sentence segmenter,
-  wrapping `pragmatic_segmenter`'s per-language rule sets. It recovers
-  offsets from the strings `pragmatic_segmenter` returns by locating each one
-  in the source, in order; if a returned sentence cannot be found there, it
-  raises `TranslationDiff::Segmenters::Pragmatic::Error` rather than
-  guessing at an offset and silently corrupting the document.
+  wrapping `pragmatic_segmenter`'s per-language rule sets. Before
+  segmenting, it shadows every single newline (one with no adjoining
+  newline) to a space in a copy of the text -- `pragmatic_segmenter`
+  otherwise treats almost any single newline as a sentence boundary
+  candidate even with no punctuation at all, a false split that HTML text
+  nodes routinely trigger via incidental source-formatting newlines -- then
+  segments the shadow and recovers offsets against it, so the *original*
+  text, newline included, reaches the output untouched. Blank-line runs
+  (real paragraph breaks) are left alone. This costs one Golden Rules point
+  (76 -> 75: a bare list of items separated by single newlines, with no
+  punctuation, now segments as one unit instead of three) -- a deliberate
+  trade, since that shape does not arise in this gem's actual input. It
+  recovers offsets from the strings `pragmatic_segmenter` returns by
+  locating each one in the shadow, in order; if a returned sentence cannot
+  be found there, it raises `TranslationDiff::Segmenters::Pragmatic::Error`
+  rather than guessing at an offset and silently corrupting the document.
 - `TranslationDiff::Segmenters::Simple` (formerly `TranslationDiff::Segmenter`,
   renamed and moved to its own namespace alongside `Pragmatic`), the
   zero-dependency, in-house sentence segmenter this gem shipped with before

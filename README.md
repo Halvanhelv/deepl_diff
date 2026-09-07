@@ -164,10 +164,24 @@ Two segmenters ship with this gem:
   which ships per-language rule sets rather than one rule set applied to every
   script. Measured against a sample of the Golden Rules corpus, the de-facto
   benchmark for sentence segmentation (see
-  `test/translation_diff/golden_rules_test.rb`), it scores 76/80 against
+  `test/translation_diff/golden_rules_test.rb`), it scores 75/80 against
   `Simple`'s 47/80, and the gap is largest on languages that have no letter
   case at all -- Arabic, Hindi, Armenian, Greek -- which `Simple` cannot
   reason about by design.
+
+  Before segmenting, `Pragmatic` replaces every single newline (one with no
+  adjoining newline) with a space in a shadow copy of the text, segments the
+  shadow, and slices the *original* text at the recovered offsets --
+  `pragmatic_segmenter` otherwise treats almost any single newline as a
+  sentence boundary candidate even with no punctuation at all, which is a
+  false split (the harmful kind) on the incidental newlines that HTML text
+  nodes routinely carry from source formatting. A run of two or more
+  newlines (a real paragraph break) is left alone. This costs one Golden
+  Rules point (76 -> 75): one exemplar shaped like a bare list of items
+  separated by single newlines, with no punctuation, now segments as one
+  unit instead of three. That shape does not arise in this gem's actual
+  input -- HTML list items are separated by markup into distinct text nodes
+  already -- so the point is a deliberate trade, not a regression to chase.
 - **`TranslationDiff::Segmenters::Simple`** is a zero-dependency, in-house
   segmenter. It splits conservatively on punctuation followed by whitespace,
   guarded by a handful of signals (a known abbreviation, an initial, digits on
@@ -188,11 +202,13 @@ entirely; its rules are language-neutral.
 
 `Pragmatic` raises `TranslationDiff::Segmenters::Pragmatic::Error` (a
 `TranslationDiff::Error`) if a sentence `pragmatic_segmenter` returns cannot be
-found in the source text -- rather than guessing at an offset and silently
-corrupting the document. This is rare but real: `pragmatic_segmenter` treats
-some raw newlines as line-wrap noise from badly-extracted documents and
-deletes them, and if that happens in a sentence that is not the last one in
-the node, the cleaned-up sentence no longer appears in the original text.
+found, in order, in the newline-shadowed text -- rather than guessing at an
+offset and silently corrupting the document. Newline shadowing closes the
+most common way this could happen, but not every way: `pragmatic_segmenter`'s
+cleaner unconditionally deletes certain formatting artefacts it treats as
+noise (an inline-formatting marker left by some PDF/OCR extraction tools, for
+one), in every language, independent of newlines -- this is what the raise
+still protects against.
 
 ## Errors
 
