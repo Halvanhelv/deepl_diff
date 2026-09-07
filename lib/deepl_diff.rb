@@ -9,6 +9,10 @@ require "ox"
 require "punkt-segmenter"
 
 require "deepl_diff/version"
+
+module DeepLDiff::Adapters; end
+
+require "deepl_diff/adapters/null"
 require "deepl_diff/tokenizer"
 require "deepl_diff/linearizer"
 require "deepl_diff/chunker"
@@ -18,6 +22,7 @@ require "deepl_diff/redis_cache_store"
 require "deepl_diff/redis_rate_limiter"
 require "deepl_diff/request"
 
+# rubocop:disable-next Style/OneClassPerFile
 module DeepLDiff
   class << self
     attr_accessor :api, :cache_store, :rate_limiter
