@@ -25,9 +25,25 @@ First release under the name **translation_diff**. This gem was published as
   codes. Nothing cached by `deepl_diff` -- or by an earlier `translation_diff`
   prerelease -- is reused. The next translation of every sentence is a cache
   miss, once, everywhere.
+- Dropped `punkt-segmenter` and, with it, its `unicode_utils` dependency.
+  `ox` is now the gem's only runtime dependency. Sentence boundaries are
+  produced by the new `TranslationDiff::Segmenter` instead; because it is
+  more conservative than punkt trained on a single short text, a few texts
+  that punkt used to over-split into fragments now stay together as one
+  cache unit (see the comparison notes in the segmenter work for examples).
 
 ### Added
 
+- `TranslationDiff::Segmenter`, an in-house sentence segmenter that replaces
+  `punkt-segmenter`. It is deliberately conservative: it splits only on a
+  handful of strong signals (a terminator followed by whitespace and an
+  uppercase or CJK next character, none of the guard conditions -- a known
+  abbreviation, an initial, digits on both sides, or a URL/email --
+  matching) so that a missed sentence boundary, which only costs a cache
+  hit, is always preferred over a false one, which sends half a sentence to
+  the translation provider. `TranslationDiff.segmenter` is swappable the
+  same way `TranslationDiff.api` and `.cache_store` are, defaulting to
+  `TranslationDiff::Segmenter.new`.
 - `TranslationDiff::Adapters::DeepL` and `TranslationDiff::Adapters::Null`.
 - `test/support/adapter_contract.rb`, the executable form of the adapter
   contract; any third-party adapter can include it to verify it behaves as

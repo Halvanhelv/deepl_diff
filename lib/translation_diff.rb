@@ -6,7 +6,6 @@ require "forwardable"
 require "stringio"
 
 require "ox"
-require "punkt-segmenter"
 
 require "translation_diff/version"
 require "translation_diff/error"
@@ -14,6 +13,7 @@ require "translation_diff/error"
 require "translation_diff/adapters"
 require "translation_diff/adapters/null"
 require "translation_diff/adapters/deepl"
+require "translation_diff/segmenter"
 require "translation_diff/tokenizer"
 require "translation_diff/linearizer"
 require "translation_diff/chunker"
@@ -26,9 +26,14 @@ require "translation_diff/request"
 module TranslationDiff
   class << self
     attr_accessor :api, :cache_store, :rate_limiter
+    attr_writer :segmenter
 
     def translate(values, from: nil, to: nil, **)
       Request.new(values, from: from, to: to, **).call
+    end
+
+    def segmenter
+      @segmenter ||= TranslationDiff::Segmenter.new
     end
   end
 
