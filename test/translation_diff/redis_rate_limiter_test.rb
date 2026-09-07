@@ -37,7 +37,7 @@ class RedisRateLimiterTest < Minitest::Test
 
     limiter(redis).check(120)
 
-    assert_equal [["deepl-diff", "call", 8000, 60]], redis.checks
+    assert_equal [["translation-diff", "call", 8000, 60]], redis.checks
     assert_equal [120], redis.added
   end
 
@@ -54,7 +54,7 @@ class RedisRateLimiterTest < Minitest::Test
   def test_check_raises_once_the_threshold_is_passed
     redis = FakeRedis.new(exceeded: true)
 
-    assert_raises(DeepLDiff::RedisRateLimiter::RateLimitExceeded) do
+    assert_raises(TranslationDiff::RedisRateLimiter::RateLimitExceeded) do
       limiter(redis).check(1)
     end
     assert_empty redis.added
@@ -63,6 +63,6 @@ class RedisRateLimiterTest < Minitest::Test
   private
 
   def limiter(redis, **)
-    DeepLDiff::RedisRateLimiter.new(FakeConnectionPool.new(redis), **)
+    TranslationDiff::RedisRateLimiter.new(FakeConnectionPool.new(redis), **)
   end
 end

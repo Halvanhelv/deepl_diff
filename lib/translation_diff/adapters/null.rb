@@ -2,7 +2,7 @@
 
 # Hands back what it was given. For tests, and for wiring a pipeline up
 # before a real provider is available.
-class DeepLDiff::Adapters::Null
+class TranslationDiff::Adapters::Null
   # No #detect on purpose: detection is optional in the contract, and this
   # is the adapter that proves the optional branch works.
   # rubocop:disable-next Lint/UnusedMethodArgument

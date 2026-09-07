@@ -115,7 +115,7 @@ class TokenizerTest < Minitest::Test
 
   CASES.each do |name, (source, expected)|
     define_method(:"test_tokenizes_#{name}") do
-      assert_equal expected, DeepLDiff::Tokenizer.tokenize(source)
+      assert_equal expected, TranslationDiff::Tokenizer.tokenize(source)
     end
   end
 end

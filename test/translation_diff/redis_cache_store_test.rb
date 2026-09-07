@@ -46,7 +46,7 @@ class RedisCacheStoreTest < Minitest::Test
     redis = FakeRedis.new(%w[one two])
 
     assert_equal %w[one two], store(redis).read_multi(%w[a b])
-    assert_equal [[:mget, %w[deepl-diff:a deepl-diff:b]]], redis.calls
+    assert_equal [[:mget, %w[translation-diff:a translation-diff:b]]], redis.calls
   end
 
   def test_write_expires_after_a_week_by_default
@@ -54,7 +54,7 @@ class RedisCacheStoreTest < Minitest::Test
 
     store(redis).write("a", "b")
 
-    assert_equal [[:setex, "deepl-diff:a", 604_800, "b"]], redis.calls
+    assert_equal [[:setex, "translation-diff:a", 604_800, "b"]], redis.calls
   end
 
   def test_write_honours_a_custom_timeout_and_namespace
@@ -68,6 +68,6 @@ class RedisCacheStoreTest < Minitest::Test
   private
 
   def store(redis, **)
-    DeepLDiff::RedisCacheStore.new(FakeConnectionPool.new(redis), **)
+    TranslationDiff::RedisCacheStore.new(FakeConnectionPool.new(redis), **)
   end
 end

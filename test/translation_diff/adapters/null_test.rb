@@ -7,7 +7,7 @@ class NullAdapterTest < Minitest::Test
   include AdapterContract
 
   def adapter
-    DeepLDiff::Adapters::Null.new
+    TranslationDiff::Adapters::Null.new
   end
 
   def test_translate_returns_the_input_unchanged

@@ -2,12 +2,12 @@
 
 lib = File.expand_path("lib", __dir__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require "deepl_diff/version"
+require "translation_diff/version"
 
 # rubocop:disable-next Metrics/BlockLength
 Gem::Specification.new do |spec|
-  spec.name          = "deepl_diff"
-  spec.version       = DeepLDiff::VERSION
+  spec.name          = "translation_diff"
+  spec.version       = TranslationDiff::VERSION
   spec.authors       = ["Islam Gagiev"]
   spec.email         = ["omniacinis@gmail.com"]
 
@@ -20,7 +20,7 @@ between revisions of long texts.
 DeepL API wrapper for Ruby which helps to translate only changes
 between revisions of long texts.
   )
-  spec.homepage = "https://github.com/Halvanhelv/deepl_diff"
+  spec.homepage = "https://github.com/Halvanhelv/translation_diff"
   spec.required_ruby_version = ">= 3.2"
 
   if spec.respond_to?(:metadata)
@@ -32,15 +32,6 @@ between revisions of long texts.
     raise "RubyGems 2.0 or newer is required to protect against " \
           "public gem pushes."
   end
-
-  spec.post_install_message = <<~MESSAGE
-    deepl_diff is being replaced by translation_diff, which supports
-    translation providers other than DeepL.
-
-    This version of deepl_diff keeps working and will not change again.
-
-    https://rubygems.org/gems/translation_diff
-  MESSAGE
 
   spec.files = `git ls-files -z`.split("\x0").reject do |f|
     f.match(%r{^(test|spec|features)/})

@@ -3,7 +3,7 @@
 # Wraps a deepl-rb client. That gem is not a dependency of this one: the
 # client arrives as an argument and the ::DeepL default resolves at call
 # time, so an application that never uses this adapter never needs it.
-class DeepLDiff::Adapters::DeepL
+class TranslationDiff::Adapters::DeepL
   # DeepL requires a target language even when only the detection is
   # wanted, so the adapter picks one rather than making the caller do it.
   DETECTION_TARGET = "EN"

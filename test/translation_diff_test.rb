@@ -2,8 +2,8 @@
 
 require "test_helper"
 
-class DeepLDiffTest < Minitest::Test
+class TranslationDiffTest < Minitest::Test
   def test_has_a_version_number
-    refute_nil DeepLDiff::VERSION
+    refute_nil TranslationDiff::VERSION
   end
 end

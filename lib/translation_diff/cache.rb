@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class DeepLDiff::Cache
+class TranslationDiff::Cache
   class Error < StandardError; end
 
   # An application uses a handful of distinct option sets, so 32 bits of
@@ -74,6 +74,6 @@ class DeepLDiff::Cache
   end
 
   def cache_store
-    DeepLDiff.cache_store
+    TranslationDiff.cache_store
   end
 end

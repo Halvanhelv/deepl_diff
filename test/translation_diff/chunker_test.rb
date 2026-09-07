@@ -37,7 +37,7 @@ class ChunkerTest < Minitest::Test
   end
 
   def test_raises_when_a_single_value_exceeds_the_limit
-    error = assert_raises(DeepLDiff::Chunker::Error) { chunk([OVERSIZED]) }
+    error = assert_raises(TranslationDiff::Chunker::Error) { chunk([OVERSIZED]) }
 
     assert_match(/Too long part/, error.message)
   end
@@ -56,7 +56,7 @@ class ChunkerTest < Minitest::Test
   end
 
   def test_raises_when_the_escaped_size_of_one_value_exceeds_the_limit
-    error = assert_raises(DeepLDiff::Chunker::Error) { chunk(["я" * 4]) }
+    error = assert_raises(TranslationDiff::Chunker::Error) { chunk(["я" * 4]) }
 
     assert_match(/Too long part 24 > 20/, error.message)
   end
@@ -64,6 +64,6 @@ class ChunkerTest < Minitest::Test
   private
 
   def chunk(values)
-    DeepLDiff::Chunker.new(values, limit: LIMIT, count_limit: COUNT_LIMIT).call
+    TranslationDiff::Chunker.new(values, limit: LIMIT, count_limit: COUNT_LIMIT).call
   end
 end

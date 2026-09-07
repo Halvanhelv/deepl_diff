@@ -27,7 +27,7 @@ class DeepLAdapterTest < Minitest::Test
   end
 
   def adapter(client = FakeClient.new)
-    DeepLDiff::Adapters::DeepL.new(client)
+    TranslationDiff::Adapters::DeepL.new(client)
   end
 
   def test_translate_unwraps_the_text_of_each_result
