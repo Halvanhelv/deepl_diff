@@ -1,0 +1,28 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Push the version tag when `rake release` creates one.
+      contents: write
+      # Mint the OIDC token RubyGems trusted publishing authenticates with.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - run: bundle exec rspec
+
+      - uses: rubygems/release-gem@v1
