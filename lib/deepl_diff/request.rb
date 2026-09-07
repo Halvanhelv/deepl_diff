@@ -8,11 +8,11 @@ class DeepLDiff::Request
   def_delegators :DeepLDiff, :api, :cache_store, :rate_limiter
   def_delegators :"DeepLDiff::Linearizer", :linearize, :restore
 
-  def initialize(values, options)
+  def initialize(values, from: nil, to: nil, **options)
     @values = values
-    # #from and #to consume their keys so the rest can go to the API as-is.
-    # Copy first: the caller's hash is theirs, and it is often frozen.
-    @options = options.dup
+    @from = from
+    @to = to
+    @options = options
   end
 
   def call
@@ -25,14 +25,10 @@ class DeepLDiff::Request
 
   private
 
-  attr_reader :values, :options
+  attr_reader :values, :options, :to
 
   def from
-    @from ||= options.delete(:from) || detect_language
-  end
-
-  def to
-    @to ||= options.delete(:to) { nil }
+    @from ||= detect_language
   end
 
   # A detected language arrives as a String while :to is usually a Symbol, so
@@ -49,8 +45,9 @@ class DeepLDiff::Request
   end
 
   def detect_language
-    api.translate(text_tokens_texts.join(" ")[0..100], nil, to)
-       .detected_source_language.downcase
+    raise Error, "Pass from: -- #{api.class} cannot detect the source language" unless api.respond_to?(:detect)
+
+    api.detect(text_tokens_texts.join(" ")[0..100])
   end
 
   def validate_globals
@@ -100,7 +97,11 @@ class DeepLDiff::Request
   # (groups less 2k sym)
   # => [[ ..., "Good", "Boy", ... ]]
   def chunks
-    @chunks ||= DeepLDiff::Chunker.new(text_tokens_texts).call
+    @chunks ||= DeepLDiff::Chunker.new(
+      text_tokens_texts,
+      limit: api.max_request_size,
+      count_limit: api.max_batch_size
+    ).call
   end
 
   # Translates/loads from cache values from each chunk
@@ -160,17 +161,17 @@ class DeepLDiff::Request
 
   def call_api(values)
     check_rate_limit(values)
-    translations = [api.translate(values, from, to, options)].flatten.map(&:text)
+    translations = api.translate(values, from: from, to: to, **options)
     return translations if translations.size == values.size
 
     # Letting a short response through means shifting nils into the results,
     # which surfaces much later as a NoMethodError far from the cause.
     raise Error,
-          "API returned #{translations.size} translations for #{values.size} values"
+          "Adapter returned #{translations.size} translations for #{values.size} values"
   end
 
   def cache
-    @cache ||= DeepLDiff::Cache.new(from, to)
+    @cache ||= DeepLDiff::Cache.new(from, to, provider: api.cache_key, options: options)
   end
 
   def check_rate_limit(values)

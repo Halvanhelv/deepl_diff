@@ -9,6 +9,10 @@ require "ox"
 require "punkt-segmenter"
 
 require "deepl_diff/version"
+
+require "deepl_diff/adapters"
+require "deepl_diff/adapters/null"
+require "deepl_diff/adapters/deepl"
 require "deepl_diff/tokenizer"
 require "deepl_diff/linearizer"
 require "deepl_diff/chunker"
@@ -22,8 +26,8 @@ module DeepLDiff
   class << self
     attr_accessor :api, :cache_store, :rate_limiter
 
-    def translate(*)
-      Request.new(*).call
+    def translate(values, from: nil, to: nil, **)
+      Request.new(values, from: from, to: to, **).call
     end
   end
 

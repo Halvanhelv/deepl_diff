@@ -5,10 +5,10 @@ class DeepLDiff::Chunker
 
   Chunk = Struct.new(:texts, :escaped_size)
 
-  MAX_CHUNK_SIZE = 1700
-  COUNT_LIMIT = 300
-
-  def initialize(values, limit: MAX_CHUNK_SIZE, count_limit: COUNT_LIMIT)
+  # No defaults. With one provider a default looks meaningful; with two it
+  # silently lies about the second, which is the class of bug this file
+  # already had once.
+  def initialize(values, limit:, count_limit:)
     @values = values
     @limit = limit
     @count_limit = count_limit
