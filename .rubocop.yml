@@ -13,7 +13,7 @@ Style/ClassAndModuleChildren:
 
 Metrics/BlockLength:
   Exclude:
-    - spec/**/*
+    - test/**/*
 
 Layout/LineLength:
   Max: 120
@@ -24,3 +24,5 @@ Gemspec/DevelopmentDependencies:
 Metrics/ClassLength:
   Exclude:
     - lib/deepl_diff/tokenizer.rb
+    # Test classes are mostly tables of cases.
+    - test/**/*
