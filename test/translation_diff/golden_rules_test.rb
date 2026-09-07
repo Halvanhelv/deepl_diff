@@ -3,12 +3,13 @@
 require "test_helper"
 
 # Eleven exemplars from the "Golden Rules", the de-facto benchmark for
-# sentence segmentation, adapted from
-# https://github.com/diasks2/pragmatic_segmenter/blob/master/spec/lib/golden_rules_spec.rb
-# (pragmatic_segmenter, MIT licence, Copyright (c) 2015 Kevin S. Dias). The
-# full corpus (79 exemplars across 10 languages) lives outside this repo; this
-# sample exists so a future change to the default segmenter cannot quietly
-# regress segmentation quality without a test noticing here first.
+# sentence segmentation, adapted from the `context "Golden Rules" do` block
+# of each per-language spec file under spec/pragmatic_segmenter/languages/
+# on https://github.com/diasks2/pragmatic_segmenter (MIT licence, Copyright
+# (c) 2015 Kevin S. Dias). The full corpus (80 exemplars across 10
+# languages) lives outside this repo; this sample exists so a future change
+# to the default segmenter cannot quietly regress segmentation quality
+# without a test noticing here first.
 #
 # It deliberately weights the languages that have no letter case -- Arabic
 # (two exemplars), Greek, Hindi -- and includes one Japanese exemplar,

@@ -4,14 +4,15 @@ require "pragmatic_segmenter"
 
 # Splits a string into sentence-sized cache units using the
 # `pragmatic_segmenter` gem's per-language rule sets. This is the default
-# segmenter: measured against a sample of the Golden Rules corpus (79
-# exemplars across 10 languages, from the pragmatic_segmenter project
-# itself; see test/translation_diff/golden_rules_test.rb), this class scores
-# 75/80 against TranslationDiff::Segmenters::Simple's 47/80 on the same
-# corpus -- and the gap is worst on exactly the languages Simple cannot
-# reason about at all: Arabic, Hindi, Armenian, Greek, because they have no
-# letter case for Simple's central "does the next letter look lowercase"
-# rule to use.
+# segmenter: measured against the Golden Rules corpus -- the
+# `context "Golden Rules" do` block of each of the 10 per-language spec
+# files on diasks2/pragmatic_segmenter, 80 exemplars in total; a sample of
+# the same corpus is in test/translation_diff/golden_rules_test.rb -- this
+# class scores 76/80 against TranslationDiff::Segmenters::Simple's 47/80 on
+# the same corpus -- and the gap is worst on exactly the languages Simple
+# cannot reason about at all: Arabic, Hindi, Armenian, Greek, because they
+# have no letter case for Simple's central "does the next letter look
+# lowercase" rule to use.
 #
 # `pragmatic_segmenter` returns sentence strings, not offsets, and drops the
 # whitespace between them. This gem reassembles the source document from

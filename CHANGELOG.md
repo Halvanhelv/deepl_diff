@@ -30,12 +30,15 @@ First release under the name **translation_diff**. This gem was published as
   defaulting to `TranslationDiff::Segmenters::Pragmatic`, backed by the
   [`pragmatic_segmenter`](https://github.com/diasks2/pragmatic_segmenter) gem
   (MIT, zero dependencies of its own) -- so `ox` and `pragmatic_segmenter` are
-  now the gem's only two runtime dependencies. Measured against a sample of
-  the Golden Rules corpus, the default now scores 75/80 against punkt's
-  38/80 and the old in-house segmenter's 47/80; the gap is largest on
-  languages with no letter case at all -- Arabic, Hindi, Armenian, Greek --
-  which the in-house segmenter cannot reason about by design (see
-  `test/translation_diff/golden_rules_test.rb`).
+  now the gem's only two runtime dependencies. Measured against the Golden
+  Rules corpus -- the `context "Golden Rules" do` block of each of the 10
+  per-language spec files on `diasks2/pragmatic_segmenter`, 80 exemplars in
+  total; a sample of the same corpus is in
+  `test/translation_diff/golden_rules_test.rb` -- the default now scores
+  76/80 against punkt's 38/80 and the old in-house segmenter's 47/80; the
+  gap is largest on languages with no letter case at all -- Arabic, Hindi,
+  Armenian, Greek -- which the in-house segmenter cannot reason about by
+  design.
 - `TranslationDiff.segmenter.split_offsets` now takes a second, optional
   `language:` keyword argument. `pragmatic_segmenter` picks its rule set by
   language and falls back to English rules without one, which can
@@ -61,7 +64,7 @@ First release under the name **translation_diff**. This gem was published as
   segments the shadow and recovers offsets against it, so the *original*
   text, newline included, reaches the output untouched. Blank-line runs
   (real paragraph breaks) are left alone. This costs one Golden Rules point
-  (76 -> 75: a bare list of items separated by single newlines, with no
+  (77 -> 76: a bare list of items separated by single newlines, with no
   punctuation, now segments as one unit instead of three) -- a deliberate
   trade, since that shape does not arise in this gem's actual input. It
   recovers offsets from the strings `pragmatic_segmenter` returns by locating

@@ -162,12 +162,34 @@ Two segmenters ship with this gem:
 - **`TranslationDiff::Segmenters::Pragmatic`** (the default) wraps the
   [`pragmatic_segmenter`](https://github.com/diasks2/pragmatic_segmenter) gem,
   which ships per-language rule sets rather than one rule set applied to every
-  script. Measured against a sample of the Golden Rules corpus, the de-facto
-  benchmark for sentence segmentation (see
-  `test/translation_diff/golden_rules_test.rb`), it scores 75/80 against
+  script. Measured against the Golden Rules corpus, the de-facto benchmark for
+  sentence segmentation -- the `context "Golden Rules" do` block of each of
+  the 10 per-language spec files on `diasks2/pragmatic_segmenter`, 80
+  exemplars in total; a sample of the same corpus is in
+  `test/translation_diff/golden_rules_test.rb` -- it scores 76/80 against
   `Simple`'s 47/80, and the gap is largest on languages that have no letter
   case at all -- Arabic, Hindi, Armenian, Greek -- which `Simple` cannot
   reason about by design.
+
+  Of the 4 exemplars `Pragmatic` misses, 3 are not boundary disagreements at
+  all: `pragmatic_segmenter`'s own expected value rewrites an incidental
+  newline into a space before comparing --
+
+      "This is a sentence\ncut off in the middle because pdf."
+        expected ["This is a sentence cut off in the middle because pdf."]
+        ours     ["This is a sentence\ncut off in the middle because pdf."]
+
+      "It was a cold \nnight in the city."
+        expected ["It was a cold night in the city."]
+        ours     ["It was a cold \nnight in the city."]
+
+  -- and the same shape recurs once in Japanese (`"これは父の\n家です。"`, expected
+  with the newline gone). In all three, `Pragmatic` finds exactly one
+  sentence, agrees on where it ends, and is scored wrong only because it
+  will not rewrite the source to match. Rewriting the source is exactly what
+  this gem's reconstruction invariant forbids, so this is a deliberate
+  choice, not a defect the score is hiding. The 1 remaining miss is a real
+  boundary disagreement, in English -- see the shadowing paragraph below.
 
   Before segmenting, `Pragmatic` replaces every single newline (one with no
   adjoining newline) with a space in a shadow copy of the text, segments the
@@ -177,7 +199,7 @@ Two segmenters ship with this gem:
   false split (the harmful kind) on the incidental newlines that HTML text
   nodes routinely carry from source formatting. A run of two or more
   newlines (a real paragraph break) is left alone. This costs one Golden
-  Rules point (76 -> 75): one exemplar shaped like a bare list of items
+  Rules point (77 -> 76): one exemplar shaped like a bare list of items
   separated by single newlines, with no punctuation, now segments as one
   unit instead of three. That shape does not arise in this gem's actual
   input -- HTML list items are separated by markup into distinct text nodes
