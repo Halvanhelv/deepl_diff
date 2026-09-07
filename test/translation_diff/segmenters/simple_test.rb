@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-class SegmenterTest < Minitest::Test
+class SimpleSegmenterTest < Minitest::Test
   RECONSTRUCTION_SAMPLES = [
     "Ordinary text. With two sentences.",
     "",
@@ -24,7 +24,7 @@ class SegmenterTest < Minitest::Test
   ].freeze
 
   def setup
-    @segmenter = TranslationDiff::Segmenter.new
+    @segmenter = TranslationDiff::Segmenters::Simple.new
   end
 
   def test_reconstruction_invariant_holds_for_a_variety_of_inputs

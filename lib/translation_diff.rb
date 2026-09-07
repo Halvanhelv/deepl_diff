@@ -13,7 +13,9 @@ require "translation_diff/error"
 require "translation_diff/adapters"
 require "translation_diff/adapters/null"
 require "translation_diff/adapters/deepl"
-require "translation_diff/segmenter"
+require "translation_diff/segmenters"
+require "translation_diff/segmenters/simple"
+require "translation_diff/segmenters/pragmatic"
 require "translation_diff/tokenizer"
 require "translation_diff/linearizer"
 require "translation_diff/chunker"
@@ -33,7 +35,7 @@ module TranslationDiff
     end
 
     def segmenter
-      @segmenter ||= TranslationDiff::Segmenter.new
+      @segmenter ||= TranslationDiff::Segmenters::Pragmatic.new
     end
   end
 

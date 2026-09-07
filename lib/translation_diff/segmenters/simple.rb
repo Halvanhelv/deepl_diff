@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# Splits a string into sentence-sized cache units.
+# Splits a string into sentence-sized cache units, with no runtime
+# dependency beyond Ruby's own Unicode data.
 #
 # A wrong boundary never corrupts the document -- the tokenizer slices by
 # offset and joins the pieces back together -- but the two kinds of error are
@@ -9,7 +10,13 @@
 # sentence to the provider on its own, and it comes back wrong. So this class
 # is deliberately conservative: it only splits on strong signals, and every
 # guard below exists to turn a would-be split back off, never to add one.
-class TranslationDiff::Segmenter
+#
+# Its central rule -- "the next visible character is lowercase, so do not
+# split" -- has no meaning in scripts without case, such as Arabic, Hindi or
+# Hebrew, so it fares worse than TranslationDiff::Segmenters::Pragmatic (the
+# default) on those languages. It exists for callers who want zero extra
+# dependencies and translate only from cased scripts.
+class TranslationDiff::Segmenters::Simple
   # A period, question mark, exclamation mark or ellipsis, run together
   # (`?!`, `!!!`) so a whole run is treated as a single terminator; or a
   # run of CJK terminators, which need no trailing whitespace and no guards
@@ -32,7 +39,10 @@ class TranslationDiff::Segmenter
   # `"Dr. Smith` still guards on "Dr.".
   WORD_TAIL = /[\p{L}\p{N}.]+\z/
 
-  def split_offsets(text)
+  # language: is part of the shared segmenter contract but is ignored here --
+  # this segmenter's rules (case, digits, punctuation) are language-neutral.
+  # rubocop:disable-next Lint/UnusedMethodArgument
+  def split_offsets(text, language: nil)
     offsets = [0]
     position = 0
 

@@ -26,24 +26,45 @@ First release under the name **translation_diff**. This gem was published as
   prerelease -- is reused. The next translation of every sentence is a cache
   miss, once, everywhere.
 - Dropped `punkt-segmenter` and, with it, its `unicode_utils` dependency.
-  `ox` is now the gem's only runtime dependency. Sentence boundaries are
-  produced by the new `TranslationDiff::Segmenter` instead; because it is
-  more conservative than punkt trained on a single short text, a few texts
-  that punkt used to over-split into fragments now stay together as one
-  cache unit (see the comparison notes in the segmenter work for examples).
+  Sentence boundaries are now produced by `TranslationDiff.segmenter`,
+  defaulting to `TranslationDiff::Segmenters::Pragmatic`, backed by the
+  [`pragmatic_segmenter`](https://github.com/diasks2/pragmatic_segmenter) gem
+  (MIT, zero dependencies of its own) -- so `ox` and `pragmatic_segmenter` are
+  now the gem's only two runtime dependencies. Measured against a sample of
+  the Golden Rules corpus, the default now scores 76/80 against punkt's
+  38/80 and the old in-house segmenter's 47/80; the gap is largest on
+  languages with no letter case at all -- Arabic, Hindi, Armenian, Greek --
+  which the in-house segmenter cannot reason about by design (see
+  `test/translation_diff/golden_rules_test.rb`).
+- `TranslationDiff.segmenter.split_offsets` now takes a second, optional
+  `language:` keyword argument. `pragmatic_segmenter` picks its rule set by
+  language and falls back to English rules without one, which can
+  mis-segment other languages (Russian abbreviations, for one); `from:` is
+  the only way a caller supplies it, and only when segmentation happens
+  before language detection would need to run.
 
 ### Added
 
-- `TranslationDiff::Segmenter`, an in-house sentence segmenter that replaces
-  `punkt-segmenter`. It is deliberately conservative: it splits only on a
-  handful of strong signals (a terminator followed by whitespace and an
-  uppercase or CJK next character, none of the guard conditions -- a known
-  abbreviation, an initial, digits on both sides, or a URL/email --
-  matching) so that a missed sentence boundary, which only costs a cache
-  hit, is always preferred over a false one, which sends half a sentence to
-  the translation provider. `TranslationDiff.segmenter` is swappable the
-  same way `TranslationDiff.api` and `.cache_store` are, defaulting to
-  `TranslationDiff::Segmenter.new`.
+- `TranslationDiff::Segmenters::Pragmatic`, the default sentence segmenter,
+  wrapping `pragmatic_segmenter`'s per-language rule sets. It recovers
+  offsets from the strings `pragmatic_segmenter` returns by locating each one
+  in the source, in order; if a returned sentence cannot be found there, it
+  raises `TranslationDiff::Segmenters::Pragmatic::Error` rather than
+  guessing at an offset and silently corrupting the document.
+- `TranslationDiff::Segmenters::Simple` (formerly `TranslationDiff::Segmenter`,
+  renamed and moved to its own namespace alongside `Pragmatic`), the
+  zero-dependency, in-house sentence segmenter this gem shipped with before
+  `pragmatic_segmenter` became the default. It is deliberately conservative:
+  it splits only on a handful of strong signals (a terminator followed by
+  whitespace and an uppercase or CJK next character, none of the guard
+  conditions -- a known abbreviation, an initial, digits on both sides, or a
+  URL/email -- matching) so that a missed sentence boundary, which only
+  costs a cache hit, is always preferred over a false one, which sends half
+  a sentence to the translation provider. Its central rule has no meaning in
+  scripts without letter case, which is why it is no longer the default; it
+  stays available for callers who want no extra dependency and translate
+  only from cased scripts. `TranslationDiff.segmenter` is swappable the same
+  way `TranslationDiff.api` and `.cache_store` are.
 - `TranslationDiff::Adapters::DeepL` and `TranslationDiff::Adapters::Null`.
 - `test/support/adapter_contract.rb`, the executable form of the adapter
   contract; any third-party adapter can include it to verify it behaves as

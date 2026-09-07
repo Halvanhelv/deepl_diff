@@ -69,8 +69,18 @@ class TranslationDiff::Request
   # => [..., [["<b>", :markup], ["Good", :text], ...]]
   def tokens
     @tokens ||= texts.map do |value|
-      TranslationDiff::Tokenizer.tokenize(value)
+      TranslationDiff::Tokenizer.tokenize(value, language: source_language)
     end
+  end
+
+  # The segmenter's language, not the resolved one: `from` triggers
+  # auto-detection the first time it is called, and detection builds its
+  # sample from the segmented text, so asking `from` here would be circular.
+  # Only a language the caller actually passed is usable at this point --
+  # everything else genuinely doesn't know yet, and nil is the honest
+  # answer.
+  def source_language
+    @from&.to_s
   end
 
   # Extracts text tokens from token list

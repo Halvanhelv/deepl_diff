@@ -20,8 +20,10 @@ Much better approach is to try to translate every repeated structural element (s
 ## Dependencies
 
 This gem loads two: [`ox`](https://github.com/ohler55/ox) to walk the HTML, and
-[`punkt-segmenter`](https://github.com/lfcipriani/punkt-segmenter) to split text
-into sentences.
+[`pragmatic_segmenter`](https://github.com/diasks2/pragmatic_segmenter), which backs
+the default sentence segmenter and has zero dependencies of its own. See [Segmenters
+and the segmenter contract](#segmenters-and-the-segmenter-contract) below if you want
+to avoid the second dependency.
 
 Everything else is duck typed and supplied by you: `TranslationDiff.api` must satisfy
 the five-method adapter contract described in [Adapters and the adapter
@@ -51,8 +53,8 @@ Or install it yourself as:
 require "translation_diff"
 
 # None of these are dependencies of this gem. It loads only `ox` and
-# `punkt-segmenter`; the API client, the connection pool, and whatever backs
-# the cache and the rate limiter are yours to choose and to require.
+# `pragmatic_segmenter`; the API client, the connection pool, and whatever
+# backs the cache and the rate limiter are yours to choose and to require.
 require "deepl"
 require "redis"
 require "connection_pool"
@@ -136,6 +138,62 @@ Nothing cached by `deepl_diff` is reused; the next translation of every sentence
 a cache miss, once, everywhere. See [CHANGELOG.md](CHANGELOG.md) for the full list
 of breaking changes.
 
+## Segmenters and the segmenter contract
+
+`TranslationDiff.segmenter` decides where a text node is cut into sentence-sized
+cache units, the same way `TranslationDiff.api` decides how a sentence gets
+translated. It defaults to `TranslationDiff::Segmenters::Pragmatic.new` and can be
+swapped for any object implementing:
+
+```ruby
+# Returns the offsets at which a new sentence begins, always starting with 0
+# and strictly increasing. Slicing the source between consecutive offsets, and
+# from the last offset to the end, reconstructs the source exactly -- a wrong
+# boundary never corrupts the document, it only changes how the text is
+# grouped into cache units.
+#
+# language: is an ISO 639-1 code such as "en" or "ru" when the caller already
+# knows the source language, and nil when it does not -- see below.
+def split_offsets(text, language: nil)
+```
+
+Two segmenters ship with this gem:
+
+- **`TranslationDiff::Segmenters::Pragmatic`** (the default) wraps the
+  [`pragmatic_segmenter`](https://github.com/diasks2/pragmatic_segmenter) gem,
+  which ships per-language rule sets rather than one rule set applied to every
+  script. Measured against a sample of the Golden Rules corpus, the de-facto
+  benchmark for sentence segmentation (see
+  `test/translation_diff/golden_rules_test.rb`), it scores 76/80 against
+  `Simple`'s 47/80, and the gap is largest on languages that have no letter
+  case at all -- Arabic, Hindi, Armenian, Greek -- which `Simple` cannot
+  reason about by design.
+- **`TranslationDiff::Segmenters::Simple`** is a zero-dependency, in-house
+  segmenter. It splits conservatively on punctuation followed by whitespace,
+  guarded by a handful of signals (a known abbreviation, an initial, digits on
+  both sides, a URL or email, or a lowercase letter immediately following --
+  the guard that gives it away as built for cased scripts). Reach for it if
+  you want no extra dependency and you only ever translate from languages
+  written in a cased script (Latin, Cyrillic, Greek's own script aside,
+  Armenian, and similar).
+
+Passing `from:` to `::translate` does more than skip a detection call (see
+[How it works](#how-it-works) below): it is also the only way a segmenter sees
+the source language. When `from:` is omitted, the language is genuinely
+unknown at the time the text is segmented -- language detection needs the
+segmented text to build its sample, so segmentation cannot wait for it -- and
+`Pragmatic` falls back to English rules, which can mis-segment other
+languages (Russian abbreviations, for one). `Simple` ignores the argument
+entirely; its rules are language-neutral.
+
+`Pragmatic` raises `TranslationDiff::Segmenters::Pragmatic::Error` (a
+`TranslationDiff::Error`) if a sentence `pragmatic_segmenter` returns cannot be
+found in the source text -- rather than guessing at an offset and silently
+corrupting the document. This is rare but real: `pragmatic_segmenter` treats
+some raw newlines as line-wrap noise from badly-extracted documents and
+deletes them, and if that happens in a sentence that is not the last one in
+the node, the cleaned-up sentence no longer appears in the original text.
+
 ## Errors
 
 Every error this gem raises inherits from `TranslationDiff::Error < StandardError`,
@@ -151,19 +209,24 @@ TranslationDiff::Error
 │                                           # serialisation for the cache key
 ├── TranslationDiff::Chunker::Error        # a single value is larger than the
 │                                           # adapter's max_request_size
+├── TranslationDiff::Segmenters::Pragmatic::Error
+│                                           # a sentence pragmatic_segmenter
+│                                           # returned cannot be found in the
+│                                           # source text
 └── TranslationDiff::RedisRateLimiter::RateLimitExceeded
 ```
 
 ## How it works
 
 - Text nodes are extracted from HTML.
-- Every text node is split into sentences (using `punkt-segmenter` gem).
+- Every text node is split into sentences by `TranslationDiff.segmenter` (see
+  [Segmenters and the segmenter contract](#segmenters-and-the-segmenter-contract)).
 - Cache is checked for the presence of each sentence (using language couple and a hash of string).
 - Missing sentences are translated via API and cached.
 - Original HTML is recombined from translations and cache data.
 
 *NOTE:* if `:from` is not specified or equal to nil, then the adapter's `#detect` will be called once with a sample of text up to 100 characters long to determine the language, and `#translate` will be called separately with the entire text.
-        Try to specify `:from` explicitly to save the extra call.
+        Try to specify `:from` explicitly to save the extra call -- it also improves segmentation, since the segmenter only sees a language when `:from` is given (see [Segmenters and the segmenter contract](#segmenters-and-the-segmenter-contract)).
 
 ## Input
 
