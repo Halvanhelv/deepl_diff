@@ -12,6 +12,7 @@ require "deepl_diff/version"
 
 require "deepl_diff/adapters"
 require "deepl_diff/adapters/null"
+require "deepl_diff/adapters/deepl"
 require "deepl_diff/tokenizer"
 require "deepl_diff/linearizer"
 require "deepl_diff/chunker"
