@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class TranslationDiff::Chunker
-  class Error < StandardError; end
+  class Error < TranslationDiff::Error; end
 
   Chunk = Struct.new(:texts, :escaped_size)
 

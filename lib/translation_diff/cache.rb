@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class TranslationDiff::Cache
-  class Error < StandardError; end
+  class Error < TranslationDiff::Error; end
 
   # An application uses a handful of distinct option sets, so 32 bits of
   # digest is ample to keep them apart; the full 128-bit MD5 would just

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class TranslationDiff::RedisRateLimiter
-  class RateLimitExceeded < StandardError; end
+  class RateLimitExceeded < TranslationDiff::Error; end
 
   DEFAULT_THRESHOLD = 8000
   DEFAULT_INTERVAL = 60

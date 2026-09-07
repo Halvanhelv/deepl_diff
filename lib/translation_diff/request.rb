@@ -3,7 +3,7 @@
 class TranslationDiff::Request
   extend Forwardable
 
-  class Error < StandardError; end
+  class Error < TranslationDiff::Error; end
 
   def_delegators :TranslationDiff, :api, :cache_store, :rate_limiter
   def_delegators :"TranslationDiff::Linearizer", :linearize, :restore
@@ -51,10 +51,10 @@ class TranslationDiff::Request
   end
 
   def validate_globals
-    raise "Set TranslationDiff.api before calling ::translate" unless api
+    raise Error, "Set TranslationDiff.api before calling ::translate" unless api
     return if cache_store
 
-    raise "Set TranslationDiff.cache_store before calling ::translate"
+    raise Error, "Set TranslationDiff.cache_store before calling ::translate"
   end
 
   # Extracts flat text array

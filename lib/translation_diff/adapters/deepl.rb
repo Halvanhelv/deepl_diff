@@ -28,8 +28,4 @@ class TranslationDiff::Adapters::DeepL
   def max_request_size = MAX_REQUEST_SIZE
   def max_batch_size = MAX_BATCH_SIZE
   def cache_key = "deepl"
-
-  private
-
-  attr_reader :client
 end

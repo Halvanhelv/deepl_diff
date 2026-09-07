@@ -9,6 +9,7 @@ require "ox"
 require "punkt-segmenter"
 
 require "translation_diff/version"
+require "translation_diff/error"
 
 require "translation_diff/adapters"
 require "translation_diff/adapters/null"

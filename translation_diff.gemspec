@@ -11,16 +11,16 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Islam Gagiev"]
   spec.email         = ["omniacinis@gmail.com"]
 
-  spec.summary       = %(
-DeepL API wrapper for Ruby which helps to translate only changes
-between revisions of long texts.
-
-  )
+  spec.summary = "A translation cache that sends only new or changed sentences to your provider."
   spec.description = %(
-DeepL API wrapper for Ruby which helps to translate only changes
-between revisions of long texts.
+TranslationDiff extracts translatable text from HTML, splits it into
+sentences, and caches each sentence by content hash. Only the sentences
+missing from the cache are sent to whichever translation provider you plug
+in through a small adapter contract, so re-translating a long text after a
+small edit costs the price of the edit, not the whole text.
   )
   spec.homepage = "https://github.com/Halvanhelv/translation_diff"
+  spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2"
 
   if spec.respond_to?(:metadata)
