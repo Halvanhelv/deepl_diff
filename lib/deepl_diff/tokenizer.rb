@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
-class DeepLDiff::Tokenizer < ::Ox::Sax
+class DeepLDiff::Tokenizer < Ox::Sax
+  SKIP = %i[script style].freeze
+  INNER_SPANS = %i[notranslate span end_span end_notranslate].freeze
+  HTML_OPTIONS = { smart: true, skip: :skip_none }.freeze
+
+  # Ox::Sax provides no initializer to chain to.
+  # rubocop:disable-next Lint/MissingSuper
   def initialize(source)
     @pos = nil
     @source = source
@@ -38,7 +44,7 @@ class DeepLDiff::Tokenizer < ::Ox::Sax
     return if value == ""
 
     @sequence << (SKIP.include?(@context.last) ? :markup : :text)
-    @indicies << @pos - 1
+    @indicies << (@pos - 1)
   end
 
   def tokens
@@ -69,7 +75,7 @@ class DeepLDiff::Tokenizer < ::Ox::Sax
     tokens.concat(sentences(tokens.pop[0])) if tokens.last[1] == :text
   end
 
-  # rubocop: disable Metrics/MethodLength
+  # rubocop: disable-next Metrics/MethodLength
   def sentences(value)
     return [] if value.strip.empty?
 
@@ -87,7 +93,6 @@ class DeepLDiff::Tokenizer < ::Ox::Sax
       [value[left..right], :text]
     end
   end
-  # rubocop:enable Metrics/MethodLength
 
   # Whether the sequence is between `:notranslate` and `:end_notranslate`
   def notranslate?
@@ -129,7 +134,7 @@ class DeepLDiff::Tokenizer < ::Ox::Sax
                   else
                     :markup
                   end)
-    @indicies << @pos - 1
+    @indicies << (@pos - 1)
   end
 
   def end_markup(name)
@@ -139,7 +144,7 @@ class DeepLDiff::Tokenizer < ::Ox::Sax
                   else
                     :markup
                   end)
-    @indicies << @pos - 1 unless @pos == @source.bytesize
+    @indicies << (@pos - 1) unless @pos == @source.bytesize
   end
 
   class << self
@@ -152,8 +157,4 @@ class DeepLDiff::Tokenizer < ::Ox::Sax
       tokenizer.tokens
     end
   end
-
-  SKIP = %i[script style].freeze
-  INNER_SPANS = %i[notranslate span end_span end_notranslate].freeze
-  HTML_OPTIONS = { smart: true, skip: :skip_none }.freeze
 end

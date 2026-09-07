@@ -5,7 +5,7 @@ class DeepLDiff::Linearizer
     def linearize(struct, array = [])
       case struct
       when Hash
-        struct.each { |_k, v| linearize(v, array) }
+        struct.each_value { |v| linearize(v, array) }
       when Array
         struct.each { |v| linearize(v, array) }
       else
