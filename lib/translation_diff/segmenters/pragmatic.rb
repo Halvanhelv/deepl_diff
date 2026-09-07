@@ -29,11 +29,14 @@ require "pragmatic_segmenter"
 # sentence mentioning a degree, or HTML indented with more than two spaces,
 # hits one of them routinely. #recover_offsets does not raise when this
 # happens. It recovers every offset it can verify, in order, and stops at
-# the first sentence it cannot -- the unverifiable remainder of the text
-# stands as one final unit instead. This is a coarsening, not a fallback:
-# every offset this class ever emits has been proved to exist at that
-# position in the source, so the document reassembles exactly either way:
-# the cache unit is just bigger when recovery stops early.
+# the first sentence it cannot -- but the boundary at the end of the last
+# sentence it did verify is not thrown away with the rest: it was matched
+# character for character, so it is still emitted, and only the genuinely
+# unverifiable remainder becomes one final unit. This is a coarsening, not
+# a fallback: every offset this class ever emits has been proved to exist
+# at that position in the source, so the document reassembles exactly
+# either way -- the last cache unit is just bigger when recovery stops
+# early, not the whole node.
 class TranslationDiff::Segmenters::Pragmatic
   # Raised only if #split_offsets itself computed offsets that violate its
   # own postcondition (start at 0, strictly increasing, all within the
@@ -120,46 +123,73 @@ class TranslationDiff::Segmenters::Pragmatic
   # previous sentence's match ended. Every sentence located this way
   # contributes a verified offset. The first sentence that cannot be
   # located -- because pragmatic_segmenter's cleaner rewrote it, see the
-  # class comment -- ends the walk: the offsets collected so far are
-  # returned, and the remainder of the text becomes one final unit rather
-  # than being sliced on a guess.
+  # class comment -- ends the walk, but the boundary at the end of the last
+  # sentence that *was* located is not a guess: it was matched character
+  # for character, so it is emitted too (guarded below), and only the
+  # genuinely unverifiable remainder becomes one final unit rather than
+  # being sliced on a guess.
   #
-  # An empty sentence, or one that resolves to the cursor's current position
-  # without advancing past it, is skipped rather than walked into: an empty
-  # match would otherwise emit the same offset twice in a row (a
-  # non-increasing "boundary" that is not a boundary at all) and could stall
-  # the cursor forever.
+  # An empty sentence is skipped rather than walked into: an empty match
+  # would otherwise emit the same offset twice in a row (a non-increasing
+  # "boundary" that is not a boundary at all) and could stall the cursor
+  # forever. See #locate.
   def recover_offsets(shadow, sentences)
+    starts, cursor, stopped_early = walk(shadow, sentences)
+
+    # The first located sentence's own start is never a split point -- it is
+    # where offset 0 already covers -- only the ones after it are.
+    offsets = [0] + starts.drop(1)
+
+    # The walk stopped before exhausting every sentence, so cursor -- the end
+    # of the last one actually matched -- is verified evidence, not a guess.
+    # Emitting it is what turns "the whole node becomes one unit" into "the
+    # verified prefix is sliced off, only the rest is coarsened". Guarded
+    # against the two ways this could break the offsets invariant: cursor
+    # equal to the text's length (nothing left to slice, the last located
+    # sentence already reaches the end) and cursor not advancing past the
+    # last offset already emitted (nothing was located at all, so cursor is
+    # still 0 -- the same as the leading offset already in the array).
+    offsets << cursor if stopped_early && cursor < shadow.length && cursor > offsets.last
+
+    offsets
+  end
+
+  # Walks the sentences in order, returning the starts of every one located
+  # (see #locate), the cursor left after the last one located, and whether
+  # the walk stopped before exhausting every sentence.
+  def walk(shadow, sentences)
     cursor = 0
     starts = []
 
     sentences.each do |sentence|
       match = locate(shadow, sentence, cursor)
-      break if match == :unlocatable
-      next unless match
+      next if match == :skip
+      return [starts, cursor, true] if match.nil?
 
       starts << match[0]
       cursor = match[1]
     end
 
-    # The first located sentence's own start is never a split point -- it is
-    # where offset 0 already covers -- only the ones after it are.
-    [0] + starts.drop(1)
+    [starts, cursor, false]
   end
 
   # Returns [start, next_cursor] for a sentence found at or after cursor;
-  # :unlocatable if it cannot be found at all (ending the walk in
-  # #recover_offsets); or nil to skip it without moving the cursor (an empty
-  # sentence, or one that resolves to the cursor's current position without
-  # advancing past it).
+  # :skip for an empty sentence, which #recover_offsets passes over without
+  # ending the walk (an empty pattern would "match" at cursor itself and
+  # never advance past it -- distinct from not being found, which should
+  # end the walk, not stall it); or nil if a non-empty sentence cannot be
+  # found there at all, which does end the walk. A located non-empty
+  # sentence always advances past cursor by construction (String#index
+  # never returns a position before where the search started), so there is
+  # no further case to guard here -- #assert_valid_offsets is the actual
+  # backstop if that ever stops holding.
   def locate(shadow, sentence, cursor)
-    return nil if sentence.empty?
+    return :skip if sentence.empty?
 
     start = shadow.index(sentence, cursor)
-    return :unlocatable if start.nil?
+    return nil if start.nil?
 
-    next_cursor = start + sentence.length
-    next_cursor > cursor ? [start, next_cursor] : nil
+    [start, start + sentence.length]
   end
 
   # The postcondition every caller of #split_offsets depends on: offsets

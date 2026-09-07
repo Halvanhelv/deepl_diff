@@ -71,8 +71,10 @@ First release under the name **translation_diff**. This gem was published as
   each one in the shadow, in order, and keeps every offset it locates; the
   first sentence it cannot locate (`pragmatic_segmenter`'s cleaner also
   collapses runs of three or more spaces and respaces abbreviations such as
-  `"Ph.D."`, among other things it rewrites) ends the search, and the
-  unrecoverable remainder of the text stands as one final unit. This is a
+  `"Ph.D."`, among other things it rewrites) ends the search -- but the
+  boundary at the end of the last sentence it did locate is not discarded
+  with the rest, since it was matched character for character too; only the
+  genuinely unrecoverable remainder becomes one final unit. This is a
   coarsening, not a failure -- every offset it ever emits has been verified,
   so the cache unit is simply larger, never wrong. It never guesses an
   offset it did not verify. `TranslationDiff::Segmenters::Pragmatic::Error`

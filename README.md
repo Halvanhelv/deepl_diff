@@ -236,10 +236,13 @@ respaces abbreviations like `"Ph.D."` into `"Ph. D."`, among other things --
 so the sentence `Pragmatic` gets back does not always appear verbatim in the
 source any more. `Pragmatic` never guesses at an offset it cannot verify: it
 walks the returned sentences in order, keeps every offset it locates, and
-stops at the first one it cannot. The unrecoverable remainder of the text
-then stands as one final unit instead of being sliced further. This is a
-*coarsening*, not a failure -- the text still translates correctly, the cache
-unit is just larger than it could have been -- and it is silent by design,
+stops at the first one it cannot -- but the boundary at the end of the last
+sentence it did locate is not thrown away with the rest, since it was
+matched character for character too. Only the genuinely unrecoverable
+remainder is coarsened into one final unit; the verified prefix before it is
+still sliced off. This is a *coarsening*, not a failure -- the text still
+translates correctly, the cache unit is just larger than it could have
+been -- and it is silent by design,
 the same way a segmenter simply not splitting a node has always been
 acceptable. `TranslationDiff::Segmenters::Pragmatic::Error` (a
 `TranslationDiff::Error`) still exists and is still raised, but only if

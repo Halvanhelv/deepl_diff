@@ -169,6 +169,20 @@ class PragmaticSegmenterTest < Minitest::Test
     assert_equal [0], @segmenter.split_offsets(text, language: "en")
   end
 
+  # N3 (fix round 4): coarsening must not throw away a boundary it has
+  # already proved. "First is fine." is located verbatim; "Hello world mid."
+  # is not, because the cleaner collapses the triple space -- but the end of
+  # "First is fine." is not a guess, it was matched character for character,
+  # so it is still emitted. Only the genuinely unverifiable remainder (from
+  # there to the end of the text) is coarsened into one unit.
+  def test_a_verified_boundary_before_an_unrecoverable_sentence_is_not_discarded
+    text = "First is fine. Hello   world mid. Third one here."
+    offsets = @segmenter.split_offsets(text, language: "en")
+
+    assert_equal [0, "First is fine.".length], offsets
+    assert_equal text, reconstruct(text, offsets)
+  end
+
   # L2 (fix round 2): an empty sentence from upstream must not emit a
   # duplicate, non-increasing offset (it would otherwise resolve to the
   # cursor's current position without advancing it). Exercised directly
@@ -202,12 +216,19 @@ class PragmaticSegmenterTest < Minitest::Test
 
   # An unrecognised code, once normalised, lands on the documented English
   # fallback (DEFAULT_LANGUAGE) rather than silently on
-  # PragmaticSegmenter::Languages::Common.
+  # PragmaticSegmenter::Languages::Common. The Russian fixture used above
+  # cannot prove this: English and Common mis-segment it identically, so a
+  # test built on it would pass whether normalize_language worked or not.
+  # "Dr.Smith" does distinguish them -- English's cleaner disables its
+  # no-space-between-sentences abbreviation guard (it overrides
+  # PragmaticSegmenter::Languages::English::Cleaner#abbreviations to an
+  # empty list), so it inserts the missing space and splits; Common's does
+  # not, and keeps the run-on text as one sentence.
   def test_an_unrecognised_language_code_falls_back_to_english_rules
-    text = "Проф. Иванов пришёл домой. Было поздно."
+    text = "This ends here.Next sentence starts."
     offsets = @segmenter.split_offsets(text, language: "zz-nonsense")
 
-    assert_equal [0, "Проф. ".length, "Проф. Иванов пришёл домой. ".length], offsets
+    assert_equal [0, "This ends here.".length], offsets
   end
 
   private
