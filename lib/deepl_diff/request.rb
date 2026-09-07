@@ -3,18 +3,22 @@
 class DeepLDiff::Request
   extend Forwardable
 
+  class Error < StandardError; end
+
   def_delegators :DeepLDiff, :api, :cache_store, :rate_limiter
   def_delegators :"DeepLDiff::Linearizer", :linearize, :restore
 
   def initialize(values, options)
     @values = values
-    @options = options
+    # #from and #to consume their keys so the rest can go to the API as-is.
+    # Copy first: the caller's hash is theirs, and it is often frozen.
+    @options = options.dup
   end
 
   def call
     validate_globals
 
-    return values if from == to || values.empty?
+    return values if same_language? || nothing_to_translate?
 
     translation
   end
@@ -29,6 +33,19 @@ class DeepLDiff::Request
 
   def to
     @to ||= options.delete(:to) { nil }
+  end
+
+  # A detected language arrives as a String while :to is usually a Symbol, so
+  # the two have to be compared on equal footing or the short circuit never
+  # fires and the text gets translated into its own language.
+  def same_language?
+    !to.nil? && from.to_s.casecmp?(to.to_s)
+  end
+
+  # Covers values holding no translatable text at all: "", nil, an empty
+  # collection, or a scalar the tokenizer has nothing to say about.
+  def nothing_to_translate?
+    text_tokens_texts.all?(&:empty?)
   end
 
   def detect_language
@@ -126,7 +143,12 @@ class DeepLDiff::Request
   # Restores texts from tokens
   # [..., "<b>Horoshiy</b> Malchik", ...]
   def texts_translated
-    @texts_translated ||= tokens_translated.map do |group|
+    @texts_translated ||= tokens_translated.map.with_index do |group, index|
+      source = texts[index]
+      # Only strings are rebuilt from tokens. Anything else has no tokens to
+      # rebuild from; nil keeps collapsing to "" the way it always has.
+      next source unless source.nil? || source.is_a?(String)
+
       group.map { |value, type| type == :text ? value : fix_ascii(value) }.join
     end
   end
@@ -138,7 +160,13 @@ class DeepLDiff::Request
 
   def call_api(values)
     check_rate_limit(values)
-    [api.translate(values, from, to, options)].flatten.map(&:text)
+    translations = [api.translate(values, from, to, options)].flatten.map(&:text)
+    return translations if translations.size == values.size
+
+    # Letting a short response through means shifting nils into the results,
+    # which surfaces much later as a NoMethodError far from the cause.
+    raise Error,
+          "API returned #{translations.size} translations for #{values.size} values"
   end
 
   def cache

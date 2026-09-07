@@ -3,7 +3,7 @@
 class DeepLDiff::Chunker
   class Error < StandardError; end
 
-  Chunk = Struct.new(:texts, :bytesize)
+  Chunk = Struct.new(:texts, :escaped_size)
 
   MAX_CHUNK_SIZE = 1700
   COUNT_LIMIT = 300
@@ -39,20 +39,25 @@ class DeepLDiff::Chunker
 
   def next_chunk?(tail, value)
     tail.nil? ||
-      (size(value) + tail.bytesize > limit) ||
-      tail.texts.size > count_limit
+      (escaped_size(value) + tail.escaped_size > limit) ||
+      tail.texts.size >= count_limit
   end
 
-  def size(text)
+  # What the limit is about is the size of the request that goes over the
+  # wire, so every measurement here is of the escaped form. Mixing it with
+  # String#size lets a chunk of non-ASCII text run several times over.
+  def escaped_size(text)
     CGI.escape(text).size
   end
 
   def update_chunk(chunk, value)
     chunk.texts << value
-    chunk.bytesize += value.size
+    chunk.escaped_size += escaped_size(value)
   end
 
   def validate_value_size(value)
-    raise Error, "Too long part #{value.size} > #{limit}" if value.size > limit
+    size = escaped_size(value)
+
+    raise Error, "Too long part #{size} > #{limit}" if size > limit
   end
 end

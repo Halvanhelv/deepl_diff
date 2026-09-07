@@ -149,7 +149,8 @@ class DeepLDiff::Tokenizer < Ox::Sax
 
   class << self
     def tokenize(value)
-      return [] if value.nil?
+      # Anything that is not a string has no markup and no sentences in it.
+      return [] unless value.is_a?(String)
 
       tokenizer = new(value).tap do |h|
         Ox.sax_parse(h, StringIO.new(value), HTML_OPTIONS)

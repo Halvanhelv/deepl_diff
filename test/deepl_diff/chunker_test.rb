@@ -26,7 +26,7 @@ class ChunkerTest < Minitest::Test
     ],
     "splits_on_the_count_limit" => [
       [SHORT] * 10,
-      [[SHORT] * 6, [SHORT] * 4]
+      [[SHORT] * 5, [SHORT] * 5]
     ]
   }.freeze
 
@@ -40,6 +40,25 @@ class ChunkerTest < Minitest::Test
     error = assert_raises(DeepLDiff::Chunker::Error) { chunk([OVERSIZED]) }
 
     assert_match(/Too long part/, error.message)
+  end
+
+  # The limit is about the size of the request that goes over the wire, and
+  # CGI.escape inflates Cyrillic sixfold. Measuring the raw String#size
+  # anywhere here let chunks of non-ASCII text run several times over.
+  def test_measures_non_ascii_values_by_their_escaped_size
+    value = "я" * 3
+
+    # Three characters raw, eighteen escaped. Measured raw, both values fit
+    # in one chunk of 20; measured as sent, they cannot.
+    assert_equal 3, value.size
+    assert_equal 18, CGI.escape(value).size
+    assert_equal [[value], [value]], chunk([value, value])
+  end
+
+  def test_raises_when_the_escaped_size_of_one_value_exceeds_the_limit
+    error = assert_raises(DeepLDiff::Chunker::Error) { chunk(["я" * 4]) }
+
+    assert_match(/Too long part 24 > 20/, error.message)
   end
 
   private
