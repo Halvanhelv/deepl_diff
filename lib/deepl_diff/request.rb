@@ -99,13 +99,13 @@ class DeepLDiff::Request
   # Restores indexes for translated tokens
   # => { ..., "1_1" => "Horoshiy", 1_3 => "Malchik", ... }
   def text_tokens_translated
-    @text_tokens_texts_translated ||=
+    @text_tokens_translated ||=
       restore(text_tokens, chunks_translated.flatten)
   end
 
   # Restores tokens translated + adds same spacing as in source token
   # => [[..., [ "Horoshiy", :text ], ...]]
-  # rubocop:disable Metrics/AbcSize
+  # rubocop:disable-next Metrics/AbcSize
   def tokens_translated
     @tokens_translated ||= tokens.dup.tap do |tokens|
       text_tokens_translated.each do |index, value|
@@ -115,7 +115,6 @@ class DeepLDiff::Request
       end
     end
   end
-  # rubocop:enable Metrics/AbcSize
 
   def restore_spacing(source_value, value)
     DeepLDiff::Spacing.restore(source_value, value)
@@ -136,7 +135,7 @@ class DeepLDiff::Request
 
   def call_api(values)
     check_rate_limit(values)
-    [api.translate(values, from, to, **options)].flatten.map(&:text)
+    [api.translate(values, from, to, options)].flatten.map(&:text)
   end
 
   def cache

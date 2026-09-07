@@ -1,4 +1,8 @@
-Documentation:
+AllCops:
+  TargetRubyVersion: 3.2
+  NewCops: enable
+
+Style/Documentation:
   Enabled: false
 
 Style/StringLiterals:
@@ -11,5 +15,12 @@ Metrics/BlockLength:
   Exclude:
     - spec/**/*
 
-Metrics/LineLength:
+Layout/LineLength:
   Max: 120
+
+Gemspec/DevelopmentDependencies:
+  EnforcedStyle: gemspec
+
+Metrics/ClassLength:
+  Exclude:
+    - lib/deepl_diff/tokenizer.rb

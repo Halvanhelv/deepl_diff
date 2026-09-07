@@ -134,8 +134,8 @@ RSpec.describe DeepLDiff::Tokenizer do
   context "notranslate inside another notranslate" do
     let(:source) do
       "<span class='notranslate'>foo" \
-      "<span class='notranslate'>bar</span>baz" \
-      "</span>"
+        "<span class='notranslate'>bar</span>baz" \
+        "</span>"
     end
 
     let(:tokens) do
@@ -166,7 +166,7 @@ RSpec.describe DeepLDiff::Tokenizer do
   context "with <?xml:...> tag" do
     let(:source) do
       "Hey!<br />Look!" \
-      "<?xml:namespace ns=\"urn:office\" ?>"
+        "<?xml:namespace ns=\"urn:office\" ?>"
     end
 
     let(:tokens) do
@@ -184,7 +184,7 @@ RSpec.describe DeepLDiff::Tokenizer do
   context "bizarre sentences" do
     let(:source) do
       "Набор «Солнечная механика» от 4М — это 6 экспериментов." \
-      "\n\nЮному изобретателю предстоит воочию посмотреть на чудеса."
+        "\n\nЮному изобретателю предстоит воочию посмотреть на чудеса."
     end
 
     let(:tokens) do

@@ -1,5 +1,10 @@
 # frozen_string_literal: true
 
+require "cgi/escape"
+require "digest/md5"
+require "forwardable"
+require "stringio"
+
 require "ox"
 require "punkt-segmenter"
 require "dry/initializer"
@@ -19,8 +24,8 @@ module DeepLDiff
   class << self
     attr_accessor :api, :cache_store, :rate_limiter
 
-    def translate(*args)
-      Request.new(*args).call
+    def translate(*)
+      Request.new(*).call
     end
   end
 

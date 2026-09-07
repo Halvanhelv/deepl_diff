@@ -5,14 +5,17 @@ class DeepLDiff::Chunker
 
   class Error < StandardError; end
 
-  Chunk = Struct.new(:values, :size)
+  Chunk = Struct.new(:texts, :bytesize)
+
+  MAX_CHUNK_SIZE = 1700
+  COUNT_LIMIT = 300
 
   param :values
   option :limit, default: proc { MAX_CHUNK_SIZE }
   option :count_limit, default: proc { COUNT_LIMIT }
 
   def call
-    chunks.map(&:values)
+    chunks.map(&:texts)
   end
 
   def chunks
@@ -34,8 +37,8 @@ class DeepLDiff::Chunker
 
   def next_chunk?(tail, value)
     tail.nil? ||
-      (size(value) + tail.size > limit) ||
-      tail.values.size > count_limit
+      (size(value) + tail.bytesize > limit) ||
+      tail.texts.size > count_limit
   end
 
   def size(text)
@@ -43,14 +46,11 @@ class DeepLDiff::Chunker
   end
 
   def update_chunk(chunk, value)
-    chunk.values << value
-    chunk.size = chunk.size + value.size
+    chunk.texts << value
+    chunk.bytesize += value.size
   end
 
   def validate_value_size(value)
     raise Error, "Too long part #{value.size} > #{limit}" if value.size > limit
   end
-
-  MAX_CHUNK_SIZE = 1700
-  COUNT_LIMIT = 300
 end

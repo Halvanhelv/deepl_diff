@@ -5,9 +5,13 @@ require "spec_helper"
 RSpec.describe DeepLDiff::Request do
   subject { described_class.new(values, options).call }
 
+  # OpenStruct is no longer available by default, and the API response only
+  # needs to expose #text.
+  translation = Struct.new(:text)
+
   let(:api) { double("API") }
   let(:cache_store) { double("Cache store") }
-  let(:api_response_wrap) { api_response.map { |v| OpenStruct.new(text: v) } }
+  let(:api_response_wrap) { api_response.map { |v| translation.new(v) } }
   let(:cache_response) { nil }
 
   before do
