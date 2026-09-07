@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 class DeepLDiff::Cache
-  extend Dry::Initializer
-
-  param :from
-  param :to
+  def initialize(from, to)
+    @from = from
+    @to = to
+  end
 
   def cached_and_missing(values)
     keys = values.map { |v| key(v) }
@@ -21,6 +21,8 @@ class DeepLDiff::Cache
   end
 
   private
+
+  attr_reader :from, :to
 
   def store_value(value, translation)
     cache_store.write(key(value), translation)

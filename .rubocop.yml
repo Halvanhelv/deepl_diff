@@ -24,5 +24,6 @@ Gemspec/DevelopmentDependencies:
 Metrics/ClassLength:
   Exclude:
     - lib/deepl_diff/tokenizer.rb
+    - lib/deepl_diff/request.rb
     # Test classes are mostly tables of cases.
     - test/**/*

@@ -1,15 +1,22 @@
 # frozen_string_literal: true
 
 class DeepLDiff::RedisRateLimiter
-  extend Dry::Initializer
-
   class RateLimitExceeded < StandardError; end
 
-  param :connection_pool
-  param :threshold, default: proc { 8000 }
-  param :interval,  default: proc { 60 }
+  DEFAULT_THRESHOLD = 8000
+  DEFAULT_INTERVAL = 60
 
-  option :namespace, default: proc { DeepLDiff::CACHE_NAMESPACE }
+  # `connection_pool` is anything answering to #with, and what it yields is
+  # anything Ratelimit accepts. Neither gem is a dependency of this one.
+  def initialize(connection_pool,
+                 threshold: DEFAULT_THRESHOLD,
+                 interval: DEFAULT_INTERVAL,
+                 namespace: DeepLDiff::CACHE_NAMESPACE)
+    @connection_pool = connection_pool
+    @threshold = threshold
+    @interval = interval
+    @namespace = namespace
+  end
 
   def check(size)
     connection_pool.with do |redis|
@@ -19,4 +26,8 @@ class DeepLDiff::RedisRateLimiter
       rate_limit.add size
     end
   end
+
+  private
+
+  attr_reader :connection_pool, :threshold, :interval, :namespace
 end

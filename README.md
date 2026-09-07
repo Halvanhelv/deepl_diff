@@ -17,6 +17,16 @@ If your user changes a single word within the long description, you will be char
 
 Much better approach is to try to translate every repeated structural element (sentence) in your texts array just once to save money. This gem helps to make it done.
 
+## Dependencies
+
+This gem loads two: [`ox`](https://github.com/ohler55/ox) to walk the HTML, and
+[`punkt-segmenter`](https://github.com/lfcipriani/punkt-segmenter) to split text
+into sentences.
+
+Everything else is duck typed and supplied by you: `DeepLDiff.api` is anything
+answering to `#translate`, and both `RedisCacheStore` and `RedisRateLimiter`
+take anything answering to `#with`. Bring your own client, pool and store.
+
 ## Installation
 
 Add this line to your application's Gemfile:
@@ -38,11 +48,14 @@ Or install it yourself as:
 ```ruby
 require "deepl_diff"
 
-# This dependencies are not included, as you might need to roll your own cache based on different store
+# None of these are dependencies of this gem. It loads only `ox` and
+# `punkt-segmenter`; the API client, the connection pool, and whatever backs
+# the cache and the rate limiter are yours to choose and to require.
+require "deepl"
 require "redis"
 require "connection_pool"
 require "redis-namespace"
-require "ratelimit" # Optional, if you will use
+require "ratelimit" # Optional, only if you use the rate limiter
 
 # Setup https://github.com/wikiti/deepl-rb
 DeepL.configure do |config|
@@ -108,10 +121,10 @@ DeepL API has a limitation: query can not be longer than approximately 128 KB. I
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake test` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
 
 To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/wikiti/deepl-rb.
+Bug reports and pull requests are welcome on GitHub at https://github.com/Halvanhelv/deepl_diff.
