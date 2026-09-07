@@ -33,6 +33,15 @@ between revisions of long texts.
           "public gem pushes."
   end
 
+  spec.post_install_message = <<~MESSAGE
+    deepl_diff is being replaced by translation_diff, which supports
+    translation providers other than DeepL.
+
+    This version of deepl_diff keeps working and will not change again.
+
+    https://rubygems.org/gems/translation_diff
+  MESSAGE
+
   spec.files = `git ls-files -z`.split("\x0").reject do |f|
     f.match(%r{^(test|spec|features)/})
   end
