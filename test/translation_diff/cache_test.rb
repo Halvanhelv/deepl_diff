@@ -35,11 +35,11 @@ class CacheTest < Minitest::Test
 
   def setup
     @store = RecordingStore.new
-    DeepLDiff.cache_store = @store
+    TranslationDiff.cache_store = @store
   end
 
   def teardown
-    DeepLDiff.cache_store = nil
+    TranslationDiff.cache_store = nil
   end
 
   # Two providers writing to one store used to collide: switching DeepL for
@@ -96,17 +96,17 @@ class CacheTest < Minitest::Test
   # or one that embeds a memory address) must not be allowed to silently
   # produce an unreproducible cache key.
   def test_an_unsupported_option_value_raises
-    assert_raises(DeepLDiff::Cache::Error) { key_for(options: { a: Object.new }) }
+    assert_raises(TranslationDiff::Cache::Error) { key_for(options: { a: Object.new }) }
   end
 
   # cached_and_missing pairs the store's response with the requested values
   # by position, trusting the store to return results in key order. A
   # database-backed store answering `WHERE key IN (...)` will not.
   def test_cached_and_missing_pairs_results_positionally
-    DeepLDiff.cache_store = PositionalStore.new(["cached one", nil, "cached three"])
+    TranslationDiff.cache_store = PositionalStore.new(["cached one", nil, "cached three"])
 
-    cached, missing = DeepLDiff::Cache.new(:en, :ru, provider: "deepl")
-                                      .cached_and_missing(%w[one two three])
+    cached, missing = TranslationDiff::Cache.new(:en, :ru, provider: "deepl")
+                                            .cached_and_missing(%w[one two three])
 
     assert_equal ["cached one", nil, "cached three"], cached
     assert_equal ["two"], missing
@@ -115,7 +115,7 @@ class CacheTest < Minitest::Test
   private
 
   def key_for(value: "text", from: :en, to: :ru, provider: "deepl", options: {})
-    DeepLDiff::Cache.new(from, to, provider: provider, options: options)
-                    .cached_and_missing([value])
+    TranslationDiff::Cache.new(from, to, provider: provider, options: options)
+                          .cached_and_missing([value])
   end
 end

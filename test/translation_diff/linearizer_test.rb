@@ -11,9 +11,9 @@ class LinearizerTest < Minitest::Test
 
   CASES.each do |name, value|
     define_method(:"test_round_trips_#{name}") do
-      linearized = DeepLDiff::Linearizer.linearize(value)
+      linearized = TranslationDiff::Linearizer.linearize(value)
 
-      assert_equal value, DeepLDiff::Linearizer.restore(value, linearized)
+      assert_equal value, TranslationDiff::Linearizer.restore(value, linearized)
     end
   end
 end

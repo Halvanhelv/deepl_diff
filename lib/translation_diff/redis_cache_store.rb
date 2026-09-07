@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-class DeepLDiff::RedisCacheStore
+class TranslationDiff::RedisCacheStore
   ONE_WEEK = 60 * 60 * 24 * 7
 
   # `connection_pool` is anything answering to #with, and what it yields is
   # anything Redis::Namespace accepts. Neither gem is a dependency of this one.
-  def initialize(connection_pool, timeout: ONE_WEEK, namespace: DeepLDiff::CACHE_NAMESPACE)
+  def initialize(connection_pool, timeout: ONE_WEEK, namespace: TranslationDiff::CACHE_NAMESPACE)
     @connection_pool = connection_pool
     @timeout = timeout
     @namespace = namespace

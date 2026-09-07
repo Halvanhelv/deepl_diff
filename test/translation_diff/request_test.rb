@@ -47,8 +47,8 @@ class RequestTest < Minitest::Test
   end
 
   def teardown
-    DeepLDiff.api = nil
-    DeepLDiff.cache_store = nil
+    TranslationDiff.api = nil
+    TranslationDiff.cache_store = nil
   end
 
   def test_translates_a_plain_string
@@ -104,11 +104,11 @@ class RequestTest < Minitest::Test
   def test_repeated_calls_leave_the_callers_options_hash_alone
     options = { from: :en, to: :ru }
 
-    DeepLDiff.api = FakeApi.new(["Какая-то строка", "Какая-то строка"])
-    DeepLDiff.cache_store = FakeCacheStore.new
+    TranslationDiff.api = FakeApi.new(["Какая-то строка", "Какая-то строка"])
+    TranslationDiff.cache_store = FakeCacheStore.new
 
     2.times do
-      assert_equal "Какая-то строка", DeepLDiff.translate("Some string", **options)
+      assert_equal "Какая-то строка", TranslationDiff.translate("Some string", **options)
     end
     assert_equal({ from: :en, to: :ru }, options)
   end
@@ -118,7 +118,7 @@ class RequestTest < Minitest::Test
   # pre-task caller passed -- is no longer accepted.
   def test_the_positional_options_hash_is_no_longer_accepted
     assert_raises(ArgumentError) do
-      DeepLDiff::Request.new("text", { from: :en, to: :ru })
+      TranslationDiff::Request.new("text", { from: :en, to: :ru })
     end
   end
 
@@ -127,32 +127,32 @@ class RequestTest < Minitest::Test
   # for and translated into its own language.
   def test_skips_the_translation_when_the_detected_language_is_the_target
     api = FakeApi.new([], detected: "RU")
-    DeepLDiff.api = api
-    DeepLDiff.cache_store = FakeCacheStore.new
+    TranslationDiff.api = api
+    TranslationDiff.cache_store = FakeCacheStore.new
 
-    result = DeepLDiff::Request.new("привет", to: :ru).call
+    result = TranslationDiff::Request.new("привет", to: :ru).call
 
     assert_equal "привет", result
     assert_equal [[:detect, "привет"]], api.calls
   end
 
   def test_raises_when_from_is_missing_and_the_adapter_cannot_detect
-    DeepLDiff.api = DeepLDiff::Adapters::Null.new
-    DeepLDiff.cache_store = FakeCacheStore.new
+    TranslationDiff.api = TranslationDiff::Adapters::Null.new
+    TranslationDiff.cache_store = FakeCacheStore.new
 
-    error = assert_raises(DeepLDiff::Request::Error) do
-      DeepLDiff::Request.new("text", to: :ru).call
+    error = assert_raises(TranslationDiff::Request::Error) do
+      TranslationDiff::Request.new("text", to: :ru).call
     end
 
     assert_match(/cannot detect/, error.message)
   end
 
   def test_raises_when_the_api_returns_fewer_translations_than_asked_for
-    DeepLDiff.api = FakeApi.new(%w[Один])
-    DeepLDiff.cache_store = FakeCacheStore.new
+    TranslationDiff.api = FakeApi.new(%w[Один])
+    TranslationDiff.cache_store = FakeCacheStore.new
 
-    error = assert_raises(DeepLDiff::Request::Error) do
-      DeepLDiff::Request.new({ a: "One", b: "Two" }, from: :en, to: :ru).call
+    error = assert_raises(TranslationDiff::Request::Error) do
+      TranslationDiff::Request.new({ a: "One", b: "Two" }, from: :en, to: :ru).call
     end
 
     assert_match(/returned 1 translations for 2 values/, error.message)
@@ -164,30 +164,30 @@ class RequestTest < Minitest::Test
   UNTRANSLATABLE.each do |value|
     define_method(:"test_passes_through_#{value.inspect.gsub(/\W/, '_')}_untouched") do
       api = FakeApi.new([])
-      DeepLDiff.api = api
-      DeepLDiff.cache_store = FakeCacheStore.new
+      TranslationDiff.api = api
+      TranslationDiff.cache_store = FakeCacheStore.new
 
-      assert_equal value, DeepLDiff::Request.new(value, from: :en, to: :ru).call
+      assert_equal value, TranslationDiff::Request.new(value, from: :en, to: :ru).call
       assert_empty api.calls
     end
   end
 
   def test_passes_through_nil_untouched
     api = FakeApi.new([])
-    DeepLDiff.api = api
-    DeepLDiff.cache_store = FakeCacheStore.new
+    TranslationDiff.api = api
+    TranslationDiff.cache_store = FakeCacheStore.new
 
-    assert_nil DeepLDiff::Request.new(nil, from: :en, to: :ru).call
+    assert_nil TranslationDiff::Request.new(nil, from: :en, to: :ru).call
     assert_empty api.calls
   end
 
   # Scalars nested in a structure are passed through too, while nil keeps
   # collapsing to "" the way it always has.
   def test_passes_nested_scalars_through_and_still_blanks_out_nils
-    DeepLDiff.api = FakeApi.new(%w[Один])
-    DeepLDiff.cache_store = FakeCacheStore.new
+    TranslationDiff.api = FakeApi.new(%w[Один])
+    TranslationDiff.cache_store = FakeCacheStore.new
 
-    result = DeepLDiff::Request.new({ a: "One", n: 42, skip: nil }, from: :en, to: :ru).call
+    result = TranslationDiff::Request.new({ a: "One", n: 42, skip: nil }, from: :en, to: :ru).call
 
     assert_equal({ a: "Один", n: 42, skip: "" }, result)
   end
@@ -196,10 +196,10 @@ class RequestTest < Minitest::Test
   # described: an adapter declaring tiny limits must change the batching.
   def test_batches_according_to_the_limits_the_adapter_declares
     api = FakeApi.new(%w[Один Два], max_batch_size: 1)
-    DeepLDiff.api = api
-    DeepLDiff.cache_store = FakeCacheStore.new
+    TranslationDiff.api = api
+    TranslationDiff.cache_store = FakeCacheStore.new
 
-    DeepLDiff::Request.new({ a: "One", b: "Two" }, from: :en, to: :ru).call
+    TranslationDiff::Request.new({ a: "One", b: "Two" }, from: :en, to: :ru).call
 
     assert_equal 2, api.calls.size, "one call per text at a batch size of 1"
   end
@@ -210,9 +210,9 @@ class RequestTest < Minitest::Test
   # Returns the translation and the API fake, so the call can be asserted on.
   def translate(values, response)
     api = FakeApi.new(response)
-    DeepLDiff.api = api
-    DeepLDiff.cache_store = FakeCacheStore.new
+    TranslationDiff.api = api
+    TranslationDiff.cache_store = FakeCacheStore.new
 
-    [DeepLDiff::Request.new(values, from: :en, to: :ru).call, api]
+    [TranslationDiff::Request.new(values, from: :en, to: :ru).call, api]
   end
 end

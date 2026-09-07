@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class DeepLDiff::Tokenizer < Ox::Sax
+class TranslationDiff::Tokenizer < Ox::Sax
   SKIP = %i[script style].freeze
   INNER_SPANS = %i[notranslate span end_span end_notranslate].freeze
   HTML_OPTIONS = { smart: true, skip: :skip_none }.freeze

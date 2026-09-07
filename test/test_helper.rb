@@ -4,7 +4,7 @@ require "simplecov"
 
 SimpleCov.start
 
-require "deepl_diff"
+require "translation_diff"
 
 require "minitest/autorun"
 

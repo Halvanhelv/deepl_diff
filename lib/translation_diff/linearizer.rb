@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class DeepLDiff::Linearizer
+class TranslationDiff::Linearizer
   class << self
     def linearize(struct, array = [])
       case struct

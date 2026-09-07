@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class DeepLDiff::RedisRateLimiter
+class TranslationDiff::RedisRateLimiter
   class RateLimitExceeded < StandardError; end
 
   DEFAULT_THRESHOLD = 8000
@@ -11,7 +11,7 @@ class DeepLDiff::RedisRateLimiter
   def initialize(connection_pool,
                  threshold: DEFAULT_THRESHOLD,
                  interval: DEFAULT_INTERVAL,
-                 namespace: DeepLDiff::CACHE_NAMESPACE)
+                 namespace: TranslationDiff::CACHE_NAMESPACE)
     @connection_pool = connection_pool
     @threshold = threshold
     @interval = interval

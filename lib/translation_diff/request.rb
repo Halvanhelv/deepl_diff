@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-class DeepLDiff::Request
+class TranslationDiff::Request
   extend Forwardable
 
   class Error < StandardError; end
 
-  def_delegators :DeepLDiff, :api, :cache_store, :rate_limiter
-  def_delegators :"DeepLDiff::Linearizer", :linearize, :restore
+  def_delegators :TranslationDiff, :api, :cache_store, :rate_limiter
+  def_delegators :"TranslationDiff::Linearizer", :linearize, :restore
 
   def initialize(values, from: nil, to: nil, **options)
     @values = values
@@ -51,10 +51,10 @@ class DeepLDiff::Request
   end
 
   def validate_globals
-    raise "Set DeepLDiff.api before calling ::translate" unless api
+    raise "Set TranslationDiff.api before calling ::translate" unless api
     return if cache_store
 
-    raise "Set DeepLDiff.cache_store before calling ::translate"
+    raise "Set TranslationDiff.cache_store before calling ::translate"
   end
 
   # Extracts flat text array
@@ -69,7 +69,7 @@ class DeepLDiff::Request
   # => [..., [["<b>", :markup], ["Good", :text], ...]]
   def tokens
     @tokens ||= texts.map do |value|
-      DeepLDiff::Tokenizer.tokenize(value)
+      TranslationDiff::Tokenizer.tokenize(value)
     end
   end
 
@@ -97,7 +97,7 @@ class DeepLDiff::Request
   # (groups less 2k sym)
   # => [[ ..., "Good", "Boy", ... ]]
   def chunks
-    @chunks ||= DeepLDiff::Chunker.new(
+    @chunks ||= TranslationDiff::Chunker.new(
       text_tokens_texts,
       limit: api.max_request_size,
       count_limit: api.max_batch_size
@@ -138,7 +138,7 @@ class DeepLDiff::Request
   end
 
   def restore_spacing(source_value, value)
-    DeepLDiff::Spacing.restore(source_value, value)
+    TranslationDiff::Spacing.restore(source_value, value)
   end
 
   # Restores texts from tokens
@@ -171,7 +171,7 @@ class DeepLDiff::Request
   end
 
   def cache
-    @cache ||= DeepLDiff::Cache.new(from, to, provider: api.cache_key, options: options)
+    @cache ||= TranslationDiff::Cache.new(from, to, provider: api.cache_key, options: options)
   end
 
   def check_rate_limit(values)
