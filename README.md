@@ -23,9 +23,11 @@ This gem loads two: [`ox`](https://github.com/ohler55/ox) to walk the HTML, and
 [`punkt-segmenter`](https://github.com/lfcipriani/punkt-segmenter) to split text
 into sentences.
 
-Everything else is duck typed and supplied by you: `TranslationDiff.api` is anything
-answering to `#translate`, and both `RedisCacheStore` and `RedisRateLimiter`
-take anything answering to `#with`. Bring your own client, pool and store.
+Everything else is duck typed and supplied by you: `TranslationDiff.api` must satisfy
+the five-method adapter contract described in [Adapters and the adapter
+contract](#adapters-and-the-adapter-contract) below -- not just `#translate` -- and both
+`RedisCacheStore` and `RedisRateLimiter` take anything answering to `#with`. Bring your
+own client, pool and store.
 
 ## Installation
 
@@ -99,8 +101,13 @@ def translate(texts, from:, to:, **options)
 # guessing.
 def detect(text)
 
-# The largest single request the provider accepts, in characters. Used to
-# split long texts into multiple requests.
+# The largest single request the provider accepts, in characters of the
+# escaped form -- which is what the chunker measures (CGI.escape(text).size,
+# not String#size). For Cyrillic and other non-Latin text this is 6 to 9
+# times the raw character count. Declaring the provider's raw character
+# limit here will either waste most of the budget (if you under-report) or
+# raise Chunker::Error on text the provider would actually have accepted
+# (if you over-report). Used to split long texts into multiple requests.
 def max_request_size
 
 # The largest number of strings the provider accepts in one batched request.
@@ -122,6 +129,30 @@ behave as documented above.
 `deepl_diff` is deprecated in favor of `translation_diff`, which is
 functionally the same gem under a name that no longer implies a dependency on
 DeepL specifically.
+
+**Upgrading from `deepl_diff`:** every cache key changed in 3.0.0 -- the provider,
+the provider options and normalised language codes are now part of the key.
+Nothing cached by `deepl_diff` is reused; the next translation of every sentence is
+a cache miss, once, everywhere. See [CHANGELOG.md](CHANGELOG.md) for the full list
+of breaking changes.
+
+## Errors
+
+Every error this gem raises inherits from `TranslationDiff::Error < StandardError`,
+so rescuing the gem's failures in one clause is a single `rescue TranslationDiff::Error`:
+
+```
+TranslationDiff::Error
+├── TranslationDiff::Request::Error        # e.g. api/cache_store not configured,
+│                                           # adapter returned the wrong number of
+│                                           # translations, from: missing and the
+│                                           # adapter cannot detect
+├── TranslationDiff::Cache::Error          # provider options have no stable
+│                                           # serialisation for the cache key
+├── TranslationDiff::Chunker::Error        # a single value is larger than the
+│                                           # adapter's max_request_size
+└── TranslationDiff::RedisRateLimiter::RateLimitExceeded
+```
 
 ## How it works
 

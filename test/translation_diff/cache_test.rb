@@ -92,6 +92,15 @@ class CacheTest < Minitest::Test
     refute_equal @store.keys[0], @store.keys[1]
   end
 
+  # An Array-valued option (e.g. glossary_ids: %w[a b]) exercises the Array
+  # branch of #canonical, which no other test in this file reaches.
+  def test_an_array_option_value_is_part_of_the_digest
+    key_for(options: { glossary_ids: %w[a b] })
+    key_for(options: { glossary_ids: %w[a c] })
+
+    refute_equal @store.keys[0], @store.keys[1]
+  end
+
   # An option value with no stable serialisation (no #inspect of its own,
   # or one that embeds a memory address) must not be allowed to silently
   # produce an unreproducible cache key.

@@ -46,6 +46,24 @@ class RequestTest < Minitest::Test
     end
   end
 
+  # Already has every key cached, regardless of what it is asked for. Proves
+  # the all-cached short circuit in Request#chunks_translated: the gem's
+  # headline behaviour is serving a translation from cache without calling
+  # the adapter at all.
+  class AllCachedStore
+    def initialize(responses)
+      @responses = responses
+    end
+
+    def read_multi(keys)
+      @responses.first(keys.size)
+    end
+
+    def write(*)
+      raise "should not write when nothing was missing"
+    end
+  end
+
   def teardown
     TranslationDiff.api = nil
     TranslationDiff.cache_store = nil
@@ -202,6 +220,20 @@ class RequestTest < Minitest::Test
     TranslationDiff::Request.new({ a: "One", b: "Two" }, from: :en, to: :ru).call
 
     assert_equal 2, api.calls.size, "one call per text at a batch size of 1"
+  end
+
+  # Every fake cache store elsewhere in this file always misses, so this is
+  # the only Request-level test exercising a cache hit: a translation served
+  # from the store without ever reaching the adapter.
+  def test_serves_a_translation_from_cache_without_calling_the_adapter
+    api = FakeApi.new([])
+    TranslationDiff.api = api
+    TranslationDiff.cache_store = AllCachedStore.new(["Какая-то строка"])
+
+    result = TranslationDiff::Request.new("Some string", from: :en, to: :ru).call
+
+    assert_equal "Какая-то строка", result
+    assert_empty api.calls
   end
 
   private
