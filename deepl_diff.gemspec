@@ -45,12 +45,9 @@ between revisions of long texts.
   spec.add_development_dependency "rubocop", "~> 1.90"
   spec.add_development_dependency "simplecov", "~> 1.2"
 
-  spec.add_dependency "connection_pool", ">= 2.4", "< 4.0"
-  spec.add_dependency "deepl-rb", "~> 3.9"
-  spec.add_dependency "dry-initializer", "~> 3.2"
+  # The only two gems this one loads. Everything else -- the DeepL client, the
+  # connection pool, and whatever backs the cache and the rate limiter -- is
+  # supplied by the application and duck typed, so it stays out of the gemspec.
   spec.add_dependency "ox", "~> 2.14"
   spec.add_dependency "punkt-segmenter", "~> 0.9"
-  spec.add_dependency "ratelimit", "~> 1.1"
-  spec.add_dependency "redis", ">= 5.0", "< 7.0"
-  spec.add_dependency "redis-namespace", "~> 1.11"
 end

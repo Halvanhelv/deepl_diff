@@ -1,12 +1,15 @@
 # frozen_string_literal: true
 
 class DeepLDiff::RedisCacheStore
-  extend Dry::Initializer
+  ONE_WEEK = 60 * 60 * 24 * 7
 
-  param :connection_pool
-
-  option :timeout, default: proc { 60 * 60 * 24 * 7 }
-  option :namespace, default: proc { DeepLDiff::CACHE_NAMESPACE }
+  # `connection_pool` is anything answering to #with, and what it yields is
+  # anything Redis::Namespace accepts. Neither gem is a dependency of this one.
+  def initialize(connection_pool, timeout: ONE_WEEK, namespace: DeepLDiff::CACHE_NAMESPACE)
+    @connection_pool = connection_pool
+    @timeout = timeout
+    @namespace = namespace
+  end
 
   def read_multi(keys)
     redis { |redis| redis.mget(*keys) }
@@ -17,6 +20,8 @@ class DeepLDiff::RedisCacheStore
   end
 
   private
+
+  attr_reader :connection_pool, :timeout, :namespace
 
   def redis
     connection_pool.with do |redis|

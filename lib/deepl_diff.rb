@@ -7,8 +7,6 @@ require "stringio"
 
 require "ox"
 require "punkt-segmenter"
-require "dry/initializer"
-require "deepl"
 
 require "deepl_diff/version"
 require "deepl_diff/tokenizer"

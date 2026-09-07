@@ -1,14 +1,15 @@
 # frozen_string_literal: true
 
 class DeepLDiff::Request
-  extend Dry::Initializer
   extend Forwardable
-
-  param :values
-  param :options
 
   def_delegators :DeepLDiff, :api, :cache_store, :rate_limiter
   def_delegators :"DeepLDiff::Linearizer", :linearize, :restore
+
+  def initialize(values, options)
+    @values = values
+    @options = options
+  end
 
   def call
     validate_globals
@@ -19,6 +20,8 @@ class DeepLDiff::Request
   end
 
   private
+
+  attr_reader :values, :options
 
   def from
     @from ||= options.delete(:from) || detect_language

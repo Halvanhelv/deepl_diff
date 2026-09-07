@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class DeepLDiff::Chunker
-  extend ::Dry::Initializer
-
   class Error < StandardError; end
 
   Chunk = Struct.new(:texts, :bytesize)
@@ -10,9 +8,11 @@ class DeepLDiff::Chunker
   MAX_CHUNK_SIZE = 1700
   COUNT_LIMIT = 300
 
-  param :values
-  option :limit, default: proc { MAX_CHUNK_SIZE }
-  option :count_limit, default: proc { COUNT_LIMIT }
+  def initialize(values, limit: MAX_CHUNK_SIZE, count_limit: COUNT_LIMIT)
+    @values = values
+    @limit = limit
+    @count_limit = count_limit
+  end
 
   def call
     chunks.map(&:texts)
@@ -34,6 +34,8 @@ class DeepLDiff::Chunker
   end
 
   private
+
+  attr_reader :values, :limit, :count_limit
 
   def next_chunk?(tail, value)
     tail.nil? ||
