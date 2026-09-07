@@ -3,11 +3,8 @@
 require "test_helper"
 
 class RequestTest < Minitest::Test
-  Translation = Struct.new(:text)
-  Detection = Struct.new(:detected_source_language)
-
-  # Records what it was asked to translate so the call can be asserted on,
-  # and answers with a canned response.
+  # A minimal adapter. Records what it was asked to translate so the call
+  # can be asserted on, and answers with a canned response.
   class FakeApi
     attr_reader :calls, :max_request_size, :max_batch_size
 
@@ -19,13 +16,17 @@ class RequestTest < Minitest::Test
       @calls = []
     end
 
-    def translate(text, from, to, options = {})
-      @calls << [text, from, to, options]
-      return Detection.new(@detected) if from.nil?
-
-      taken = @response.shift(Array(text).size)
-      taken.map { |value| Translation.new(value) }
+    def translate(texts, from:, to:, **options)
+      @calls << [texts, from, to, options]
+      @response.shift(texts.size)
     end
+
+    def detect(text)
+      @calls << [:detect, text]
+      @detected
+    end
+
+    def cache_key = "fake"
   end
 
   # Always misses, so every value reaches the API.
@@ -132,7 +133,18 @@ class RequestTest < Minitest::Test
     result = DeepLDiff::Request.new("привет", to: :ru).call
 
     assert_equal "привет", result
-    assert_equal 1, api.calls.size, "only the detection call should be made"
+    assert_equal [[:detect, "привет"]], api.calls
+  end
+
+  def test_raises_when_from_is_missing_and_the_adapter_cannot_detect
+    DeepLDiff.api = DeepLDiff::Adapters::Null.new
+    DeepLDiff.cache_store = FakeCacheStore.new
+
+    error = assert_raises(DeepLDiff::Request::Error) do
+      DeepLDiff::Request.new("text", to: :ru).call
+    end
+
+    assert_match(/cannot detect/, error.message)
   end
 
   def test_raises_when_the_api_returns_fewer_translations_than_asked_for

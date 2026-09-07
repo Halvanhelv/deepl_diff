@@ -45,8 +45,9 @@ class DeepLDiff::Request
   end
 
   def detect_language
-    api.translate(text_tokens_texts.join(" ")[0..100], nil, to)
-       .detected_source_language.downcase
+    raise Error, "Pass from: -- #{api.class} cannot detect the source language" unless api.respond_to?(:detect)
+
+    api.detect(text_tokens_texts.join(" ")[0..100])
   end
 
   def validate_globals
@@ -160,13 +161,13 @@ class DeepLDiff::Request
 
   def call_api(values)
     check_rate_limit(values)
-    translations = [api.translate(values, from, to, options)].flatten.map(&:text)
+    translations = api.translate(values, from: from, to: to, **options)
     return translations if translations.size == values.size
 
     # Letting a short response through means shifting nils into the results,
     # which surfaces much later as a NoMethodError far from the cause.
     raise Error,
-          "API returned #{translations.size} translations for #{values.size} values"
+          "Adapter returned #{translations.size} translations for #{values.size} values"
   end
 
   def cache
