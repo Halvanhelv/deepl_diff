@@ -20,6 +20,19 @@ class CacheTest < Minitest::Test
     end
   end
 
+  # A store that answers with fixed, caller-chosen results regardless of the
+  # keys it is asked about, to pin the positional contract between the keys
+  # sent and the results read back.
+  class PositionalStore
+    def initialize(responses)
+      @responses = responses
+    end
+
+    def read_multi(_keys)
+      @responses
+    end
+  end
+
   def setup
     @store = RecordingStore.new
     DeepLDiff.cache_store = @store
@@ -68,6 +81,35 @@ class CacheTest < Minitest::Test
     key_for(value: "  text  ")
 
     assert_equal @store.keys[0], @store.keys[1]
+  end
+
+  # nil and "" are different values; #to_s would collide them, so the digest
+  # must be built from a serialisation that keeps them apart.
+  def test_nil_and_empty_string_option_values_produce_different_keys
+    key_for(options: { a: nil })
+    key_for(options: { a: "" })
+
+    refute_equal @store.keys[0], @store.keys[1]
+  end
+
+  # An option value with no stable serialisation (no #inspect of its own,
+  # or one that embeds a memory address) must not be allowed to silently
+  # produce an unreproducible cache key.
+  def test_an_unsupported_option_value_raises
+    assert_raises(DeepLDiff::Cache::Error) { key_for(options: { a: Object.new }) }
+  end
+
+  # cached_and_missing pairs the store's response with the requested values
+  # by position, trusting the store to return results in key order. A
+  # database-backed store answering `WHERE key IN (...)` will not.
+  def test_cached_and_missing_pairs_results_positionally
+    DeepLDiff.cache_store = PositionalStore.new(["cached one", nil, "cached three"])
+
+    cached, missing = DeepLDiff::Cache.new(:en, :ru, provider: "deepl")
+                                      .cached_and_missing(%w[one two three])
+
+    assert_equal ["cached one", nil, "cached three"], cached
+    assert_equal ["two"], missing
   end
 
   private
