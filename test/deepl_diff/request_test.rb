@@ -96,9 +96,11 @@ class RequestTest < Minitest::Test
     assert_equal [[%w[One Black So Red that], :en, :ru, {}]], api.calls
   end
 
-  # Keyword arguments collect a fresh hash on every call, which is what
-  # made the 2.1.0 fix for the consumed-hash bug unnecessary here.
-  def test_a_splatted_options_hash_survives_repeated_calls
+  # True of the public interface, but not new: 2.1.0 already protected the
+  # caller's hash from mutation by dup-ing it in the initializer. Keyword
+  # arguments keep that guarantee for a different reason (a fresh hash per
+  # call), but this test alone cannot tell the two implementations apart.
+  def test_repeated_calls_leave_the_callers_options_hash_alone
     options = { from: :en, to: :ru }
 
     DeepLDiff.api = FakeApi.new(["Какая-то строка", "Какая-то строка"])
@@ -108,6 +110,15 @@ class RequestTest < Minitest::Test
       assert_equal "Какая-то строка", DeepLDiff.translate("Some string", **options)
     end
     assert_equal({ from: :en, to: :ru }, options)
+  end
+
+  # This is what actually changed: the initializer declares one positional
+  # parameter now, so a single positional options hash -- which is what every
+  # pre-task caller passed -- is no longer accepted.
+  def test_the_positional_options_hash_is_no_longer_accepted
+    assert_raises(ArgumentError) do
+      DeepLDiff::Request.new("text", { from: :en, to: :ru })
+    end
   end
 
   # A detected language comes back as a String while :to is usually a Symbol,

@@ -26,8 +26,8 @@ module DeepLDiff
   class << self
     attr_accessor :api, :cache_store, :rate_limiter
 
-    def translate(values, **)
-      Request.new(values, **).call
+    def translate(values, from: nil, to: nil, **)
+      Request.new(values, from: from, to: to, **).call
     end
   end
 
