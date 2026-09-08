@@ -14,16 +14,26 @@ class InstrumentationTest < ConfiguredTest
     end
   end
 
+  # Assignable via `config.rate_limiter =`, same as `config.cache =`. Always
+  # lets the call through, so `check_rate_limit` has something to call
+  # without needing a real Redis connection -- and so the `rate_limit` event
+  # fires on every translation in this file, alongside `translate`, `cache`
+  # and `request`.
+  class FakeRateLimiter
+    def check(_size) = nil
+  end
+
   def setup
     super
     @recorder = Recorder.new
     TranslationDiff.configure do |c|
       c.provider = :null
       c.instrumenter = @recorder
+      c.rate_limiter = FakeRateLimiter.new
     end
   end
 
-  def test_a_translation_emits_translate_cache_and_request_events
+  def test_a_translation_emits_translate_cache_request_and_rate_limit_events
     TranslationDiff.translate("Hello there.", from: "en", to: "ru")
 
     names = @recorder.events.map(&:first)
@@ -31,6 +41,7 @@ class InstrumentationTest < ConfiguredTest
     assert_includes names, "translate.translation_diff"
     assert_includes names, "cache.translation_diff"
     assert_includes names, "request.translation_diff"
+    assert_includes names, "rate_limit.translation_diff"
   end
 
   def test_the_translate_event_carries_languages_provider_and_a_count
@@ -53,12 +64,29 @@ class InstrumentationTest < ConfiguredTest
     assert_equal 1, payload[:misses]
   end
 
+  def test_the_rate_limit_event_carries_the_provider_and_a_character_count
+    TranslationDiff.translate("Hello there.", from: "en", to: "ru")
+
+    payload = @recorder.events.find { |name, _| name == "rate_limit.translation_diff" }.last
+
+    assert_equal "null", payload[:provider]
+    assert_equal "Hello there.".size, payload[:characters]
+  end
+
+  ALL_EVENT_NAMES = %w[translate.translation_diff cache.translation_diff
+                       request.translation_diff rate_limit.translation_diff].sort.freeze
+
+  # A guard that only checked payload content would pass even if an event
+  # quietly stopped firing -- asserting the full set of names first makes
+  # sure every event this library emits is actually present and inspected,
+  # not just whichever ones happened to show up.
   def test_no_payload_ever_contains_the_text_being_translated
     secret = "Zaphod Beeblebrox is president."
     TranslationDiff.translate(secret, from: "en", to: "ru")
 
-    serialised = @recorder.events.map { |name, payload| "#{name}#{payload}" }.join
+    assert_equal ALL_EVENT_NAMES, @recorder.events.map(&:first).sort
 
+    serialised = @recorder.events.map { |name, payload| "#{name}#{payload}" }.join
     refute_includes serialised, "Zaphod"
     refute_includes serialised, secret
   end

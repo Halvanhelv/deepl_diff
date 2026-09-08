@@ -137,6 +137,45 @@ class ConfigurationTest < Minitest::Test
     assert_instance_of TranslationDiff::RedisRateLimiter, @config.rate_limiter
   end
 
+  def test_an_assigned_rate_limiter_object_wins_over_every_value
+    limiter = Object.new
+    @config.rate_limiter = limiter
+
+    assert_same limiter, @config.rate_limiter
+  end
+
+  def test_an_assigned_rate_limiter_object_is_used_even_without_a_rate_limit
+    limiter = Object.new
+    @config.rate_limiter = limiter
+
+    assert_nil @config.rate_limit
+    assert_same limiter, @config.rate_limiter
+  end
+
+  def test_the_default_rate_limiter_is_memoised
+    @config.rate_limit = 100
+
+    assert_same @config.rate_limiter, @config.rate_limiter
+  end
+
+  # Unlike `cache_store`/`provider_instance`/`segmenter_instance`, a copy
+  # does inherit an already-built default rate limiter: `rate_limiter` has
+  # no separate resolved-value reader of its own, so there is only the one
+  # instance variable for `copy` to carry over.
+  def test_copy_shares_a_built_default_rate_limiter
+    @config.rate_limit = 100
+    original_limiter = @config.rate_limiter
+
+    assert_same original_limiter, @config.copy.rate_limiter
+  end
+
+  def test_copy_shares_an_assigned_rate_limiter_object
+    limiter = Object.new
+    @config.rate_limiter = limiter
+
+    assert_same limiter, @config.copy.rate_limiter
+  end
+
   def test_segmenter_instance_resolves_the_default_symbol
     assert_instance_of TranslationDiff::Segmenters::Pragmatic, @config.segmenter_instance
   end
