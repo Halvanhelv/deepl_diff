@@ -52,7 +52,29 @@ class DeepLProviderTest < Minitest::Test
 
     fake.translate(%w[one], from: :en, to: :ru, formality: :less)
 
-    assert_equal [[%w[one], :en, :ru, { formality: :less }]], fake.calls
+    assert_equal({ formality: :less }, fake.calls.first.last.slice(:formality))
+  end
+
+  # What reaches a provider is not plain text: Tokenizer hands a notranslate
+  # span over with its tags. DeepL honours `class="notranslate"` only under
+  # `tag_handling: html`; without it, per DeepL's own documentation, "tags
+  # are treated as regular text" -- and the protected content is translated
+  # while the tags survive, which is exactly the shape of bug nobody spots.
+  def test_translate_asks_for_html_tag_handling
+    fake = FakeDeepL.new
+
+    fake.translate(%w[one], from: :en, to: :ru)
+
+    assert_equal({ tag_handling: :html, tag_handling_version: "v2" },
+                 fake.calls.first.last.slice(:tag_handling, :tag_handling_version))
+  end
+
+  def test_translate_lets_the_caller_override_the_tag_handling
+    fake = FakeDeepL.new
+
+    fake.translate(%w[one], from: :en, to: :ru, tag_handling: :xml)
+
+    assert_equal :xml, fake.calls.first.last[:tag_handling]
   end
 
   def test_detect_downcases_the_language

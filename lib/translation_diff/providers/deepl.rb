@@ -16,6 +16,24 @@ class TranslationDiff::Providers::DeepL
   MAX_REQUEST_SIZE = 1700
   MAX_BATCH_SIZE = 300
 
+  # What arrives here is not plain text, despite having been through the
+  # Tokenizer. A notranslate span is handed over whole, tags included --
+  # that is how the tokenizer marks content the provider must leave alone.
+  # DeepL honours `class="notranslate"` (and `translate="no"`) only under
+  # HTML tag handling; without it, in DeepL's own words, "tags are treated
+  # as regular text". The failure is quiet, because DeepL leaves the tags
+  # themselves alone either way and only the protected content changes:
+  #
+  #   "<span class='notranslate'>Bold Mountain</span> is a good place."
+  #   no tag_handling -> "<span class='notranslate'>Болд-Маунтин</span> — отличное место."
+  #   tag_handling    -> "<span class='notranslate'>Bold Mountain</span> — это хорошее место."
+  #
+  # v2 is the tag handling algorithm DeepL's documentation recommends.
+  # Note that under HTML tag handling DeepL defaults `split_sentences` to
+  # `nonewlines`; this library sends one sentence at a time, so that
+  # changes nothing here.
+  DEFAULT_OPTIONS = { tag_handling: :html, tag_handling_version: "v2" }.freeze
+
   def self.configuration_options = %i[deepl_api_key deepl_host]
 
   # `config.logger` is deliberately NOT forwarded into DeepL::Configuration.
@@ -44,7 +62,7 @@ class TranslationDiff::Providers::DeepL
   end
 
   def translate(texts, from:, to:, **options)
-    Array(request(texts, from, to, options)).map(&:text)
+    Array(request(texts, from, to, DEFAULT_OPTIONS.merge(options))).map(&:text)
   end
 
   def detect(text)

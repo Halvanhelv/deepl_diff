@@ -197,6 +197,15 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
 
 ### Fixed
 
+- `notranslate` works with DeepL. The provider sent no `tag_handling`, and
+  per DeepL's documentation "tags are treated as regular text" without it,
+  so a span the tokenizer had marked as protected was translated anyway.
+  The provider now sends `tag_handling: :html` and
+  `tag_handling_version: "v2"`, both overridable per call. This has been
+  broken since the gem moved from Google to DeepL: `tag_handling` appears
+  nowhere in the repository's history before this change. It failed
+  quietly, because DeepL leaves the tags themselves alone either way and
+  only the protected content came back changed.
 - Comments, doctypes and CDATA sections survive a translation. `Tokenizer`
   declared no handler for those three Ox SAX events, so the bytes each one
   covered belonged to no token: a leading `<!-- ... -->` or `<!DOCTYPE html>`
