@@ -12,13 +12,14 @@ First release under the name **translation_diff**. This gem was published as
 ### Breaking
 
 - Renamed the gem to `translation_diff` and the module to `TranslationDiff`.
-- `TranslationDiff.api` must now be an adapter satisfying the five-method
-  contract (`translate`, optional `detect`, `max_request_size`,
-  `max_batch_size`, `cache_key`) instead of a raw client such as `DeepL`.
+- The provider (`config.provider`; see Removed below for what replaced the
+  old `TranslationDiff.api` accessor) must satisfy the five-method contract
+  (`translate`, optional `detect`, `max_request_size`, `max_batch_size`,
+  `cache_key`) instead of being a raw client such as `DeepL`.
 - `translate` takes keyword arguments -- `translate(values, from:, to:, **options)`
   -- and no longer accepts a positional options hash.
 - Request-size and batch-size limits moved out of `Chunker` and into the
-  adapter (`#max_request_size`, `#max_batch_size`); they are no longer
+  provider (`#max_request_size`, `#max_batch_size`); they are no longer
   hard-coded to DeepL's numbers.
 - **Every cache key changes.** The key now includes the provider's
   `cache_key`, a digest of the provider options, and lowercased language
@@ -26,7 +27,7 @@ First release under the name **translation_diff**. This gem was published as
   prerelease -- is reused. The next translation of every sentence is a cache
   miss, once, everywhere.
 - Dropped `punkt-segmenter` and, with it, its `unicode_utils` dependency.
-  Sentence boundaries are now produced by `TranslationDiff.segmenter`,
+  Sentence boundaries are now produced by `config.segmenter`,
   defaulting to `TranslationDiff::Segmenters::Pragmatic`, backed by the
   [`pragmatic_segmenter`](https://github.com/diasks2/pragmatic_segmenter) gem
   (MIT, zero dependencies of its own) -- so `ox` and `pragmatic_segmenter` are
@@ -39,7 +40,7 @@ First release under the name **translation_diff**. This gem was published as
   gap is largest on languages with no letter case at all -- Arabic, Hindi,
   Armenian, Greek -- which the in-house segmenter cannot reason about by
   design.
-- `TranslationDiff.segmenter.split_offsets` now takes a second, optional
+- `config.segmenter_instance.split_offsets` now takes a second, optional
   `language:` keyword argument. `pragmatic_segmenter` picks its rule set by
   language and falls back to English rules without one, which can
   mis-segment other languages (Russian abbreviations, for one); `from:` is
@@ -49,11 +50,70 @@ First release under the name **translation_diff**. This gem was published as
   back to English for anything `pragmatic_segmenter` does not recognise
   afterward. Without this, DeepL's own codes (`"RU"`, `"EN-GB"`) missed their
   rule set entirely: `pragmatic_segmenter`'s lookup is case-sensitive and
-  region-blind, so this gem's own flagship adapter was hitting the broken
+  region-blind, so this gem's own flagship provider was hitting the broken
   path on every call.
+- **`config.rate_limit` now actually enforces the threshold you configure.**
+  `TranslationDiff::RedisRateLimiter` called `Ratelimit#add(size)`, but that
+  gem's signature is `add(subject, count = 1)` -- so it recorded the hit
+  under a subject *named after the character count*, while `exceeded?`
+  checked a subject nothing ever incremented. The limiter never limited
+  anything, in every release back to `v1.0.2` (tagged 2023-02-16, roughly
+  three years ago). If you have `rate_limit` configured, your traffic has
+  never actually been throttled; on upgrading to 3.0.0 it will be, for the
+  first time, against a threshold you set once and have never seen fire. You
+  changed no configuration, but your throttling behaviour changes on
+  upgrade. Re-validate `rate_limit` and `rate_interval` before upgrading --
+  see "Rate limiting" in the README.
+- `rate_interval` is silently clamped by the `ratelimit` gem's fixed bucket
+  span to roughly **5-600 seconds** (measured: `3600` becomes `600`, `1`
+  becomes `5`). Combined with a limiter that now actually fires, an interval
+  configured above 600 seconds is enforced over 600 seconds instead -- up to
+  six times more eager than the configuration reads. Keep `rate_interval`
+  within that range, or expect a tighter effective window than configured.
+
+### Removed
+
+- The four module-level accessors (`TranslationDiff.api`, `.cache_store`,
+  `.segmenter`, `.rate_limiter`) and `TranslationDiff::CACHE_NAMESPACE`.
+  Every setting now lives on `TranslationDiff::Configuration`, reached
+  through `TranslationDiff.config` or `TranslationDiff.configure`.
 
 ### Added
 
+- `TranslationDiff::Configuration`, a declarative settings object built
+  through the `option(key, default)` macro. Options fall back to their
+  default until assigned, treat a blank string as unset, and support a
+  callable default (evaluated on every read, not at load time). `#copy`
+  carries option values into an isolated configuration without carrying
+  already-built collaborators along with them.
+- `TranslationDiff::Registry`, a small `name -> class` map backing every
+  pluggable extension point: a registered class need only answer
+  `build(config)`. Three registries exist: `TranslationDiff::Providers`,
+  `TranslationDiff::Stores`, and `TranslationDiff::Segmenters.registry`.
+- `TranslationDiff::Context`, returned by `TranslationDiff.context`: an
+  isolated configuration scope with the same `#translate` entry point as the
+  `TranslationDiff` module, for multi-tenant and per-request configuration
+  that never touches the global configuration.
+- Instrumentation and logging: `config.instrumenter` (anything satisfying
+  `ActiveSupport::Notifications`' interface) receives `translate`, `cache`,
+  `request` and `rate_limit` events, each named `<name>.translation_diff`
+  and carrying counts, language codes and provider names only -- never the
+  text being translated, its translation, or a credential. `config.logger`
+  receives a `debug` line per provider resolution, naming the provider
+  class, and is held to the same guarantee: it is never handed to
+  `deepl-rb`, which logs the whole request -- auth header and payload -- at
+  DEBUG when given a logger of its own. See "Instrumentation and logging" in
+  the README for how to opt into that logging deliberately. Both are no-ops,
+  at no extra cost, when left unset.
+- `TranslationDiff::Providers.register` raises when a provider declares a
+  `configuration_options` name another provider already declared. The two
+  would otherwise share one accessor on `TranslationDiff::Configuration`, so
+  a credential set for one service would be sent to the other. The same
+  provider redeclaring its own options stays silent, so a double `require`
+  and Rails development reloading keep working.
+- `TranslationDiff::MemoryCacheStore`, a bounded, in-process LRU, and the
+  new default cache store when `redis_url` is not configured -- so the
+  library works before any infrastructure does.
 - `TranslationDiff::Segmenters::Pragmatic`, the default sentence segmenter,
   wrapping `pragmatic_segmenter`'s per-language rule sets. Before
   segmenting, it shadows every single newline (one with no adjoining
@@ -94,24 +154,38 @@ First release under the name **translation_diff**. This gem was published as
   a sentence to the translation provider. Its central rule has no meaning in
   scripts without letter case, which is why it is no longer the default; it
   stays available for callers who want no extra dependency and translate
-  only from cased scripts. `TranslationDiff.segmenter` is swappable the same
-  way `TranslationDiff.api` and `.cache_store` are.
-- `TranslationDiff::Adapters::DeepL` and `TranslationDiff::Adapters::Null`.
-- `test/support/adapter_contract.rb`, the executable form of the adapter
-  contract; any third-party adapter can include it to verify it behaves as
+  only from cased scripts. `config.segmenter` is swappable the same
+  way `config.provider` and `.cache` are.
+- `TranslationDiff::Providers::DeepL` and `TranslationDiff::Providers::Null`.
+- `test/support/provider_contract.rb`, the executable form of the provider
+  contract; any third-party provider can include it to verify it behaves as
   documented.
-- `detect` is now its own adapter method. Previously
+- `detect` is now its own provider method. Previously
   `api.translate(sample, nil, to)` returned an object of a different shape
   than the same call with `from:` given -- one method, two return types,
-  told apart by an argument's value. An adapter with no `detect` makes
+  told apart by an argument's value. A provider with no `detect` makes
   `from:` required and raises a clear error when it is missing, instead of
   `NoMethodError`.
 
 ### Changed
 
+- `Adapters` renamed to `Providers`, and providers are now registered by
+  name through `TranslationDiff::Providers.register` rather than assigned
+  directly to a module accessor. A provider built through the registry is
+  stamped with its registered name and needs no `cache_key` of its own; an
+  object assigned straight to `config.provider`, bypassing the registry,
+  must define `cache_key` itself or every call through it raises -- it has
+  no registered name to fall back on.
 - The cache key's options digest uses a canonical, version-stable encoding
   instead of `Hash#inspect`, which renders symbol-keyed hashes differently
   across Ruby 3.2-4.0.
+
+### Fixed
+
+- `TranslationDiff::RedisRateLimiter` requires `ratelimit` lazily, on the
+  first check, and raises `TranslationDiff::Error` naming the gem to add
+  when it is missing. Previously the bare constant surfaced a raw
+  `NameError` instead of the message the Redis path already raises.
 
 ## [2.2.0] - 2026-09-07
 

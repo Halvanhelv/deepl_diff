@@ -18,12 +18,20 @@ class TranslationDiff::Providers::DeepL
 
   def self.configuration_options = %i[deepl_api_key deepl_host]
 
+  # `config.logger` is deliberately NOT forwarded into DeepL::Configuration.
+  # deepl-rb logs the whole request at DEBUG -- a "Request details:" line
+  # carrying the Authorization header, DeepL auth key and all, followed by
+  # the payload, which is the text being translated. This library's logger
+  # carries a guarantee that no line it writes holds translated text, source
+  # text, or a credential; handing it to a gem that logs payloads would break
+  # that guarantee silently, at the exact moment someone turns DEBUG on to
+  # diagnose a problem. Anyone who wants deepl-rb's own request log can build
+  # the DeepL::API themselves, wrap it in this provider, and assign that to
+  # `config.provider` -- see "Instrumentation and logging" in the README.
   def self.build(config)
     require "deepl"
 
-    settings = { auth_key: config.deepl_api_key,
-                 host: config.deepl_host,
-                 logger: config.logger }.compact
+    settings = { auth_key: config.deepl_api_key, host: config.deepl_host }.compact
     new(::DeepL::API.new(::DeepL::Configuration.new(settings)))
   rescue LoadError
     raise TranslationDiff::Error,

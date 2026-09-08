@@ -79,6 +79,23 @@ class DeepLProviderTest < Minitest::Test
     assert_equal "https://api-free.deepl.com", host
   end
 
+  # Regression test for a content and credential leak. deepl-rb logs the
+  # whole request at DEBUG -- the Authorization header, DeepL auth key and
+  # all, plus the text being translated -- so forwarding this library's
+  # `config.logger` into DeepL::Configuration wrote customers' content and
+  # the API key into the application log the moment anyone turned DEBUG on.
+  # This gem guarantees its own log lines carry none of that, so the logger
+  # must not cross into deepl-rb.
+  def test_build_does_not_forward_the_logger_into_deepl_rb
+    config = TranslationDiff::Configuration.new
+    config.deepl_api_key = "abc:fx"
+    config.logger = Object.new
+
+    provider = TranslationDiff::Providers::DeepL.build(config)
+
+    assert_nil provider.instance_variable_get(:@api).configuration.logger
+  end
+
   def test_build_raises_when_no_key_is_available
     original = ENV.fetch("DEEPL_AUTH_KEY", nil)
     ENV["DEEPL_AUTH_KEY"] = nil

@@ -11,6 +11,7 @@ require "translation_diff/version"
 require "translation_diff/error"
 require "translation_diff/registry"
 require "translation_diff/configuration"
+require "translation_diff/configuration/provider_option_owners"
 
 require "translation_diff/providers"
 require "translation_diff/providers/null"

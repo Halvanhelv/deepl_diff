@@ -64,15 +64,101 @@ class ConfigurationTest < Minitest::Test
     assert_equal 120, copy.cache_ttl
   end
 
+  # Stand-ins for two provider classes. register_provider_options is handed
+  # the class so it can tell "the same provider declaring its options again"
+  # from "another provider claiming a name that is already taken".
+  class AcmeOptionOwner
+    def self.configuration_options = %i[acme_api_key]
+  end
+
+  class RivalOptionOwner
+    def self.configuration_options = %i[contested_key]
+  end
+
   def test_register_provider_options_adds_readers_and_writers
     # acme_api_key is registered here purely to exercise
     # register_provider_options; it is not a production option and mutating
     # class-level state with it is harmless.
-    TranslationDiff::Configuration.register_provider_options(%i[acme_api_key])
+    TranslationDiff::Configuration.register_provider_options(%i[acme_api_key], AcmeOptionOwner)
     @config.acme_api_key = "secret"
 
     assert_equal "secret", @config.acme_api_key
     assert_includes TranslationDiff::Configuration.options, :acme_api_key
+  end
+
+  # A double `require` and a Rails development reload both re-run
+  # registration; neither is a conflict.
+  def test_the_same_provider_may_redeclare_its_own_options
+    TranslationDiff::Configuration.register_provider_options(%i[acme_repeat_key], AcmeOptionOwner)
+    TranslationDiff::Configuration.register_provider_options(%i[acme_repeat_key], AcmeOptionOwner)
+
+    assert_includes TranslationDiff::Configuration.options, :acme_repeat_key
+  end
+
+  # Without this, `option` returns early on the already-declared name and the
+  # two providers silently share one accessor -- so the credential set for
+  # one is handed to the other.
+  def test_a_different_provider_declaring_a_declared_option_raises
+    TranslationDiff::Configuration.register_provider_options(%i[contested_key], AcmeOptionOwner)
+
+    error = assert_raises(TranslationDiff::Error) do
+      TranslationDiff::Configuration.register_provider_options(%i[contested_key], RivalOptionOwner)
+    end
+
+    assert_match(/contested_key/, error.message)
+    assert_match(/AcmeOptionOwner/, error.message)
+    assert_match(/RivalOptionOwner/, error.message)
+  end
+
+  # A subclass wanting its parent's options is the one case where sharing
+  # the accessor is correct -- subclassing a provider to point it at a
+  # different host or account is an obvious thing to want.
+  class AcmeSubclassOwner < AcmeOptionOwner; end
+
+  def test_a_subclass_of_the_declaring_provider_may_redeclare_its_options
+    TranslationDiff::Configuration.register_provider_options(%i[acme_subclass_key], AcmeOptionOwner)
+    TranslationDiff::Configuration.register_provider_options(%i[acme_subclass_key], AcmeSubclassOwner)
+
+    assert_includes TranslationDiff::Configuration.options, :acme_subclass_key
+  end
+
+  # An unrelated class is still refused, even though a subclass is now
+  # allowed -- the guard only relaxes for an actual inheritance relationship.
+  def test_an_unrelated_class_claiming_a_subclassable_providers_option_still_raises
+    TranslationDiff::Configuration.register_provider_options(%i[acme_unrelated_key], AcmeOptionOwner)
+
+    error = assert_raises(TranslationDiff::Error) do
+      TranslationDiff::Configuration.register_provider_options(%i[acme_unrelated_key], RivalOptionOwner)
+    end
+
+    assert_match(/acme_unrelated_key/, error.message)
+  end
+
+  # A provider that conflicts on its *second* option, once its first
+  # (fresh_option) has already been checked.
+  class IntruderOptionOwner
+    def self.configuration_options = %i[fresh_option owned_by_acme]
+  end
+
+  # register_provider_options used to declare and record ownership key by
+  # key, so a provider whose *second* option conflicted still left its first
+  # option declared and owned by the class that failed to register. Fixed to
+  # check every key before mutating any of them.
+  def test_a_conflict_on_a_later_option_leaves_no_partial_state
+    TranslationDiff::Configuration.register_provider_options(%i[owned_by_acme], AcmeOptionOwner)
+
+    assert_raises(TranslationDiff::Error) do
+      keys = IntruderOptionOwner.configuration_options
+      TranslationDiff::Configuration.register_provider_options(keys, IntruderOptionOwner)
+    end
+
+    refute_includes TranslationDiff::Configuration.options, :fresh_option
+
+    # If the failed attempt had already declared or claimed :fresh_option,
+    # this would raise, blaming a provider that was never registered.
+    TranslationDiff::Configuration.register_provider_options(%i[fresh_option], RivalOptionOwner)
+
+    assert_includes TranslationDiff::Configuration.options, :fresh_option
   end
 
   def test_registering_an_option_twice_does_not_clobber_the_first_default

@@ -7,6 +7,11 @@ class TranslationDiff::RedisRateLimiter
   DEFAULT_INTERVAL = 60
   DEFAULT_NAMESPACE = "translation-diff"
 
+  # Ratelimit counts per subject. This library limits the provider as a
+  # whole rather than per caller, so there is exactly one subject and it
+  # only has to be stable.
+  SUBJECT = "call"
+
   def self.build(config)
     new(config.redis_pool,
         threshold: config.rate_limit,
@@ -27,15 +32,31 @@ class TranslationDiff::RedisRateLimiter
   end
 
   def check(size)
-    connection_pool.with do |redis|
-      rate_limit = Ratelimit.new(namespace, redis: redis)
-      raise RateLimitExceeded if rate_limit.exceeded?("call", threshold: threshold, interval: interval)
+    limiter_class = ratelimit_class
 
-      rate_limit.add size
+    connection_pool.with do |redis|
+      rate_limit = limiter_class.new(namespace, redis: redis)
+      raise RateLimitExceeded if rate_limit.exceeded?(SUBJECT, threshold: threshold, interval: interval)
+
+      rate_limit.add(SUBJECT, size)
     end
   end
 
   private
 
   attr_reader :connection_pool, :threshold, :interval, :namespace
+
+  # `ratelimit` is not a dependency of this gem, so it is required here, at
+  # the first check, rather than at load time -- an application that
+  # configures no `rate_limit` never needs it installed. Naming the bare
+  # constant instead surfaced its absence as a raw NameError; this raises the
+  # same "add this gem" TranslationDiff::Error the Redis path already does.
+  def ratelimit_class
+    require "ratelimit"
+    ::Ratelimit
+  rescue LoadError
+    raise TranslationDiff::Error,
+          "a rate limit was configured but the `ratelimit` gem is not available. " \
+          'Add `gem "ratelimit"` to your Gemfile.'
+  end
 end

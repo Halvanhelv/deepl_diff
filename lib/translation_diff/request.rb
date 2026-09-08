@@ -191,7 +191,7 @@ class TranslationDiff::Request
     # Letting a short response through means shifting nils into the results,
     # which surfaces much later as a NoMethodError far from the cause.
     raise Error,
-          "Adapter returned #{translations.size} translations for #{values.size} values"
+          "Provider returned #{translations.size} translations for #{values.size} values"
   end
 
   def cache

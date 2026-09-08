@@ -42,10 +42,13 @@ module TranslationDiff::Providers
   end
 
   class << self
+    # Options are declared before the registry entry is written, so a
+    # provider whose option names collide with another's raises without
+    # having replaced anything under `name`.
     def register(name, klass)
       klass.include(Naming) unless klass.method_defined?(:cache_key)
+      TranslationDiff::Configuration.register_provider_options(klass.configuration_options, klass)
       registry.register(name, klass)
-      TranslationDiff::Configuration.register_provider_options(klass.configuration_options)
     end
 
     def build(name, config)

@@ -12,6 +12,12 @@
 module TranslationDiff::Instrumentation
   SUFFIX = ".translation_diff"
 
+  # Both methods are private: they are internal plumbing for the class that
+  # includes this module, not part of its public surface. `include` ignores
+  # the includer's own `private` keyword, so the visibility has to be
+  # declared here.
+  private
+
   # A point event (no block) reports a fact that already happened -- a cache
   # hit/miss tally, say -- rather than wrapping work, so it only yields when
   # a block was actually given.

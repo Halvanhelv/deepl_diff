@@ -18,3 +18,10 @@ gem "deepl-rb", "~> 3.9", require: false
 gem "connection_pool", "~> 2.4", require: false
 gem "redis", "~> 5.0", require: false
 gem "redis-namespace", "~> 1.11", require: false
+
+# Not a runtime dependency of the gem (see the gemspec) -- RedisRateLimiter
+# requires it lazily on the first check, so an application that configures no
+# rate limit never needs it installed. It is only here so the test suite,
+# which exercises the limiter against the real Ratelimit class rather than a
+# stand-in, has it available.
+gem "ratelimit", "~> 1.1", require: false

@@ -28,6 +28,10 @@ class InstrumentationTest < ConfiguredTest
     @recorder = Recorder.new
     TranslationDiff.configure do |c|
       c.provider = :null
+      # Pinned so a developer with REDIS_URL set does not have these tests
+      # resolve the Redis store and open a real socket -- the same reason
+      # context_test.rb pins it. It weakens no assertion here.
+      c.cache = :memory
       c.instrumenter = @recorder
       c.rate_limiter = FakeRateLimiter.new
     end

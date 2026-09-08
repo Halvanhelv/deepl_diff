@@ -16,7 +16,7 @@ Gem::Specification.new do |spec|
 TranslationDiff extracts translatable text from HTML, splits it into
 sentences, and caches each sentence by content hash. Only the sentences
 missing from the cache are sent to whichever translation provider you plug
-in through a small adapter contract, so re-translating a long text after a
+in through a small provider contract, so re-translating a long text after a
 small edit costs the price of the edit, not the whole text.
   )
   spec.homepage = "https://github.com/Halvanhelv/translation_diff"

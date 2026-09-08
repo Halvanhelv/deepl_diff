@@ -35,10 +35,22 @@ class TranslationDiff::Configuration
       options << key
     end
 
-    def register_provider_options(keys) = Array(keys).each { |key| option(key) }
+    # Declares the options a provider needs, remembering which provider
+    # declared each one. See ProviderOptionOwners (configuration/
+    # provider_option_owners.rb) for the conflict rules and the
+    # all-or-nothing guarantee.
+    def register_provider_options(keys, provider)
+      keys = Array(keys).map(&:to_sym)
+      provider_option_owners.claim(keys, provider)
+      keys.each { |key| option(key) }
+    end
 
     def options = @options ||= []
     def defaults = @defaults ||= {}
+
+    private
+
+    def provider_option_owners = @provider_option_owners ||= ProviderOptionOwners.new
   end
 
   option :provider, :deepl
