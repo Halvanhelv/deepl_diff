@@ -21,13 +21,24 @@ class TranslationDiff::Providers::Google
   MAX_REQUEST_SIZE = 5_000
   MAX_BATCH_SIZE = 128
 
-  # Google defaults to `html`, which HTML-escapes its own output: an
-  # apostrophe comes back as "&#39;" and an ampersand as "&amp;". Everything
-  # reaching a provider has already been through the Tokenizer, which
-  # separates markup from text and sends only the text -- so plain is what
-  # this is, and plain is what it must be asked for. A caller who really is
-  # sending markup can pass `format: :html` per call.
-  DEFAULT_FORMAT = :text
+  # What arrives here is not plain text, despite having been through the
+  # Tokenizer. A notranslate span is handed over whole, tags included --
+  # that is how the tokenizer marks content the provider must leave alone --
+  # and HTML entities such as `&amp;` stay in the text it emits. Asking
+  # Google for `text` makes it translate the protected span and drop the
+  # markup around it entirely:
+  #
+  #   "<span class='notranslate'>Bold Mountain</span> is a good place."
+  #   format: text  -> "Болд Маунтин — хорошее место."
+  #   format: html  -> "<span class='notranslate'>Bold Mountain</span> — хорошее место."
+  #
+  # So `html` it is, which is also what this gem sent for its whole life
+  # before the provider seam existed. The cost is that Google escapes its
+  # own output -- a literal apostrophe returns as "&#39;" -- which is
+  # correct inside the HTML fragment these values usually are, and noise
+  # inside a value that never had markup in it. A caller translating bare
+  # strings can pass `format: :text` per call.
+  DEFAULT_FORMAT = :html
 
   # A bare alphabetic code is downcased, so a configuration written for
   # DeepL ("EN") keeps working against Google, whose codes are lowercase.
