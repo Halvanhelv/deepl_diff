@@ -19,3 +19,10 @@ class FakeConnectionPool
     yield @connection
   end
 end
+
+# Any test that configures anything must reset afterwards, or its settings
+# leak into every test that runs after it.
+class ConfiguredTest < Minitest::Test
+  def setup = TranslationDiff.reset!
+  def teardown = TranslationDiff.reset!
+end

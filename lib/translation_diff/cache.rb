@@ -8,16 +8,20 @@ class TranslationDiff::Cache
   # bloat every key in a cache that may hold millions of them.
   DIGEST_LENGTH = 8
 
-  def initialize(from, to, provider:, options: {})
+  # `store` is the cache store this instance reads and writes through. It has
+  # no reader: #store is already the public method that writes a chunk of
+  # translations back, and an attr_reader would silently replace it.
+  def initialize(from, to, provider:, store:, options: {})
     @from = from
     @to = to
     @provider = provider
+    @store = store
     @options = options
   end
 
   def cached_and_missing(values)
     keys = values.map { |v| key(v) }
-    cached = cache_store.read_multi(keys)
+    cached = @store.read_multi(keys)
     missing = values.map.with_index { |v, i| v if cached[i].nil? }.compact
 
     [cached, missing]
@@ -34,7 +38,7 @@ class TranslationDiff::Cache
   attr_reader :from, :to, :provider, :options
 
   def store_value(value, translation)
-    cache_store.write(key(value), translation)
+    @store.write(key(value), translation)
     translation
   end
 
@@ -71,9 +75,5 @@ class TranslationDiff::Cache
     when String, Symbol, Numeric, true, false, nil then value.inspect
     else raise Error, "Cannot build a stable cache key from #{value.class} in the provider options"
     end
-  end
-
-  def cache_store
-    TranslationDiff.cache_store
   end
 end

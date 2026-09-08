@@ -39,6 +39,8 @@ class TranslationDiff::Segmenters::Simple
   # `"Dr. Smith` still guards on "Dr.".
   WORD_TAIL = /[\p{L}\p{N}.]+\z/
 
+  def self.build(_config) = new
+
   # language: is part of the shared segmenter contract but is ignored here --
   # this segmenter's rules (case, digits, punctuation) are language-neutral.
   # rubocop:disable-next Lint/UnusedMethodArgument
@@ -147,3 +149,5 @@ class TranslationDiff::Segmenters::Simple
     !char.nil? && char.match?(/\s/)
   end
 end
+
+TranslationDiff::Segmenters.registry.register(:simple, TranslationDiff::Segmenters::Simple)

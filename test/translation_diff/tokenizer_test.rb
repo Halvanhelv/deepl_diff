@@ -118,7 +118,14 @@ class TokenizerTest < Minitest::Test
 
   CASES.each do |name, (source, expected)|
     define_method(:"test_tokenizes_#{name}") do
-      assert_equal expected, TranslationDiff::Tokenizer.tokenize(source)
+      assert_equal expected, TranslationDiff::Tokenizer.tokenize(source, segmenter: segmenter)
     end
   end
+
+  private
+
+  # The segmenter these expectations were written against, and the one the
+  # configuration still defaults to. Passed explicitly now that the tokenizer
+  # takes its segmenter as a collaborator rather than reaching for a global.
+  def segmenter = TranslationDiff::Segmenters::Pragmatic.new
 end

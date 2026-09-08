@@ -7,9 +7,10 @@ class TranslationDiff::Tokenizer < Ox::Sax
 
   # Ox::Sax provides no initializer to chain to.
   # rubocop:disable-next Lint/MissingSuper
-  def initialize(source, language: nil)
+  def initialize(source, segmenter:, language: nil)
     @pos = nil
     @source = source
+    @segmenter = segmenter
     @language = language
     @tokens = nil
     @context = []
@@ -79,7 +80,7 @@ class TranslationDiff::Tokenizer < Ox::Sax
   def sentences(value)
     return [] if value.strip.empty?
 
-    offsets = TranslationDiff.segmenter.split_offsets(value, language: @language)
+    offsets = @segmenter.split_offsets(value, language: @language)
     return [[value, :text]] if offsets.size == 1
 
     offsets.each_cons(2).map { |left, right| [value[left...right], :text] } +
@@ -140,11 +141,11 @@ class TranslationDiff::Tokenizer < Ox::Sax
   end
 
   class << self
-    def tokenize(value, language: nil)
+    def tokenize(value, segmenter:, language: nil)
       # Anything that is not a string has no markup and no sentences in it.
       return [] unless value.is_a?(String)
 
-      tokenizer = new(value, language: language).tap do |h|
+      tokenizer = new(value, segmenter: segmenter, language: language).tap do |h|
         Ox.sax_parse(h, StringIO.new(value), HTML_OPTIONS)
       end
       tokenizer.tokens

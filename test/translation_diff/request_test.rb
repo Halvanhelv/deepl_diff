@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-class RequestTest < Minitest::Test
+class RequestTest < ConfiguredTest
   # A minimal adapter. Records what it was asked to translate so the call
   # can be asserted on, and answers with a canned response.
   class FakeApi
@@ -46,6 +46,21 @@ class RequestTest < Minitest::Test
     end
   end
 
+  # A provider object assigned straight to `config.provider` never passed
+  # through the registry, so nothing stamped it with a name. This one defines
+  # its own #cache_key and returns an empty segment from it, which is the case
+  # TranslationDiff::Providers::Naming cannot catch.
+  class NamelessApi < FakeApi
+    def cache_key = ""
+  end
+
+  # A whitespace-only key is just as blank as an empty one -- it must not
+  # slip past the guard and cache translations under a segment that looks
+  # empty to anyone reading the store.
+  class WhitespaceNamedApi < FakeApi
+    def cache_key = "   "
+  end
+
   # Already has every key cached, regardless of what it is asked for. Proves
   # the all-cached short circuit in Request#chunks_translated: the gem's
   # headline behaviour is serving a translation from cache without calling
@@ -62,11 +77,6 @@ class RequestTest < Minitest::Test
     def write(*)
       raise "should not write when nothing was missing"
     end
-  end
-
-  def teardown
-    TranslationDiff.api = nil
-    TranslationDiff.cache_store = nil
   end
 
   def test_translates_a_plain_string
@@ -122,8 +132,7 @@ class RequestTest < Minitest::Test
   def test_repeated_calls_leave_the_callers_options_hash_alone
     options = { from: :en, to: :ru }
 
-    TranslationDiff.api = FakeApi.new(["Какая-то строка", "Какая-то строка"])
-    TranslationDiff.cache_store = FakeCacheStore.new
+    configure_with(FakeApi.new(["Какая-то строка", "Какая-то строка"]))
 
     2.times do
       assert_equal "Какая-то строка", TranslationDiff.translate("Some string", **options)
@@ -145,8 +154,7 @@ class RequestTest < Minitest::Test
   # for and translated into its own language.
   def test_skips_the_translation_when_the_detected_language_is_the_target
     api = FakeApi.new([], detected: "RU")
-    TranslationDiff.api = api
-    TranslationDiff.cache_store = FakeCacheStore.new
+    configure_with(api)
 
     result = TranslationDiff::Request.new("привет", to: :ru).call
 
@@ -155,8 +163,7 @@ class RequestTest < Minitest::Test
   end
 
   def test_raises_when_from_is_missing_and_the_adapter_cannot_detect
-    TranslationDiff.api = TranslationDiff::Adapters::Null.new
-    TranslationDiff.cache_store = FakeCacheStore.new
+    configure_with(TranslationDiff::Providers::Null.new)
 
     error = assert_raises(TranslationDiff::Request::Error) do
       TranslationDiff::Request.new("text", to: :ru).call
@@ -166,8 +173,7 @@ class RequestTest < Minitest::Test
   end
 
   def test_raises_when_the_api_returns_fewer_translations_than_asked_for
-    TranslationDiff.api = FakeApi.new(%w[Один])
-    TranslationDiff.cache_store = FakeCacheStore.new
+    configure_with(FakeApi.new(%w[Один]))
 
     error = assert_raises(TranslationDiff::Request::Error) do
       TranslationDiff::Request.new({ a: "One", b: "Two" }, from: :en, to: :ru).call
@@ -182,8 +188,7 @@ class RequestTest < Minitest::Test
   UNTRANSLATABLE.each do |value|
     define_method(:"test_passes_through_#{value.inspect.gsub(/\W/, '_')}_untouched") do
       api = FakeApi.new([])
-      TranslationDiff.api = api
-      TranslationDiff.cache_store = FakeCacheStore.new
+      configure_with(api)
 
       assert_equal value, TranslationDiff::Request.new(value, from: :en, to: :ru).call
       assert_empty api.calls
@@ -192,8 +197,7 @@ class RequestTest < Minitest::Test
 
   def test_passes_through_nil_untouched
     api = FakeApi.new([])
-    TranslationDiff.api = api
-    TranslationDiff.cache_store = FakeCacheStore.new
+    configure_with(api)
 
     assert_nil TranslationDiff::Request.new(nil, from: :en, to: :ru).call
     assert_empty api.calls
@@ -202,8 +206,7 @@ class RequestTest < Minitest::Test
   # Scalars nested in a structure are passed through too, while nil keeps
   # collapsing to "" the way it always has.
   def test_passes_nested_scalars_through_and_still_blanks_out_nils
-    TranslationDiff.api = FakeApi.new(%w[Один])
-    TranslationDiff.cache_store = FakeCacheStore.new
+    configure_with(FakeApi.new(%w[Один]))
 
     result = TranslationDiff::Request.new({ a: "One", n: 42, skip: nil }, from: :en, to: :ru).call
 
@@ -214,8 +217,7 @@ class RequestTest < Minitest::Test
   # described: an adapter declaring tiny limits must change the batching.
   def test_batches_according_to_the_limits_the_adapter_declares
     api = FakeApi.new(%w[Один Два], max_batch_size: 1)
-    TranslationDiff.api = api
-    TranslationDiff.cache_store = FakeCacheStore.new
+    configure_with(api)
 
     TranslationDiff::Request.new({ a: "One", b: "Two" }, from: :en, to: :ru).call
 
@@ -227,13 +229,48 @@ class RequestTest < Minitest::Test
   # from the store without ever reaching the adapter.
   def test_serves_a_translation_from_cache_without_calling_the_adapter
     api = FakeApi.new([])
-    TranslationDiff.api = api
-    TranslationDiff.cache_store = AllCachedStore.new(["Какая-то строка"])
+    configure_with(api, AllCachedStore.new(["Какая-то строка"]))
 
     result = TranslationDiff::Request.new("Some string", from: :en, to: :ru).call
 
     assert_equal "Какая-то строка", result
     assert_empty api.calls
+  end
+
+  # `provider:` picks the provider for one call. A name is built through the
+  # registry against this call's configuration; the configured provider is
+  # left untouched and unused.
+  def test_the_provider_keyword_overrides_the_configured_provider_for_one_call
+    api = FakeApi.new(%w[Один])
+    configure_with(api)
+
+    result = TranslationDiff::Request.new("One", from: :en, to: :ru, provider: :null).call
+
+    assert_equal "One", result
+    assert_empty api.calls
+  end
+
+  # An empty cache-key segment would put this provider's translations in the
+  # same namespace as every other provider's, and a caller would be served
+  # another service's answer. Refusing is the only safe response.
+  def test_a_provider_whose_cache_key_is_empty_is_refused_rather_than_sharing_a_namespace
+    configure_with(NamelessApi.new(%w[Один]))
+
+    error = assert_raises(TranslationDiff::Request::Error) do
+      TranslationDiff::Request.new("One", from: :en, to: :ru).call
+    end
+
+    assert_match(/must define #cache_key/, error.message)
+  end
+
+  def test_a_provider_whose_cache_key_is_whitespace_is_refused_rather_than_sharing_a_namespace
+    configure_with(WhitespaceNamedApi.new(%w[Один]))
+
+    error = assert_raises(TranslationDiff::Request::Error) do
+      TranslationDiff::Request.new("One", from: :en, to: :ru).call
+    end
+
+    assert_match(/must define #cache_key/, error.message)
   end
 
   private
@@ -242,9 +279,18 @@ class RequestTest < Minitest::Test
   # Returns the translation and the API fake, so the call can be asserted on.
   def translate(values, response)
     api = FakeApi.new(response)
-    TranslationDiff.api = api
-    TranslationDiff.cache_store = FakeCacheStore.new
+    configure_with(api)
 
     [TranslationDiff::Request.new(values, from: :en, to: :ru).call, api]
+  end
+
+  # The two collaborators every test here needs, assigned as configuration
+  # options. An object assigned to `provider` or `cache` is used as-is, so a
+  # fake goes in exactly where a registered name would.
+  def configure_with(api, store = FakeCacheStore.new)
+    TranslationDiff.configure do |config|
+      config.provider = api
+      config.cache = store
+    end
   end
 end

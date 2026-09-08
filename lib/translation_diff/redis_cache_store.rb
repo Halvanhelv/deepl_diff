@@ -2,10 +2,15 @@
 
 class TranslationDiff::RedisCacheStore
   ONE_WEEK = 60 * 60 * 24 * 7
+  DEFAULT_NAMESPACE = "translation-diff"
+
+  def self.build(config)
+    new(config.redis_pool, timeout: config.cache_ttl, namespace: config.cache_namespace)
+  end
 
   # `connection_pool` is anything answering to #with, and what it yields is
   # anything Redis::Namespace accepts. Neither gem is a dependency of this one.
-  def initialize(connection_pool, timeout: ONE_WEEK, namespace: TranslationDiff::CACHE_NAMESPACE)
+  def initialize(connection_pool, timeout: ONE_WEEK, namespace: DEFAULT_NAMESPACE)
     @connection_pool = connection_pool
     @timeout = timeout
     @namespace = namespace
@@ -29,3 +34,5 @@ class TranslationDiff::RedisCacheStore
     end
   end
 end
+
+TranslationDiff::Stores.register(:redis, TranslationDiff::RedisCacheStore)

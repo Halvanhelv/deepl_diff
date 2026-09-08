@@ -60,6 +60,8 @@ class TranslationDiff::Segmenters::Pragmatic
   # pragmatic_segmenter already handles it correctly. See #shadow_newlines.
   SINGLE_NEWLINE = /(?<!\n)\n(?!\n)/
 
+  def self.build(_config) = new
+
   def split_offsets(text, language: nil)
     return [0] unless split_candidate?(text)
 
@@ -100,7 +102,7 @@ class TranslationDiff::Segmenters::Pragmatic
 
   # Normalises a caller-supplied language code to one pragmatic_segmenter
   # actually has rules for: downcased, with any region subtag dropped
-  # (DeepL, this gem's own flagship adapter, sends uppercase codes such as
+  # (DeepL, this gem's own flagship provider, sends uppercase codes such as
   # "EN" and "EN-GB"; PragmaticSegmenter::Languages.get_language_by_code is
   # case-sensitive and knows nothing about region subtags, so "RU" and
   # "ru-RU" would otherwise silently fall through to Common, not even to the
@@ -206,3 +208,5 @@ class TranslationDiff::Segmenters::Pragmatic
                  "within the text -- refusing to hand them back. text: #{text.inspect}"
   end
 end
+
+TranslationDiff::Segmenters.registry.register(:pragmatic, TranslationDiff::Segmenters::Pragmatic)
