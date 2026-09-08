@@ -1,9 +1,10 @@
 # TranslationDiff
 
 A translation cache that helps translate only changes between revisions of
-long texts. It ships with a DeepL provider, but any translation service can
-be plugged in by implementing a small provider contract -- this gem has no
-hard dependency on DeepL or any other provider.
+long texts. It ships with DeepL and Google Cloud Translation providers, but
+any translation service can be plugged in by implementing a small provider
+contract -- this gem has no hard dependency on either of them, or on any
+other provider.
 
 **TranslationDiff** based on [GoogleTranslateDiff](https://github.com/gzigzigzeo/google_translate_diff)
 
@@ -27,8 +28,9 @@ and the segmenter contract](#segmenters-and-the-segmenter-contract) below if you
 to avoid the second dependency.
 
 Everything else is duck typed and supplied by you: `deepl-rb` only if you use
-the DeepL provider (the default), required lazily the first time it is
-needed, with a clear error if it is missing. The same is true of `redis` and
+the DeepL provider (the default) and `google-cloud-translate-v2` only if you
+use the Google one, each required lazily the first time it is needed, with a
+clear error if it is missing. The same is true of `redis` and
 `connection_pool` once you configure `redis_url`, and of `ratelimit` on the
 first check once you configure `rate_limit`. `redis-namespace` (for the Redis
 cache store) goes one step further: this gem never requires it at all, so
@@ -110,6 +112,13 @@ The `:deepl` provider declares two options of its own, registered the moment
 | `deepl_api_key` | `nil` | Forwarded to `deepl-rb` as `auth_key`. Left unset, `deepl-rb` reads `DEEPL_AUTH_KEY` from the environment itself. |
 | `deepl_host` | `nil` | Overrides `deepl-rb`'s automatic free/paid host selection (from the `:fx` suffix on the key). Rarely needed. |
 
+The `:google` provider declares two of its own, on the same terms:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `google_api_key` | `nil` | Forwarded to `google-cloud-translate-v2` as `key`. Left unset, that gem reads `TRANSLATE_KEY` or `GOOGLE_CLOUD_KEY` from the environment itself, and falls back to application default credentials when there is no key at all. |
+| `google_project_id` | `nil` | Only consulted on the credentials path; an API key needs no project. Left unset, the gem reads `TRANSLATE_PROJECT`. |
+
 A provider you register yourself can declare its own options the same way --
 see [Registering your own provider](#registering-your-own-provider) below.
 
@@ -147,22 +156,67 @@ would serve, the real service's entries. Give such a configuration its own
 here on purpose: changing its shape invalidates every entry already cached,
 everywhere, at once.
 
+### The Google provider
+
+`config.provider = :google` translates through Cloud Translation v2 (Basic).
+It needs the `google-cloud-translate-v2` gem, which this gem requires lazily
+the first time the provider is built:
+
+```ruby
+gem "google-cloud-translate-v2", "~> 1.2"
+```
+
+```ruby
+TranslationDiff.configure do |config|
+  config.provider = :google
+  config.google_api_key = ENV["GOOGLE_TRANSLATE_KEY"]
+end
+```
+
+An API key is the whole setup -- no project id, no service account. Leave
+`google_api_key` unset and the gem reads `TRANSLATE_KEY` or
+`GOOGLE_CLOUD_KEY` itself; with no key anywhere it falls back to application
+default credentials, which is the path where `google_project_id` matters.
+
+Two things this provider does on your behalf, both of which would otherwise
+be silent problems:
+
+- **It asks for plain text.** Google's own default is `format: html`, which
+  HTML-escapes its own output -- an apostrophe returns as `&#39;`. By the
+  time anything reaches a provider the Tokenizer has already separated
+  markup from text and is sending only text, so plain is what it must ask
+  for. Pass `format: :html` per call to override that.
+- **It downcases bare language codes.** Google's codes are lowercase, and a
+  configuration written against DeepL says `"EN"`. Codes carrying a subtag
+  -- `"zh-Hans"`, `"zh-CN"`, `"pt-BR"` -- are passed through untouched,
+  because the casing of a script or region subtag is its own.
+
+Its limits are Google's documented ones: 128 strings per request (a hard
+limit -- a larger batch is rejected), and 5,000 characters per request (the
+documented recommendation, well under the hard 100 KB ceiling). Chunker
+measures the URL-escaped form of each string, which is never smaller than
+its UTF-8 byte count, so a chunk within that bound in escaped characters is
+within it in bytes as well.
+
+`google_project_id` is not part of the cache key, on the same reasoning as
+`deepl_host` above: it selects an account to bill, not a translation.
+
 ## Registering your own provider
 
 Any translation service can be a provider -- no change to this gem's own
 code is required. Registering a provider also declares the options it needs,
-so `config.google_api_key` below does not exist until `GoogleTranslateProvider`
+so `config.yandex_api_key` below does not exist until `YandexProvider`
 is registered:
 
 ```ruby
-class GoogleTranslateProvider
+class YandexProvider
   # Declares this provider's own configuration options. TranslationDiff::Providers.register
   # adds each one to TranslationDiff::Configuration as a side effect.
-  def self.configuration_options = %i[google_api_key]
-  def self.build(config) = new(config.google_api_key)
+  def self.configuration_options = %i[yandex_api_key]
+  def self.build(config) = new(config.yandex_api_key)
 
   def initialize(api_key)
-    @client = Google::Cloud::Translate::V2.new(key: api_key)
+    @client = SomeYandexClient.new(key: api_key)
   end
 
   # Required: translate an array of strings, return one string per input, in
@@ -189,11 +243,11 @@ class GoogleTranslateProvider
   # "Provider objects and cache_key" below for what happens without it.
 end
 
-TranslationDiff::Providers.register(:google, GoogleTranslateProvider)
+TranslationDiff::Providers.register(:yandex, YandexProvider)
 
 TranslationDiff.configure do |config|
-  config.provider = :google
-  config.google_api_key = ENV["GOOGLE_API_KEY"]
+  config.provider = :yandex
+  config.yandex_api_key = ENV["YANDEX_API_KEY"]
 end
 ```
 
@@ -224,12 +278,12 @@ provider redeclaring its own options is not a conflict: a double `require`
 and a Rails reload both re-run registration.
 
 `TranslationDiff::Providers.names` lists every registered provider;
-`TranslationDiff::Providers.registered?(:google)` checks one.
+`TranslationDiff::Providers.registered?(:yandex)` checks one.
 
 ## The provider contract
 
-`config.provider` accepts either a registered name (`:deepl`, `:null`, or
-anything you registered yourself) or an object of your own that satisfies
+`config.provider` accepts either a registered name (`:deepl`, `:google`,
+`:null`, or anything you registered yourself) or an object of your own that satisfies
 this contract directly, bypassing the registry entirely:
 
 ```ruby

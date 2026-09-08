@@ -85,6 +85,15 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
 
 ### Added
 
+- A Google provider: `config.provider = :google` translates through Cloud
+  Translation v2 (Basic), on the `google-cloud-translate-v2` gem, required
+  lazily so an application using DeepL never needs it installed. It declares
+  `google_api_key` and `google_project_id`; an API key alone is enough, and
+  with none configured the gem reads `TRANSLATE_KEY`/`GOOGLE_CLOUD_KEY` or
+  falls back to application default credentials. The provider asks for
+  `format: :text` -- Google's own default HTML-escapes its output -- and
+  downcases bare language codes so a configuration written for DeepL
+  (`"EN"`) keeps working, leaving subtagged codes such as `"zh-Hans"` alone.
 - `TranslationDiff::Configuration`, a declarative settings object built
   through the `option(key, default)` macro. Options fall back to their
   default until assigned, treat a blank string as unset, and support a
