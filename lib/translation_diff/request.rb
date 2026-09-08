@@ -41,7 +41,7 @@ class TranslationDiff::Request
     value.is_a?(Symbol) || value.is_a?(String) ? TranslationDiff::Providers.build(value, config) : value
   end
 
-  def rate_limiter = config.rate_limiter
+  def rate_limiter = config.rate_limiter_instance
 
   def from
     @from ||= detect_language

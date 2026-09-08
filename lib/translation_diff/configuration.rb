@@ -57,19 +57,17 @@ class TranslationDiff::Configuration
   option :logger, nil
 
   # Values are copied; memoised collaborators (`provider_instance`,
-  # `cache_store`, `segmenter_instance` and `redis_pool`) are deliberately
-  # not -- `copy` walks `self.class.options` only, which never includes
-  # those readers' instance variables, so a copy builds its own provider,
-  # store and connection pool from its own values instead of inheriting the
-  # original's. An object the caller assigned is an option value and is
-  # therefore shared -- which is correct: someone who hands us one
+  # `cache_store`, `segmenter_instance`, `rate_limiter_instance` and
+  # `redis_pool`) are deliberately not -- `copy` walks `self.class.options`
+  # only, which never includes those readers' instance variables, so a copy
+  # builds its own provider, store, rate limiter and connection pool from
+  # its own values instead of inheriting the original's. This matters for
+  # `rate_limiter_instance` in particular: a tenant context that sets its
+  # own `cache_namespace` must not be rate-limited against its parent's
+  # namespace just because the parent had already resolved a limiter before
+  # the copy was made. An object the caller assigned is an option value and
+  # is therefore shared -- which is correct: someone who hands us one
   # connection pool means one connection pool.
-  #
-  # `rate_limiter` is the one option whose resolved value and raw value
-  # share both a name and an instance variable (see below), so a copy
-  # inherits whatever it already resolved to -- an assigned object, or a
-  # limiter already built from the original's connection pool -- rather
-  # than rebuilding fresh the way `cache_store` and friends do.
   def copy
     self.class.new.tap do |other|
       self.class.options.each do |key|
@@ -95,17 +93,23 @@ class TranslationDiff::Configuration
     @segmenter_instance ||= resolve(segmenter, TranslationDiff::Segmenters.registry)
   end
 
-  # nil, not a null object: Request checks for nil and skips the whole
-  # rate-limiting path, which is the common case and should cost nothing.
+  # `rate_limiter` holds what the caller set -- an object, or nil -- exactly
+  # like `provider`, `cache` and `segmenter` hold theirs. nil, not a null
+  # object: Request checks for nil and skips the whole rate-limiting path,
+  # which is the common case and should cost nothing.
   #
-  # Assignable like `provider`, `cache` and `segmenter`: an object assigned
-  # directly to `rate_limiter` is used as-is. Unlike those three, there is
-  # no separate `_instance`/`_store` reader here -- this method is both the
-  # option and the resolved value, memoised the same way the others are.
-  def rate_limiter
-    return nil if @rate_limiter.nil? && rate_limit.nil?
+  # The assigned object when there is one; nil when no `rate_limit`
+  # threshold was ever configured; a RedisRateLimiter built from this
+  # config's own values otherwise. Memoised under its own instance
+  # variable, like `provider_instance`, `cache_store` and
+  # `segmenter_instance`, so a copy builds its own limiter from its own
+  # settings instead of inheriting one built for a different config's
+  # namespace or connection pool.
+  def rate_limiter_instance
+    return rate_limiter unless rate_limiter.nil?
+    return nil if rate_limit.nil?
 
-    @rate_limiter ||= TranslationDiff::RedisRateLimiter.build(self)
+    @rate_limiter_instance ||= TranslationDiff::RedisRateLimiter.build(self)
   end
 
   # One pool for the cache store and the rate limiter both. Callers used to

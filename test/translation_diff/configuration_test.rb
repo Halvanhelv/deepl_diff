@@ -127,21 +127,21 @@ class ConfigurationTest < Minitest::Test
   end
 
   def test_there_is_no_rate_limiter_unless_a_rate_limit_is_set
-    assert_nil @config.rate_limiter
+    assert_nil @config.rate_limiter_instance
   end
 
   def test_a_rate_limit_builds_a_redis_rate_limiter
     @config.rate_limit = 100
     @config.redis_url = "redis://localhost:6379"
 
-    assert_instance_of TranslationDiff::RedisRateLimiter, @config.rate_limiter
+    assert_instance_of TranslationDiff::RedisRateLimiter, @config.rate_limiter_instance
   end
 
   def test_an_assigned_rate_limiter_object_wins_over_every_value
     limiter = Object.new
     @config.rate_limiter = limiter
 
-    assert_same limiter, @config.rate_limiter
+    assert_same limiter, @config.rate_limiter_instance
   end
 
   def test_an_assigned_rate_limiter_object_is_used_even_without_a_rate_limit
@@ -149,31 +149,56 @@ class ConfigurationTest < Minitest::Test
     @config.rate_limiter = limiter
 
     assert_nil @config.rate_limit
-    assert_same limiter, @config.rate_limiter
+    assert_same limiter, @config.rate_limiter_instance
   end
 
   def test_the_default_rate_limiter_is_memoised
     @config.rate_limit = 100
 
-    assert_same @config.rate_limiter, @config.rate_limiter
+    assert_same @config.rate_limiter_instance, @config.rate_limiter_instance
   end
 
-  # Unlike `cache_store`/`provider_instance`/`segmenter_instance`, a copy
-  # does inherit an already-built default rate limiter: `rate_limiter` has
-  # no separate resolved-value reader of its own, so there is only the one
-  # instance variable for `copy` to carry over.
-  def test_copy_shares_a_built_default_rate_limiter
+  # `rate_limiter_instance` follows the same rule as `provider_instance`,
+  # `cache_store` and `segmenter_instance`: a config that never had an
+  # object assigned starts from nothing on `copy` and builds its own
+  # limiter. This is the case that used to be broken -- a copy inherited an
+  # already-built limiter, which would silently rate-limit a tenant against
+  # its parent's namespace. See
+  # `test_a_copy_that_changes_its_namespace_gets_a_rate_limiter_using_that_namespace`
+  # below for the scenario that actually surfaces the bleed.
+  def test_copy_does_not_share_a_built_default_rate_limiter
     @config.rate_limit = 100
-    original_limiter = @config.rate_limiter
+    original_limiter = @config.rate_limiter_instance
 
-    assert_same original_limiter, @config.copy.rate_limiter
+    refute_same original_limiter, @config.copy.rate_limiter_instance
   end
 
+  # An explicitly assigned object is different: it is the option's own
+  # value, exactly like an assigned `cache` or `provider`, and `copy`
+  # carries option values over on purpose -- "someone who hands us one
+  # object means one object." Only the *default build* must not survive a
+  # copy; an object the caller supplied is never rebuilt in the first
+  # place, so there is nothing for a copy to get wrong.
   def test_copy_shares_an_assigned_rate_limiter_object
     limiter = Object.new
     @config.rate_limiter = limiter
 
-    assert_same limiter, @config.copy.rate_limiter
+    assert_same limiter, @config.copy.rate_limiter_instance
+  end
+
+  # The regression this whole area was fixed for: a tenant context that
+  # sets its own `cache_namespace` must get a rate limiter scoped to that
+  # namespace, not one built for -- and still carrying -- its parent's.
+  def test_a_copy_that_changes_its_namespace_gets_a_rate_limiter_using_that_namespace
+    @config.rate_limit = 100
+    @config.redis_url = "redis://localhost:6379"
+    @config.cache_namespace = "parent-ns"
+    @config.rate_limiter_instance # resolve/build on the parent before copying
+
+    copy = @config.copy
+    copy.cache_namespace = "tenant-ns"
+
+    assert_equal "tenant-ns", copy.rate_limiter_instance.send(:namespace)
   end
 
   def test_segmenter_instance_resolves_the_default_symbol
@@ -207,7 +232,7 @@ class ConfigurationTest < Minitest::Test
     @config.rate_limit = 100
 
     assert_same @config.cache_store.send(:connection_pool), @config.redis_pool
-    assert_same @config.rate_limiter.send(:connection_pool), @config.redis_pool
+    assert_same @config.rate_limiter_instance.send(:connection_pool), @config.redis_pool
   end
 
   def test_copy_does_not_share_memoised_collaborators
