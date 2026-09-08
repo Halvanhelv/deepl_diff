@@ -2,6 +2,7 @@
 
 class TranslationDiff::Request
   extend Forwardable
+  include TranslationDiff::Instrumentation
 
   class Error < TranslationDiff::Error; end
 
@@ -19,7 +20,10 @@ class TranslationDiff::Request
   def call
     return values if same_language? || nothing_to_translate?
 
-    translation
+    instrument("translate", from: from.to_s, to: to.to_s,
+                            provider: provider_cache_key, values: texts.size) do
+      translation
+    end
   end
 
   private
@@ -29,7 +33,8 @@ class TranslationDiff::Request
   # The provider for this call: the `provider:` keyword when the caller gave
   # one, otherwise whatever the configuration resolves to.
   def api
-    @api ||= @provider.nil? ? config.provider_instance : resolve_provider(@provider)
+    @api ||= (@provider.nil? ? config.provider_instance : resolve_provider(@provider))
+             .tap { |provider| log("provider #{provider.class}") }
   end
 
   def resolve_provider(value)
@@ -123,11 +128,12 @@ class TranslationDiff::Request
   def chunks_translated
     @chunks_translated ||= chunks.map do |chunk|
       cached, missing = cache.cached_and_missing(chunk)
-      if missing.empty?
-        cached
-      else
-        cache.store(chunk, cached, call_api(missing))
-      end
+      instrument("cache", provider: provider_cache_key,
+                          hits: cached.count { |value| !value.nil? },
+                          misses: missing.size)
+      next cached if missing.empty?
+
+      cache.store(chunk, cached, call_api(missing))
     end
   end
 
@@ -175,7 +181,11 @@ class TranslationDiff::Request
 
   def call_api(values)
     check_rate_limit(values)
-    translations = api.translate(values, from: from, to: to, **options)
+    translations = instrument("request", provider: provider_cache_key,
+                                         batch: values.size,
+                                         characters: values.sum(&:size)) do
+      api.translate(values, from: from, to: to, **options)
+    end
     return translations if translations.size == values.size
 
     # Letting a short response through means shifting nils into the results,
@@ -197,7 +207,7 @@ class TranslationDiff::Request
   # answer.
   def provider_cache_key
     key = api.cache_key if api.respond_to?(:cache_key)
-    return key unless key.nil? || key.to_s.empty?
+    return key unless key.nil? || key.to_s.strip.empty?
 
     raise Error,
           "#{api.class} must define #cache_key. A provider assigned directly rather " \
@@ -208,8 +218,10 @@ class TranslationDiff::Request
   def check_rate_limit(values)
     return if rate_limiter.nil?
 
-    size = values.map(&:size).inject(0) { |sum, x| sum + x }
-    rate_limiter.check(size)
+    size = values.sum(&:size)
+    instrument("rate_limit", provider: provider_cache_key, characters: size) do
+      rate_limiter.check(size)
+    end
   end
 
   # Markup should not contain control characters

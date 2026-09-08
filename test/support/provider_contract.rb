@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # The executable form of the provider contract. Every provider includes this
-# and defines #provider; anything that passes can be TranslationDiff.api.
+# and defines #provider; anything that passes can be registered with
+# TranslationDiff::Providers.register and reached through TranslationDiff.translate.
 module ProviderContract
   def test_translate_returns_one_string_per_input
     result = provider.translate(%w[one two three], from: :en, to: :ru)

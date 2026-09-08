@@ -54,6 +54,13 @@ class RequestTest < ConfiguredTest
     def cache_key = ""
   end
 
+  # A whitespace-only key is just as blank as an empty one -- it must not
+  # slip past the guard and cache translations under a segment that looks
+  # empty to anyone reading the store.
+  class WhitespaceNamedApi < FakeApi
+    def cache_key = "   "
+  end
+
   # Already has every key cached, regardless of what it is asked for. Proves
   # the all-cached short circuit in Request#chunks_translated: the gem's
   # headline behaviour is serving a translation from cache without calling
@@ -248,6 +255,16 @@ class RequestTest < ConfiguredTest
   # another service's answer. Refusing is the only safe response.
   def test_a_provider_whose_cache_key_is_empty_is_refused_rather_than_sharing_a_namespace
     configure_with(NamelessApi.new(%w[Один]))
+
+    error = assert_raises(TranslationDiff::Request::Error) do
+      TranslationDiff::Request.new("One", from: :en, to: :ru).call
+    end
+
+    assert_match(/must define #cache_key/, error.message)
+  end
+
+  def test_a_provider_whose_cache_key_is_whitespace_is_refused_rather_than_sharing_a_namespace
+    configure_with(WhitespaceNamedApi.new(%w[Один]))
 
     error = assert_raises(TranslationDiff::Request::Error) do
       TranslationDiff::Request.new("One", from: :en, to: :ru).call
