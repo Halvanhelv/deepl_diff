@@ -156,6 +156,29 @@ would serve, the real service's entries. Give such a configuration its own
 here on purpose: changing its shape invalidates every entry already cached,
 everywhere, at once.
 
+### The DeepL provider
+
+`config.provider = :deepl` is the default. It sends `tag_handling: :html`
+and `tag_handling_version: "v2"` with every translation, because what
+reaches a provider is not plain text: a `notranslate` span arrives whole,
+tags included. DeepL honours `class="notranslate"` and `translate="no"`
+only under HTML tag handling -- without it, in DeepL's own words, "tags are
+treated as regular text".
+
+That failure was a quiet one, worth knowing about if you translated with an
+older version: DeepL leaves the tags themselves alone either way, so the
+markup looks untouched and only the protected content comes back changed.
+
+```
+"<span class='notranslate'>Bold Mountain</span> is a good place."
+no tag handling ->  "<span class='notranslate'>Болд-Маунтин</span> — отличное место."
+tag_handling    ->  "<span class='notranslate'>Bold Mountain</span> — это хорошее место."
+```
+
+Both values are overridable per call, as any provider option is. Under HTML
+tag handling DeepL defaults `split_sentences` to `nonewlines`; this library
+sends one sentence at a time, so that changes nothing.
+
 ### The Google provider
 
 `config.provider = :google` translates through Cloud Translation v2 (Basic).
