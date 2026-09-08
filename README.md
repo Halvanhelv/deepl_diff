@@ -347,7 +347,7 @@ exceeded within its interval. Neither `redis` nor `connection_pool` nor
 check, so an application that configures no `rate_limit` never needs it, and
 its absence raises `TranslationDiff::Error` naming the gem to add.
 
-**Upgrading to 3.0.0: re-validate your `rate_limit` threshold.** Before this
+**Upgrading to 3.1.0: re-validate your `rate_limit` threshold.** Before this
 release, `RedisRateLimiter` never actually limited anything -- a signature
 mismatch with the `ratelimit` gem meant it recorded hits under a subject
 `exceeded?` never read, so the threshold could never be reached. That bug
@@ -646,21 +646,20 @@ requests at 1700 characters and batches at 300 sentences.
 
 ## Former name and upgrading
 
-This gem was published as `deepl_diff` before version 3.0.0. `deepl_diff` is
+This gem was published as `deepl_diff` through 2.2.0. `deepl_diff` is
 deprecated in favor of `translation_diff`, which is functionally the same
 gem under a name that no longer implies a dependency on DeepL specifically.
 
-**Upgrading from `deepl_diff` or from a `translation_diff` release before
-3.0.0:** every cache key changed in 3.0.0 -- the provider, the provider
-options and normalised language codes are now part of the key. Nothing
-cached previously is reused; the next translation of every sentence is a
-cache miss, once, everywhere. `TranslationDiff.api`, `.cache_store`,
+**Upgrading from `deepl_diff`:** every cache key changed in 3.1.0 -- the
+provider, the provider options and normalised language codes are now part of
+the key. Nothing cached previously is reused; the next translation of every
+sentence is a cache miss, once, everywhere. `TranslationDiff.api`, `.cache_store`,
 `.segmenter` and `.rate_limiter` -- the four module-level accessors earlier
 versions configured directly -- are gone; configure `TranslationDiff.config`
 (or use `TranslationDiff.configure`) instead. If you have `rate_limit`
 configured, also read the upgrading note in
 [The rate limiter contract](#the-rate-limiter-contract): the limiter was
-never actually enforcing your threshold before 3.0.0, and it starts doing so
+never actually enforcing your threshold before 3.1.0, and it starts doing so
 now. See [CHANGELOG.md](CHANGELOG.md) for the full list of breaking changes.
 
 ## Development

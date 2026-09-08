@@ -4,10 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [3.0.0] - 2026-09-07
+## [3.1.0] - 2026-09-08
 
 First release under the name **translation_diff**. This gem was published as
 `deepl_diff` through 2.2.0.
+
+There is no 3.0.0 entry. That version was tagged during the rename and then
+held back before it reached RubyGems, so no `translation_diff` gem was ever
+published as 3.0.0 and the tag names a commit that predates most of what is
+described below. Everything here is relative to `deepl_diff` 2.2.0.
 
 ### Breaking
 
@@ -59,7 +64,7 @@ First release under the name **translation_diff**. This gem was published as
   checked a subject nothing ever incremented. The limiter never limited
   anything, in every release back to `v1.0.2` (tagged 2023-02-16, roughly
   three years ago). If you have `rate_limit` configured, your traffic has
-  never actually been throttled; on upgrading to 3.0.0 it will be, for the
+  never actually been throttled; on upgrading to 3.1.0 it will be, for the
   first time, against a threshold you set once and have never seen fire. You
   changed no configuration, but your throttling behaviour changes on
   upgrade. Re-validate `rate_limit` and `rate_interval` before upgrading --
@@ -275,7 +280,7 @@ No changes to `lib/`.
   `texts`/`escaped_size`) because they shadowed `Struct#values` and
   `Struct#size`.
 
-[3.0.0]: https://github.com/Halvanhelv/translation_diff/compare/v2.2.0...v3.0.0
+[3.1.0]: https://github.com/Halvanhelv/translation_diff/compare/v2.2.0...v3.1.0
 [2.2.0]: https://github.com/Halvanhelv/deepl_diff/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/Halvanhelv/deepl_diff/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/Halvanhelv/deepl_diff/compare/v1.1.1...v2.0.0
