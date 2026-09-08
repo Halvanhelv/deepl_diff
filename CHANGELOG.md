@@ -91,9 +91,10 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
   `google_api_key` and `google_project_id`; an API key alone is enough, and
   with none configured the gem reads `TRANSLATE_KEY`/`GOOGLE_CLOUD_KEY` or
   falls back to application default credentials. The provider asks for
-  `format: :text` -- Google's own default HTML-escapes its output -- and
-  downcases bare language codes so a configuration written for DeepL
-  (`"EN"`) keeps working, leaving subtagged codes such as `"zh-Hans"` alone.
+  `format: :html`, which the tokenizer's output requires -- a `notranslate`
+  span is handed over with its tags -- and downcases bare language codes so
+  a configuration written for DeepL (`"EN"`) keeps working, leaving
+  subtagged codes such as `"zh-Hans"` alone.
 - `TranslationDiff::Configuration`, a declarative settings object built
   through the `option(key, default)` macro. Options fall back to their
   default until assigned, treat a blank string as unset, and support a
@@ -196,6 +197,14 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
 
 ### Fixed
 
+- Comments, doctypes and CDATA sections survive a translation. `Tokenizer`
+  declared no handler for those three Ox SAX events, so the bytes each one
+  covered belonged to no token: a leading `<!-- ... -->` or `<!DOCTYPE html>`
+  disappeared from the result outright, and a comment in the middle of a
+  sentence leaked its `<!` into the surrounding text and handed the comment's
+  own contents to the translation provider as prose -- both paying for the
+  characters and risking an internal note coming back translated in place of
+  the comment.
 - `TranslationDiff::RedisRateLimiter` requires `ratelimit` lazily, on the
   first check, and raises `TranslationDiff::Error` naming the gem to add
   when it is missing. Previously the bare constant surfaced a raw

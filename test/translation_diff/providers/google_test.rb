@@ -57,24 +57,26 @@ class GoogleProviderTest < Minitest::Test
     assert_equal %w[one-translated], provider.translate(%w[one], from: :en, to: :ru)
   end
 
-  # Google's own default is `html`, which HTML-escapes the response: an
-  # apostrophe comes back as "&#39;". By the time a value reaches a provider
-  # the Tokenizer has already stripped the markup, so what is being sent is
-  # plain text and must be asked for as plain text.
-  def test_translate_asks_for_plain_text
+  # What reaches a provider is not plain text: Tokenizer hands over a
+  # notranslate span with its tags intact, and leaves entities such as
+  # `&amp;` in the text it emits. Asking for plain text makes Google
+  # translate the protected span and drop its markup -- verified against
+  # the live API. `html` is what this gem's tokenizer contract requires,
+  # and what it has always sent.
+  def test_translate_asks_for_html
     api = FakeApi.new
 
     TranslationDiff::Providers::Google.new(api).translate(%w[one], from: :en, to: :ru)
 
-    assert_equal :text, api.calls.first.last[:format]
+    assert_equal :html, api.calls.first.last[:format]
   end
 
   def test_translate_lets_the_caller_override_the_format
     api = FakeApi.new
 
-    TranslationDiff::Providers::Google.new(api).translate(%w[one"], from: :en, to: :ru, format: :html)
+    TranslationDiff::Providers::Google.new(api).translate(%w[one], from: :en, to: :ru, format: :text)
 
-    assert_equal :html, api.calls.first.last[:format]
+    assert_equal :text, api.calls.first.last[:format]
   end
 
   # A configuration written against DeepL says "EN"; Google's codes are

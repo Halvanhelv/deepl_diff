@@ -181,11 +181,24 @@ default credentials, which is the path where `google_project_id` matters.
 Two things this provider does on your behalf, both of which would otherwise
 be silent problems:
 
-- **It asks for plain text.** Google's own default is `format: html`, which
-  HTML-escapes its own output -- an apostrophe returns as `&#39;`. By the
-  time anything reaches a provider the Tokenizer has already separated
-  markup from text and is sending only text, so plain is what it must ask
-  for. Pass `format: :html` per call to override that.
+- **It asks for HTML**, which is Google's own default and what this gem has
+  always sent. What reaches a provider is not plain text: a `notranslate`
+  span arrives whole, tags included -- that is how the tokenizer marks
+  content the provider must leave alone -- and entities such as `&amp;`
+  stay in the text it emits. Asking for `text` makes Google translate the
+  protected span and drop its markup:
+
+  ```
+  "<span class='notranslate'>Bold Mountain</span> is a good place."
+  format: text  ->  "Болд Маунтин — хорошее место."
+  format: html  ->  "<span class='notranslate'>Bold Mountain</span> — хорошее место."
+  ```
+
+  The cost is that Google escapes its own output: a literal apostrophe
+  returns as `&#39;`. Inside the HTML fragment these values usually are,
+  that renders as an apostrophe and is correct. Inside a value that never
+  had any markup in it, it is noise -- pass `format: :text` per call when
+  translating bare strings.
 - **It downcases bare language codes.** Google's codes are lowercase, and a
   configuration written against DeepL says `"EN"`. Codes carrying a subtag
   -- `"zh-Hans"`, `"zh-CN"`, `"pt-BR"` -- are passed through untouched,
