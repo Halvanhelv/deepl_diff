@@ -155,7 +155,7 @@ class RequestTest < Minitest::Test
   end
 
   def test_raises_when_from_is_missing_and_the_adapter_cannot_detect
-    TranslationDiff.api = TranslationDiff::Adapters::Null.new
+    TranslationDiff.api = TranslationDiff::Providers::Null.new
     TranslationDiff.cache_store = FakeCacheStore.new
 
     error = assert_raises(TranslationDiff::Request::Error) do
