@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "support/cache_store_contract"
 
 # The gem depends on neither redis nor redis-namespace -- it just calls into
 # whatever the application supplies. This stand-in applies the namespace the
@@ -23,36 +24,53 @@ class Redis::Namespace
 end
 
 class RedisCacheStoreTest < Minitest::Test
+  include CacheStoreContract
+
+  # `values`, when given, forces every #mget to return it regardless of the
+  # keys asked for -- what the namespacing tests below use to inspect the
+  # keys reaching Redis without needing real storage behind them. Without
+  # it, #mget and #setex behave like a real key/value store, which is what
+  # the shared CacheStoreContract needs.
   class FakeRedis
     attr_reader :calls
 
-    def initialize(values = [])
+    def initialize(values = nil)
       @values = values
+      @entries = {}
       @calls = []
     end
 
     def mget(*keys)
       @calls << [:mget, keys]
-      @values
+      return @values if @values
+
+      keys.map { |key| @entries[key] }
     end
 
     def setex(key, timeout, value)
       @calls << [:setex, key, timeout, value]
+      @entries[key] = value
       "OK"
     end
+  end
+
+  attr_reader :store
+
+  def setup
+    @store = build_store(FakeRedis.new)
   end
 
   def test_read_multi_namespaces_the_keys
     redis = FakeRedis.new(%w[one two])
 
-    assert_equal %w[one two], store(redis).read_multi(%w[a b])
+    assert_equal %w[one two], build_store(redis).read_multi(%w[a b])
     assert_equal [[:mget, %w[translation-diff:a translation-diff:b]]], redis.calls
   end
 
   def test_write_expires_after_a_week_by_default
     redis = FakeRedis.new
 
-    store(redis).write("a", "b")
+    build_store(redis).write("a", "b")
 
     assert_equal [[:setex, "translation-diff:a", 604_800, "b"]], redis.calls
   end
@@ -60,14 +78,14 @@ class RedisCacheStoreTest < Minitest::Test
   def test_write_honours_a_custom_timeout_and_namespace
     redis = FakeRedis.new
 
-    store(redis, timeout: 60, namespace: "t").write("a", "b")
+    build_store(redis, timeout: 60, namespace: "t").write("a", "b")
 
     assert_equal [[:setex, "t:a", 60, "b"]], redis.calls
   end
 
   private
 
-  def store(redis, **)
+  def build_store(redis, **)
     TranslationDiff::RedisCacheStore.new(FakeConnectionPool.new(redis), **)
   end
 end

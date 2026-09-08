@@ -6,6 +6,13 @@ class TranslationDiff::RedisRateLimiter
   DEFAULT_THRESHOLD = 8000
   DEFAULT_INTERVAL = 60
 
+  def self.build(config)
+    new(config.redis_pool,
+        threshold: config.rate_limit,
+        interval: config.rate_interval,
+        namespace: config.cache_namespace)
+  end
+
   # `connection_pool` is anything answering to #with, and what it yields is
   # anything Ratelimit accepts. Neither gem is a dependency of this one.
   def initialize(connection_pool,

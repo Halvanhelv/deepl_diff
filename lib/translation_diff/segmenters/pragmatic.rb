@@ -60,6 +60,8 @@ class TranslationDiff::Segmenters::Pragmatic
   # pragmatic_segmenter already handles it correctly. See #shadow_newlines.
   SINGLE_NEWLINE = /(?<!\n)\n(?!\n)/
 
+  def self.build(_config) = new
+
   def split_offsets(text, language: nil)
     return [0] unless split_candidate?(text)
 
@@ -206,3 +208,5 @@ class TranslationDiff::Segmenters::Pragmatic
                  "within the text -- refusing to hand them back. text: #{text.inspect}"
   end
 end
+
+TranslationDiff::Segmenters.registry.register(:pragmatic, TranslationDiff::Segmenters::Pragmatic)
