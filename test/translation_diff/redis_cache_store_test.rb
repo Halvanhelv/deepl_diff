@@ -3,10 +3,18 @@
 require "test_helper"
 require "support/cache_store_contract"
 
-# The gem depends on neither redis nor redis-namespace -- it just calls into
-# whatever the application supplies. This stand-in applies the namespace the
-# way redis-namespace does, so the keys reaching Redis can be asserted on.
-module Redis; end
+# The gem depends on neither redis nor redis-namespace at runtime -- it just
+# calls into whatever the application supplies. This stand-in applies the
+# namespace the way redis-namespace does, so the keys reaching Redis can be
+# asserted on.
+#
+# TranslationDiff::Configuration#redis_pool requires the real "redis" gem
+# lazily, at call time, so whether ::Redis is already defined when this file
+# runs depends on test order -- Minitest randomises it. Requiring it
+# explicitly here, and nesting this stand-in inside the real class instead of
+# declaring a fake top-level `Redis` module, means this file never collides
+# with -- or races -- that real constant.
+require "redis"
 
 class Redis::Namespace
   def initialize(namespace, redis:)

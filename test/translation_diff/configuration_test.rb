@@ -98,4 +98,83 @@ class ConfigurationTest < Minitest::Test
 
     assert_same object, @config.send(:resolve, object, registry)
   end
+
+  def test_cache_store_defaults_to_memory_when_no_redis_url_is_set
+    original = ENV.fetch("REDIS_URL", nil)
+    ENV["REDIS_URL"] = nil
+
+    assert_instance_of TranslationDiff::MemoryCacheStore, @config.cache_store
+  ensure
+    ENV["REDIS_URL"] = original
+  end
+
+  def test_cache_store_defaults_to_redis_when_a_redis_url_is_set
+    @config.redis_url = "redis://localhost:6379"
+
+    assert_instance_of TranslationDiff::RedisCacheStore, @config.cache_store
+  end
+
+  def test_an_assigned_cache_object_wins_over_every_value
+    store = Object.new
+    @config.cache = store
+    @config.redis_url = "redis://localhost:6379"
+
+    assert_same store, @config.cache_store
+  end
+
+  def test_the_cache_store_is_memoised
+    assert_same @config.cache_store, @config.cache_store
+  end
+
+  def test_there_is_no_rate_limiter_unless_a_rate_limit_is_set
+    assert_nil @config.rate_limiter
+  end
+
+  def test_a_rate_limit_builds_a_redis_rate_limiter
+    @config.rate_limit = 100
+    @config.redis_url = "redis://localhost:6379"
+
+    assert_instance_of TranslationDiff::RedisRateLimiter, @config.rate_limiter
+  end
+
+  def test_segmenter_instance_resolves_the_default_symbol
+    assert_instance_of TranslationDiff::Segmenters::Pragmatic, @config.segmenter_instance
+  end
+
+  def test_segmenter_instance_resolves_a_named_alternative
+    @config.segmenter = :simple
+
+    assert_instance_of TranslationDiff::Segmenters::Simple, @config.segmenter_instance
+  end
+
+  def test_an_assigned_segmenter_object_passes_through_untouched
+    segmenter = Object.new
+    @config.segmenter = segmenter
+
+    assert_same segmenter, @config.segmenter_instance
+  end
+
+  def test_an_unknown_segmenter_name_raises_listing_what_is_registered
+    @config.segmenter = :nonsense
+
+    error = assert_raises(TranslationDiff::Error) { @config.segmenter_instance }
+
+    assert_includes error.message, "segmenter"
+    assert_includes error.message, "pragmatic"
+  end
+
+  def test_the_redis_pool_is_built_once_and_shared
+    @config.redis_url = "redis://localhost:6379"
+    @config.rate_limit = 100
+
+    assert_same @config.cache_store.send(:connection_pool), @config.redis_pool
+    assert_same @config.rate_limiter.send(:connection_pool), @config.redis_pool
+  end
+
+  def test_copy_does_not_share_memoised_collaborators
+    @config.cache = :memory
+    original_store = @config.cache_store
+
+    refute_same original_store, @config.copy.cache_store
+  end
 end

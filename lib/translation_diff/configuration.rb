@@ -55,13 +55,14 @@ class TranslationDiff::Configuration
   option :instrumenter, nil
   option :logger, nil
 
-  # Values are copied; memoised collaborators (readers such as
-  # `provider_instance`, `cache_store`, `segmenter_instance`, `rate_limiter`
-  # and `redis_pool`, added by later tasks) are not -- `copy` walks
-  # `self.class.options` only, so a context builds its own provider, store
-  # and connection pool from its own values. An object the caller assigned is
-  # an option value and is therefore shared -- which is correct: someone who
-  # hands us one connection pool means one connection pool.
+  # Values are copied; memoised collaborators (`provider_instance`,
+  # `cache_store`, `segmenter_instance`, `rate_limiter` and `redis_pool`) are
+  # deliberately not -- `copy` walks `self.class.options` only, which never
+  # includes those readers' instance variables, so a copy builds its own
+  # provider, store and connection pool from its own values instead of
+  # inheriting the original's. An object the caller assigned is an option
+  # value and is therefore shared -- which is correct: someone who hands us
+  # one connection pool means one connection pool.
   def copy
     self.class.new.tap do |other|
       self.class.options.each do |key|
@@ -70,7 +71,52 @@ class TranslationDiff::Configuration
     end
   end
 
+  # The provider actually used. `provider` holds what the caller set -- a
+  # symbol or an object -- and this turns it into an instance once.
+  def provider_instance
+    @provider_instance ||= resolve(provider, TranslationDiff::Providers)
+  end
+
+  # `cache` unset means "choose for me": Redis when a URL is configured,
+  # otherwise the in-process store, so the library works before anything is
+  # running.
+  def cache_store
+    @cache_store ||= resolve(cache || (redis_url ? :redis : :memory), TranslationDiff::Stores)
+  end
+
+  def segmenter_instance
+    @segmenter_instance ||= resolve(segmenter, TranslationDiff::Segmenters.registry)
+  end
+
+  # nil, not a null object: Request checks for nil and skips the whole
+  # rate-limiting path, which is the common case and should cost nothing.
+  def rate_limiter
+    return nil if rate_limit.nil?
+
+    @rate_limiter ||= TranslationDiff::RedisRateLimiter.build(self)
+  end
+
+  # One pool for the cache store and the rate limiter both. Callers used to
+  # build this themselves and pass it to each, keeping the namespaces in step
+  # by hand.
+  def redis_pool
+    @redis_pool ||= build_redis_pool
+  end
+
   private
+
+  def build_redis_pool
+    require "connection_pool"
+    require "redis"
+    ConnectionPool.new(size: redis_pool_size, timeout: redis_pool_timeout) do
+      Redis.new(url: redis_url)
+    end
+  rescue LoadError
+    raise TranslationDiff::Error,
+          "a Redis-backed cache or rate limiter was requested but the gems are not " \
+          'available. Add `gem "redis"`, `gem "connection_pool"` and ' \
+          '`gem "redis-namespace"` to your Gemfile.'
+  end
 
   def read(key)
     value = instance_variable_get(:"@#{key}")
