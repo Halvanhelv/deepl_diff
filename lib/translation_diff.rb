@@ -10,6 +10,7 @@ require "ox"
 require "translation_diff/version"
 require "translation_diff/error"
 require "translation_diff/registry"
+require "translation_diff/configuration"
 
 require "translation_diff/adapters"
 require "translation_diff/adapters/null"
