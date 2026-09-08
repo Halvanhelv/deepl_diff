@@ -7,9 +7,10 @@ class TranslationDiff::Tokenizer < Ox::Sax
 
   # Ox::Sax provides no initializer to chain to.
   # rubocop:disable-next Lint/MissingSuper
-  def initialize(source)
+  def initialize(source, language: nil)
     @pos = nil
     @source = source
+    @language = language
     @tokens = nil
     @context = []
     @sequence = []
@@ -75,23 +76,14 @@ class TranslationDiff::Tokenizer < Ox::Sax
     tokens.concat(sentences(tokens.pop[0])) if tokens.last[1] == :text
   end
 
-  # rubocop: disable-next Metrics/MethodLength
   def sentences(value)
     return [] if value.strip.empty?
 
-    boundaries =
-      Punkt::SentenceTokenizer
-      .new(value)
-      .sentences_from_text(value)
+    offsets = TranslationDiff.segmenter.split_offsets(value, language: @language)
+    return [[value, :text]] if offsets.size == 1
 
-    return [[value, :text]] if boundaries.size == 1
-
-    boundaries.map.with_index do |(left, right), index|
-      next_boundary = boundaries[index + 1]
-      right = next_boundary[0] - 1 if next_boundary
-
-      [value[left..right], :text]
-    end
+    offsets.each_cons(2).map { |left, right| [value[left...right], :text] } +
+      [[value[offsets.last..], :text]]
   end
 
   # Whether the sequence is between `:notranslate` and `:end_notranslate`
@@ -148,11 +140,11 @@ class TranslationDiff::Tokenizer < Ox::Sax
   end
 
   class << self
-    def tokenize(value)
+    def tokenize(value, language: nil)
       # Anything that is not a string has no markup and no sentences in it.
       return [] unless value.is_a?(String)
 
-      tokenizer = new(value).tap do |h|
+      tokenizer = new(value, language: language).tap do |h|
         Ox.sax_parse(h, StringIO.new(value), HTML_OPTIONS)
       end
       tokenizer.tokens

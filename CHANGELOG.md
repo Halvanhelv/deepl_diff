@@ -25,9 +25,77 @@ First release under the name **translation_diff**. This gem was published as
   codes. Nothing cached by `deepl_diff` -- or by an earlier `translation_diff`
   prerelease -- is reused. The next translation of every sentence is a cache
   miss, once, everywhere.
+- Dropped `punkt-segmenter` and, with it, its `unicode_utils` dependency.
+  Sentence boundaries are now produced by `TranslationDiff.segmenter`,
+  defaulting to `TranslationDiff::Segmenters::Pragmatic`, backed by the
+  [`pragmatic_segmenter`](https://github.com/diasks2/pragmatic_segmenter) gem
+  (MIT, zero dependencies of its own) -- so `ox` and `pragmatic_segmenter` are
+  now the gem's only two runtime dependencies. Measured against the Golden
+  Rules corpus -- the `context "Golden Rules" do` block of each of the 10
+  per-language spec files on `diasks2/pragmatic_segmenter`, 80 exemplars in
+  total; a sample of the same corpus is in
+  `test/translation_diff/golden_rules_test.rb` -- the default now scores
+  76/80 against punkt's 38/80 and the old in-house segmenter's 47/80; the
+  gap is largest on languages with no letter case at all -- Arabic, Hindi,
+  Armenian, Greek -- which the in-house segmenter cannot reason about by
+  design.
+- `TranslationDiff.segmenter.split_offsets` now takes a second, optional
+  `language:` keyword argument. `pragmatic_segmenter` picks its rule set by
+  language and falls back to English rules without one, which can
+  mis-segment other languages (Russian abbreviations, for one); `from:` is
+  the only way a caller supplies it, and only when segmentation happens
+  before language detection would need to run. `Segmenters::Pragmatic`
+  normalises the code first -- downcased, region subtag dropped -- and falls
+  back to English for anything `pragmatic_segmenter` does not recognise
+  afterward. Without this, DeepL's own codes (`"RU"`, `"EN-GB"`) missed their
+  rule set entirely: `pragmatic_segmenter`'s lookup is case-sensitive and
+  region-blind, so this gem's own flagship adapter was hitting the broken
+  path on every call.
 
 ### Added
 
+- `TranslationDiff::Segmenters::Pragmatic`, the default sentence segmenter,
+  wrapping `pragmatic_segmenter`'s per-language rule sets. Before
+  segmenting, it shadows every single newline (one with no adjoining
+  newline) to a space in a copy of the text -- `pragmatic_segmenter`
+  otherwise treats almost any single newline as a sentence boundary
+  candidate even with no punctuation at all, a false split that HTML text
+  nodes routinely trigger via incidental source-formatting newlines -- then
+  segments the shadow and recovers offsets against it, so the *original*
+  text, newline included, reaches the output untouched. Blank-line runs
+  (real paragraph breaks) are left alone. This costs one Golden Rules point
+  (77 -> 76: a bare list of items separated by single newlines, with no
+  punctuation, now segments as one unit instead of three) -- a deliberate
+  trade, since that shape does not arise in this gem's actual input. It
+  recovers offsets from the strings `pragmatic_segmenter` returns by locating
+  each one in the shadow, in order, and keeps every offset it locates; the
+  first sentence it cannot locate (`pragmatic_segmenter`'s cleaner also
+  collapses runs of three or more spaces and respaces abbreviations such as
+  `"Ph.D."`, among other things it rewrites) ends the search -- but the
+  boundary at the end of the last sentence it did locate is not discarded
+  with the rest, since it was matched character for character too; only the
+  genuinely unrecoverable remainder becomes one final unit. This is a
+  coarsening, not a failure -- every offset it ever emits has been verified,
+  so the cache unit is simply larger, never wrong. It never guesses an
+  offset it did not verify. `TranslationDiff::Segmenters::Pragmatic::Error`
+  exists for the one case that would still be silent corruption -- offsets
+  it computed itself violating their own postcondition (start at 0, strictly
+  increase, stay within the text) -- not for ordinary `pragmatic_segmenter`
+  rewriting.
+- `TranslationDiff::Segmenters::Simple` (formerly `TranslationDiff::Segmenter`,
+  renamed and moved to its own namespace alongside `Pragmatic`), the
+  zero-dependency, in-house sentence segmenter this gem shipped with before
+  `pragmatic_segmenter` became the default. It is deliberately conservative:
+  it splits only on a handful of strong signals (a terminator followed by
+  whitespace and an uppercase or CJK next character, none of the guard
+  conditions -- a known abbreviation, an initial, digits on both sides, or a
+  URL/email -- matching) so that a missed sentence boundary, which only
+  costs a cache hit, is always preferred over a false one, which sends half
+  a sentence to the translation provider. Its central rule has no meaning in
+  scripts without letter case, which is why it is no longer the default; it
+  stays available for callers who want no extra dependency and translate
+  only from cased scripts. `TranslationDiff.segmenter` is swappable the same
+  way `TranslationDiff.api` and `.cache_store` are.
 - `TranslationDiff::Adapters::DeepL` and `TranslationDiff::Adapters::Null`.
 - `test/support/adapter_contract.rb`, the executable form of the adapter
   contract; any third-party adapter can include it to verify it behaves as

@@ -56,8 +56,11 @@ class TokenizerTest < Minitest::Test
     "text_split_into_sentences" => [
       "! Киловольт. <span>Смеркалось.    Ворчало. Кричало.</span>",
       [
-        ["! ", :text],
-        ["Киловольт. ", :text],
+        # Pragmatic does not treat a lone terminator with no preceding
+        # content as a sentence of its own, so "!" stays merged with
+        # "Киловольт." -- a missed boundary, which only makes the cache
+        # unit bigger, not a false one.
+        ["! Киловольт. ", :text],
         ["<span>", :markup],
         ["Смеркалось.    ", :text],
         ["Ворчало. ", :text],
