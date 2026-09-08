@@ -3,6 +3,13 @@
 require "test_helper"
 require "support/provider_contract"
 
+# `TranslationDiff::Providers::DeepL.build` only requires "deepl" lazily, at
+# call time, so whether ::DeepL is already defined when this file runs
+# depends on test order -- Minitest randomises it. Requiring it explicitly
+# here means this file's constant references (::DeepL::Exceptions::Error
+# below) don't depend on some other test file having required "deepl" first.
+require "deepl"
+
 class DeepLProviderTest < Minitest::Test
   include ProviderContract
 

@@ -51,4 +51,16 @@ class ProvidersTest < Minitest::Test
   def test_null_keeps_its_own_cache_key
     assert_equal "null", TranslationDiff::Providers.build(:null, @config).cache_key
   end
+
+  # A provider instantiated directly, bypassing TranslationDiff::Providers.build,
+  # never gets its #name stamped. Falling back to "" there would let two such
+  # providers share the same cache namespace silently, so this must raise
+  # instead.
+  def test_cache_key_raises_when_the_provider_was_never_built_through_the_registry
+    provider = AcmeProvider.new("T")
+
+    error = assert_raises(TranslationDiff::Error) { provider.cache_key }
+
+    assert_match(/registry/, error.message)
+  end
 end
