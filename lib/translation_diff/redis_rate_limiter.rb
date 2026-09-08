@@ -5,6 +5,7 @@ class TranslationDiff::RedisRateLimiter
 
   DEFAULT_THRESHOLD = 8000
   DEFAULT_INTERVAL = 60
+  DEFAULT_NAMESPACE = "translation-diff"
 
   def self.build(config)
     new(config.redis_pool,
@@ -18,7 +19,7 @@ class TranslationDiff::RedisRateLimiter
   def initialize(connection_pool,
                  threshold: DEFAULT_THRESHOLD,
                  interval: DEFAULT_INTERVAL,
-                 namespace: TranslationDiff::CACHE_NAMESPACE)
+                 namespace: DEFAULT_NAMESPACE)
     @connection_pool = connection_pool
     @threshold = threshold
     @interval = interval

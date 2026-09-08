@@ -5,19 +5,18 @@ class TranslationDiff::Request
 
   class Error < TranslationDiff::Error; end
 
-  def_delegators :TranslationDiff, :api, :cache_store, :rate_limiter
   def_delegators :"TranslationDiff::Linearizer", :linearize, :restore
 
-  def initialize(values, from: nil, to: nil, **options)
+  def initialize(values, from: nil, to: nil, provider: nil, config: nil, **options)
     @values = values
     @from = from
     @to = to
+    @provider = provider
+    @config = config || TranslationDiff.config
     @options = options
   end
 
   def call
-    validate_globals
-
     return values if same_language? || nothing_to_translate?
 
     translation
@@ -25,7 +24,19 @@ class TranslationDiff::Request
 
   private
 
-  attr_reader :values, :options, :to
+  attr_reader :values, :options, :to, :config
+
+  # The provider for this call: the `provider:` keyword when the caller gave
+  # one, otherwise whatever the configuration resolves to.
+  def api
+    @api ||= @provider.nil? ? config.provider_instance : resolve_provider(@provider)
+  end
+
+  def resolve_provider(value)
+    value.is_a?(Symbol) || value.is_a?(String) ? TranslationDiff::Providers.build(value, config) : value
+  end
+
+  def rate_limiter = config.rate_limiter
 
   def from
     @from ||= detect_language
@@ -50,13 +61,6 @@ class TranslationDiff::Request
     api.detect(text_tokens_texts.join(" ")[0..100])
   end
 
-  def validate_globals
-    raise Error, "Set TranslationDiff.api before calling ::translate" unless api
-    return if cache_store
-
-    raise Error, "Set TranslationDiff.cache_store before calling ::translate"
-  end
-
   # Extracts flat text array
   # => "Name", "<b>Good</b> boy"
   #
@@ -69,7 +73,7 @@ class TranslationDiff::Request
   # => [..., [["<b>", :markup], ["Good", :text], ...]]
   def tokens
     @tokens ||= texts.map do |value|
-      TranslationDiff::Tokenizer.tokenize(value, language: source_language)
+      TranslationDiff::Tokenizer.tokenize(value, segmenter: config.segmenter_instance, language: source_language)
     end
   end
 
@@ -181,7 +185,24 @@ class TranslationDiff::Request
   end
 
   def cache
-    @cache ||= TranslationDiff::Cache.new(from, to, provider: api.cache_key, options: options)
+    @cache ||= TranslationDiff::Cache.new(
+      from, to, provider: provider_cache_key, store: config.cache_store, options: options
+    )
+  end
+
+  # A provider built through the registry is stamped with its name. An object
+  # assigned straight to `config.provider` never passed through the registry,
+  # so it has to supply this itself -- without it two providers' translations
+  # would share cache entries and a caller would be served the wrong service's
+  # answer.
+  def provider_cache_key
+    key = api.cache_key if api.respond_to?(:cache_key)
+    return key unless key.nil? || key.to_s.empty?
+
+    raise Error,
+          "#{api.class} must define #cache_key. A provider assigned directly rather " \
+          "than registered by name has no name to fall back on, and without a key its " \
+          "translations would share cache entries with every other provider."
   end
 
   def check_rate_limit(values)

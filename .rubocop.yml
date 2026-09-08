@@ -21,6 +21,14 @@ Layout/LineLength:
 Gemspec/DevelopmentDependencies:
   EnforcedStyle: gemspec
 
+# Request takes its collaborators as keyword arguments -- values, from:, to:,
+# provider:, config: and the provider's own options. The confusion this cop
+# guards against is positional: six named arguments at a call site read
+# perfectly well, and the alternative is pulling them out of an options hash
+# where nothing documents them.
+Metrics/ParameterLists:
+  CountKeywordArgs: false
+
 Metrics/ClassLength:
   Exclude:
     - lib/translation_diff/tokenizer.rb
