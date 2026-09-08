@@ -196,6 +196,14 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
 
 ### Fixed
 
+- Comments, doctypes and CDATA sections survive a translation. `Tokenizer`
+  declared no handler for those three Ox SAX events, so the bytes each one
+  covered belonged to no token: a leading `<!-- ... -->` or `<!DOCTYPE html>`
+  disappeared from the result outright, and a comment in the middle of a
+  sentence leaked its `<!` into the surrounding text and handed the comment's
+  own contents to the translation provider as prose -- both paying for the
+  characters and risking an internal note coming back translated in place of
+  the comment.
 - `TranslationDiff::RedisRateLimiter` requires `ratelimit` lazily, on the
   first check, and raises `TranslationDiff::Error` naming the gem to add
   when it is missing. Previously the bare constant surfaced a raw

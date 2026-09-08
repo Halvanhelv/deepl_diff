@@ -106,6 +106,40 @@ class TokenizerTest < Minitest::Test
         ["<?xml:namespace ns=\"urn:office\" ?>", :markup]
       ]
     ],
+    # Ox reports a comment, a doctype and a CDATA section as their own SAX
+    # events. Each one needs a handler: without it the bytes it covers are
+    # attributed to no token at all and vanish from the rebuilt string.
+    "an_html_comment" => [
+      "<!-- note --> Visible text.",
+      [
+        ["<!-- note -->", :markup],
+        [" Visible text.", :text]
+      ]
+    ],
+    "a_doctype" => [
+      "<!DOCTYPE html><p>Body text.</p>",
+      [
+        ["<!DOCTYPE html><p>", :markup],
+        ["Body text.", :text],
+        ["</p>", :markup]
+      ]
+    ],
+    "a_cdata_section" => [
+      "Before.<![CDATA[raw & unparsed]]>After.",
+      [
+        ["Before.", :text],
+        ["<![CDATA[raw & unparsed]]>", :markup],
+        ["After.", :text]
+      ]
+    ],
+    "a_comment_between_two_sentences" => [
+      "First sentence. <!-- aside --> Second sentence.",
+      [
+        ["First sentence. ", :text],
+        ["<!-- aside -->", :markup],
+        [" Second sentence.", :text]
+      ]
+    ],
     "sentences_separated_by_blank_lines" => [
       "Набор «Солнечная механика» от 4М — это 6 экспериментов." \
       "\n\nЮному изобретателю предстоит воочию посмотреть на чудеса.",
