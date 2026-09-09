@@ -21,9 +21,12 @@ class TranslationDiff::Cache
     [cached, missing]
   end
 
+  # Indexes rather than shifting: #store is public and takes an outside array, which is not ours to consume.
   def store(values, cached, updates)
+    update = -1
+
     cached.map.with_index do |value, index|
-      value || store_value(values[index], updates.shift)
+      value || store_value(values[index], updates[update += 1])
     end
   end
 

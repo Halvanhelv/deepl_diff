@@ -159,7 +159,7 @@ class TranslationDiff::Request
                                      characters: values.sum(&:size)) do
       api.translate(request)
     end
-    # Dup'd: Cache#store consumes this array destructively (#shift), and a provider may hand back its own array.
+    # Dup'd: the array is the provider's own, and handing it to a collaborator makes it the collaborator's too.
     response.texts.dup
   end
 

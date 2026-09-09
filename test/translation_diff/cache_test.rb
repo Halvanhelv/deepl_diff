@@ -103,6 +103,32 @@ class CacheTest < Minitest::Test
     assert_equal ["two"], missing
   end
 
+  # #store is public and takes an outside array; shifting it emptied the caller's own array.
+  def test_store_does_not_consume_the_updates_it_is_given
+    updates = %w[один три]
+    cache = TranslationDiff::Cache.new(:en, :ru, provider: "deepl", store: @store)
+
+    cache.store(%w[one two three], [nil, "два", nil], updates)
+
+    assert_equal %w[один три], updates
+  end
+
+  def test_store_fills_the_gaps_in_key_order
+    cache = TranslationDiff::Cache.new(:en, :ru, provider: "deepl", store: @store)
+
+    assert_equal %w[один два три],
+                 cache.store(%w[one two three], [nil, "два", nil], %w[один три])
+  end
+
+  # The exact key a translation is stored under. Change it and every user re-translates their whole corpus.
+  def test_the_key_is_the_one_users_already_have_in_their_caches
+    key_for(value: "text", from: :en, to: :ru, provider: "deepl")
+    key_for(value: "text", from: :en, to: :ru, provider: "deepl", options: { formality: :less })
+
+    assert_equal "deepl:en:ru:1cb251ec0d568de6a929b520c4aed8d1", @store.keys[0]
+    assert_equal "deepl:en:ru:80df90b8:1cb251ec0d568de6a929b520c4aed8d1", @store.keys[1]
+  end
+
   private
 
   def key_for(value: "text", from: :en, to: :ru, provider: "deepl", options: {})
