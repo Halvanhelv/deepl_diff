@@ -1,6 +1,6 @@
 # A sentence with the whitespace it was found in: its core is the text a provider sees, its render is markup again.
 class TranslationDiff::Segment
-  attr_reader :source, :core
+  attr_reader :source, :body, :core
   attr_accessor :translation
 
   # A core is compared decoded, so a sentence that was only `&nbsp;` counts as the padding it is and is never sent.

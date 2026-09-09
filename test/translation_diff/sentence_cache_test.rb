@@ -127,4 +127,51 @@ class SentenceCacheTest < Minitest::Test
     assert_equal "null:en:ru:b5010567e209726a125c9ed59162eca5",
                  subject_cache.key(segments("Fine.").first)
   end
+
+  # Four fields without options, five with: the options digest is its own field, not folded into the sentence.
+  def test_the_options_digest_is_a_field_of_its_own
+    segment = segments("One.").first
+
+    assert_equal 4, cache(RecordingStore.new).key(segment).split(":").size
+    assert_equal 5, cache(RecordingStore.new, options: { formality: :more }).key(segment).split(":").size
+  end
+
+  # Pinned as a literal: anyone passing formality or a glossary id has to keep hitting this exact key.
+  def test_a_key_carrying_options_is_pinned_field_by_field
+    subject_cache = TranslationDiff::SentenceCache.new(
+      store: RecordingStore.new, provider: "null", from: "en", to: "ru", options: { formality: :more }
+    )
+
+    assert_equal "null:en:ru:c09f3c46:900019fa233e608091ba641d50d69b81",
+                 subject_cache.key(segments("One.").first)
+  end
+
+  # A Symbol and a String are not comparable with each other, so sorting on the raw keys raises on this hash.
+  def test_mixed_option_key_types_canonicalise_instead_of_raising
+    segment = segments("One.").first
+    symbol_first = cache(RecordingStore.new, options: { formality: :more, "glossary" => "g" })
+    string_first = cache(RecordingStore.new, options: { "glossary" => "g", formality: :more })
+
+    assert_equal symbol_first.key(segment), string_first.key(segment)
+  end
+
+  # A value rendering as an address gives a key that can never be hit twice, so it fails where a user can see it.
+  def test_an_option_with_no_stable_string_form_raises_and_names_it
+    subject_cache = cache(RecordingStore.new, options: { glossary: Object.new })
+
+    error = assert_raises(TranslationDiff::SentenceCache::Error) { subject_cache.key(segments("One.").first) }
+
+    assert_kind_of TranslationDiff::Error, error
+    assert_includes error.message, "glossary"
+  end
+
+  # One definition of padding, the one Segment already makes: the key hashes the body it cut, not a copy of its regex.
+  def test_the_key_hashes_the_body_segment_cut
+    segment = segments("  Padded sentence.  ").first
+
+    key = cache(RecordingStore.new).key(segment)
+
+    assert_equal "Padded sentence.", segment.body
+    assert_equal Digest::MD5.hexdigest(segment.body), key.split(":").last
+  end
 end
