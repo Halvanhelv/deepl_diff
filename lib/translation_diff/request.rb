@@ -35,7 +35,9 @@ class TranslationDiff::Request
   end
 
   def resolve_provider(value)
-    value.is_a?(Symbol) || value.is_a?(String) ? TranslationDiff::Providers.build(value, config) : value
+    return TranslationDiff::Providers.build(value, config) if value.is_a?(Symbol) || value.is_a?(String)
+
+    TranslationDiff::Providers.ensure_provider!(value)
   end
 
   def rate_limiter = config.rate_limiter_instance

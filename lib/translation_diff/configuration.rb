@@ -66,8 +66,10 @@ class TranslationDiff::Configuration
     end
   end
 
+  # Guarded, unlike cache/segmenter/rate_limiter: only the provider gained a base class to check against.
   def provider_instance
-    @provider_instance ||= resolve(provider, TranslationDiff::Providers)
+    @provider_instance ||=
+      TranslationDiff::Providers.ensure_provider!(resolve(provider, TranslationDiff::Providers))
   end
 
   # Unset `cache` means Redis when a URL is configured, otherwise in-process -- works before anything runs.

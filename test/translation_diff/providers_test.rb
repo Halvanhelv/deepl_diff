@@ -167,6 +167,40 @@ class ProvidersTest < Minitest::Test
     refute TranslationDiff::Providers.registered?(:impostor)
   end
 
+  # `klass < Provider` raised NoMethodError for an instance -- the first thing someone writing a provider hits.
+  def test_registering_an_instance_rather_than_a_class_raises_the_registry_error
+    instance = TranslationDiff::Providers::Null.new(TranslationDiff::Configuration.new)
+
+    error = assert_raises(TranslationDiff::InvalidProviderError) do
+      TranslationDiff::Providers.register(:impostor_instance, instance)
+    end
+
+    assert_match(/TranslationDiff::Provider/, error.message)
+    refute TranslationDiff::Providers.registered?(:impostor_instance)
+  end
+
+  # `klass < Provider` raised ArgumentError for a non-Module, and NoMethodError for nil or a symbol.
+  def test_registering_a_non_module_raises_the_registry_error
+    [nil, :deepl, 42, Object.new].each do |value|
+      assert_raises(TranslationDiff::InvalidProviderError) do
+        TranslationDiff::Providers.register(:impostor_value, value)
+      end
+    end
+
+    refute TranslationDiff::Providers.registered?(:impostor_value)
+  end
+
+  # The message names the class, never the object: an arbitrary #to_s renders its own content or an address.
+  def test_the_registry_error_names_the_class_and_not_the_object
+    secret = Struct.new(:token).new("s3cret")
+
+    error = assert_raises(TranslationDiff::InvalidProviderError) do
+      TranslationDiff::Providers.register(:impostor_secret, secret)
+    end
+
+    refute_match(/s3cret/, error.message)
+  end
+
   # A caller rescuing "this class cannot be a provider" must not also accidentally swallow an option collision.
   def test_an_option_collision_raises_the_generic_error_not_the_invalid_provider_one
     TranslationDiff::Providers.register(:collision_a, ConflictingProviderA)

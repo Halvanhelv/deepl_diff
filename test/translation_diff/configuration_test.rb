@@ -5,6 +5,21 @@ class ConfigurationTest < Minitest::Test
   include EnvStub
 
   # A hand-written double for TranslationDiff::Registry: Minitest 6.0 dropped minitest/mock.
+  # Duck-typed collaborators, deliberately inheriting nothing: the provider is the only tightened one.
+  class FakeStore
+    def read_multi(keys) = [nil] * keys.size
+    def write(_key, value) = value
+  end
+
+  class FakeSegmenter
+    def split_offsets(_text, **) = []
+  end
+
+  class FakeRateLimiter
+    # The real limiter raises when the threshold is passed and returns nothing useful otherwise.
+    def check(_size) = nil
+  end
+
   ResolvingRegistry = Struct.new(:answer) do
     attr_reader :asked
 
@@ -219,6 +234,33 @@ class ConfigurationTest < Minitest::Test
     TranslationDiff::Configuration.option(:shared_option, "second")
 
     assert_equal "first", TranslationDiff::Configuration.new.shared_option
+  end
+
+  # Providers.register refuses a class that skips the base class; assigning an object bypassed that entirely.
+  def test_an_assigned_provider_object_that_is_not_a_provider_is_refused
+    @config.provider = Object.new
+
+    error = assert_raises(TranslationDiff::InvalidProviderError) { @config.provider_instance }
+
+    assert_match(/TranslationDiff::Provider/, error.message)
+  end
+
+  def test_an_assigned_provider_object_that_is_a_provider_is_used_as_is
+    provider = TranslationDiff::Providers::Null.new(TranslationDiff::Configuration.new)
+    @config.provider = provider
+
+    assert_same provider, @config.provider_instance
+  end
+
+  # Only the provider gained a base class; these three are still genuinely duck-typed.
+  def test_the_other_extension_points_stay_duck_typed
+    @config.cache = FakeStore.new
+    @config.segmenter = FakeSegmenter.new
+    @config.rate_limiter = FakeRateLimiter.new
+
+    assert_instance_of FakeStore, @config.cache_store
+    assert_instance_of FakeSegmenter, @config.segmenter_instance
+    assert_instance_of FakeRateLimiter, @config.rate_limiter_instance
   end
 
   def test_resolve_builds_from_a_registry_for_a_symbol

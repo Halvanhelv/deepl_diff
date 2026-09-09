@@ -293,6 +293,15 @@ class RequestTest < ConfiguredTest
     assert_empty api.calls
   end
 
+  # The `provider:` keyword is the third way to supply one; it must fail in the same words as the other two.
+  def test_a_provider_object_passed_for_one_call_that_is_not_a_provider_is_refused
+    error = assert_raises(TranslationDiff::InvalidProviderError) do
+      TranslationDiff::Request.new("One", from: :en, to: :ru, provider: Object.new).call
+    end
+
+    assert_match(/TranslationDiff::Provider/, error.message)
+  end
+
   # An empty cache-key segment would put this provider's translations in every other provider's namespace.
   def test_a_provider_whose_cache_key_is_empty_is_refused_rather_than_sharing_a_namespace
     configure_with(NamelessApi.new(%w[Один]))
