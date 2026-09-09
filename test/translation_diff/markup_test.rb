@@ -118,13 +118,14 @@ class MarkupTest < Minitest::Test
 
   # Every entity is decoded, not the two that were measured: an `&` we leave behind is an `&` encoding corrupts.
   def test_decoding_resolves_named_and_numeric_entities
+    assert_equal "\u00A9 \u2014 \u2026", TranslationDiff::Markup.decode_entities("&copy; &mdash; &hellip;")
     assert_equal "& < > \" ' \u00A0", TranslationDiff::Markup.decode_entities("&amp; &lt; &gt; &quot; &apos; &nbsp;")
     assert_equal "& & \u00A0 \u00A0", TranslationDiff::Markup.decode_entities("&#38; &#x26; &#160; &#xA0;")
   end
 
   # Sane rather than an exception, and sane here means untouched: what is not an entity is text, and stays text.
   def test_decoding_leaves_a_malformed_entity_exactly_as_it_arrived
-    ["&notanentity;", "&#xZZ;", "&#;", "&#999999999;", "&hellip;", "AT&T", "a &gt b", "&"].each do |text|
+    ["&notanentity;", "&#xZZ;", "&#;", "&#999999999;", "&Bogus9;", "AT&T", "a &gt b", "&"].each do |text|
       assert_equal text, TranslationDiff::Markup.decode_entities(text)
     end
   end
@@ -150,6 +151,7 @@ class MarkupTest < Minitest::Test
     assert_round_trips("AT&T is a company. Fine.")
     assert_round_trips("&copy; 2026. Fine.")
     assert_round_trips("&notanentity; here. Fine.")
+    assert_round_trips("One &mdash; two &hellip; three. Fine.")
   end
 
   # The bargain, in a test: bytes are promised only while a segment is untranslated.
@@ -159,9 +161,18 @@ class MarkupTest < Minitest::Test
     assert_equal "Hard\u00A0space here. Fine.", echoed("Hard&nbsp;space here. Fine.")
   end
 
-  # CGI's table is the HTML specials and the numeric forms, so a `&copy;` that is translated is spelled, not resolved.
-  def test_a_named_entity_cgi_cannot_decode_survives_translation_as_text
-    assert_equal "&amp;copy; 2026. Fine.", echoed("&copy; 2026. Fine.")
+  # The whole HTML5 named set, not just the specials CGI knows: a spelled-out `&copy;` would display as text, not as ©.
+  def test_a_named_entity_outside_cgis_table_is_translated_as_the_character_it_means
+    assert_equal ["\u00A9 2026.", "Fine."], cores("&copy; 2026. Fine.")
+    assert_equal "\u00A9 2026. Fine.", echoed("&copy; 2026. Fine.")
+    assert_equal "One \u2014 two \u2026 three. Fine.", echoed("One &mdash; two &hellip; three. Fine.")
+  end
+
+  # A lone `&` is invalid XML and Ox raises on it, so nothing but a single well-formed entity is ever handed over.
+  def test_a_lone_ampersand_never_reaches_the_entity_resolver
+    assert_equal ["AT&T is a company.", "Fine."], cores("AT&T is a company. Fine.")
+    assert_equal "AT&amp;T is a company. Fine.", echoed("AT&T is a company. Fine.")
+    assert_equal "R&D; x", TranslationDiff::Markup.decode_entities("R&D; x")
   end
 
   # -- what still has to hold ----------------------------------------------

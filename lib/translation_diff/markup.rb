@@ -13,10 +13,11 @@ module TranslationDiff::Markup
 
   # The bargain: an untranslated segment renders byte-exact, a translated one renders equivalent HTML, not equal bytes.
 
-  # Named and numeric alike, so nothing an `&` opens survives to be escaped again; `&nbsp;` because Google breaks on it.
-  DECODABLE = /&(?:nbsp|amp|lt|gt|quot|apos|#\d+|#[xX]\h+);/
+  # Named and numeric alike, so nothing an `&` opens survives to be escaped again and rendered as its own spelling.
+  DECODABLE = /&(?:[A-Za-z][A-Za-z0-9]*|#\d+|#[xX]\h+);/
 
-  NBSP = "\u00A0".freeze
+  # Which of the two decoders an entity belongs to: Ox knows every HTML5 name, CGI knows both numeric forms.
+  NAMED = /\A&([A-Za-z][A-Za-z0-9]*);\z/
 
   # Only the two characters that are unsafe in HTML text; every other decoded character is left as the character it is.
   ENCODED = { "&" => "&amp;", "<" => "&lt;" }.freeze
@@ -39,14 +40,37 @@ module TranslationDiff::Markup
   # What a provider is sent is text, so it gets the characters; one left-to-right pass, so nothing is decoded twice.
   def self.decode_entities(text) = text.gsub(DECODABLE) { |entity| decoded(entity) }
 
-  # An entity CGI cannot decode stays as it arrived, and so does a surrogate: that decodes to invalid UTF-8.
+  # An entity neither decoder knows stays as it arrived, and so does a surrogate: that decodes to invalid UTF-8.
   def self.decoded(entity)
-    return NBSP if entity == "&nbsp;"
-
-    plain = CGI.unescapeHTML(entity)
+    name = entity[NAMED, 1]
+    plain = name ? named(name) : CGI.unescapeHTML(entity)
     plain.valid_encoding? ? plain : entity
+  end
+
+  # A document repeats the same handful of names, and only a name that resolved is kept, so the table cannot be grown.
+  def self.named(name) = resolved[name] || resolve(name)
+
+  def self.resolved = @resolved ||= {}
+
+  # One well-formed entity alone in an element is the only input Ox decodes safely -- prose with a lone `&` raises.
+  def self.resolve(name)
+    entity = "&#{name};"
+    resolver = Resolver.new
+    Ox.sax_html(resolver, StringIO.new("<e>#{entity}</e>"))
+    return entity if resolver.text.nil? || resolver.text == entity
+
+    resolved[name] = resolver.text
+  rescue StandardError
+    entity
   end
 
   # What a document renders is markup, so text that changed is made safe again -- and only where it is unsafe.
   def self.encode_entities(text) = text.gsub(ENCODABLE, ENCODED)
+
+  # Ox hands back the decoded text of the one element it was given; a name it does not know arrives as the text it was.
+  class Resolver < Ox::Sax
+    attr_reader :text
+
+    def value(value) = @text = value.as_s
+  end
 end
