@@ -48,6 +48,7 @@ require "translation_diff/memory_cache_store"
 require "translation_diff/redis_cache_store"
 require "translation_diff/redis_rate_limiter"
 require "translation_diff/instrumentation"
+require "translation_diff/translator"
 require "translation_diff/request"
 require "translation_diff/context"
 
