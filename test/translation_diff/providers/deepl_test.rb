@@ -2,12 +2,14 @@ require "test_helper"
 require "support/provider_contract"
 require "support/http_provider_contract"
 require "support/stubbed_provider"
+require "support/env_stub"
 require "faraday"
 
 class DeepLProviderTest < Minitest::Test
   include ProviderContract
   include HTTPProviderContract
   include StubbedProvider
+  include EnvStub
 
   # A real response body, captured from api-free.deepl.com on 2026-09-09.
   TRANSLATE_BODY = {
@@ -31,6 +33,42 @@ class DeepLProviderTest < Minitest::Test
   def provider(body: nil, status: 200, headers: {})
     stub_provider(route: "/v2/translate", body: body || method(:echo_translations),
                   status: status, headers: headers, name: :deepl)
+  end
+
+  # deepl-rb read DEEPL_AUTH_KEY on our behalf; an app that set it and configured nothing kept working.
+  def test_the_deepl_auth_key_environment_variable_supplies_an_unset_key
+    with_env("DEEPL_AUTH_KEY" => "env-key:fx") do
+      assert_equal "env-key:fx", TranslationDiff::Configuration.new.deepl_api_key
+    end
+  end
+
+  # The default is a callable, so setting the variable after this file was required still works.
+  def test_the_environment_is_read_on_use_not_at_load_time
+    built = TranslationDiff::Configuration.new
+
+    with_env("DEEPL_AUTH_KEY" => "set-after-the-fact") do
+      assert_equal "set-after-the-fact", built.deepl_api_key
+    end
+  end
+
+  def test_an_explicitly_configured_key_wins_over_the_environment
+    with_env("DEEPL_AUTH_KEY" => "env-key") do
+      assert_equal "test-key:fx", config.deepl_api_key
+    end
+  end
+
+  def test_a_blank_environment_variable_is_not_a_key
+    with_env("DEEPL_AUTH_KEY" => "  ") do
+      assert_nil TranslationDiff::Configuration.new.deepl_api_key
+    end
+  end
+
+  # The scenario: ensure_configured! raised ConfigurationError at boot for an app that only set the variable.
+  def test_the_environment_variable_satisfies_the_configuration_requirement
+    with_env("DEEPL_AUTH_KEY" => "env-key") do
+      assert_instance_of TranslationDiff::Providers::DeepL,
+                         TranslationDiff::Providers::DeepL.new(TranslationDiff::Configuration.new)
+    end
   end
 
   def test_a_free_key_selects_the_free_host

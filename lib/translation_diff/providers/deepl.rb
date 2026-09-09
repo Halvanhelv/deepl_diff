@@ -17,7 +17,11 @@ class TranslationDiff::Providers::DeepL < TranslationDiff::HTTPProvider
     )
   end
 
-  def self.configuration_options = %i[deepl_api_key deepl_api_base]
+  # DEEPL_AUTH_KEY is what deepl-rb read on our behalf; the callable keeps it read on use, not at load.
+  def self.configuration_options
+    [:deepl_api_base, { deepl_api_key: -> { ENV.fetch("DEEPL_AUTH_KEY", nil) } }]
+  end
+
   def self.configuration_requirements = %i[deepl_api_key]
 
   # DeepL requires a target language even when only detection is wanted, so the provider picks one.

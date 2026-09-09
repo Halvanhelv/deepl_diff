@@ -1,12 +1,14 @@
 require "test_helper"
 require "support/provider_contract"
 require "support/http_provider_contract"
+require "support/env_stub"
 require "faraday"
 require "aws-sigv4"
 
 class AmazonProviderTest < Minitest::Test
   include ProviderContract
   include HTTPProviderContract
+  include EnvStub
 
   attr_reader :config, :requests
 
@@ -44,6 +46,18 @@ class AmazonProviderTest < Minitest::Test
     [200, { "Content-Type" => "application/x-amz-json-1.1" },
      { "TranslatedText" => translated, "SourceLanguageCode" => "en",
        "TargetLanguageCode" => "ru" }.to_json]
+  end
+
+  # Deliberate: aws-sigv4 takes explicit credentials and this library does not implement the credential chain.
+  def test_it_reads_no_aws_environment_variables
+    with_env("AWS_ACCESS_KEY_ID" => "AKIAENV", "AWS_SECRET_ACCESS_KEY" => "secret",
+             "AWS_REGION" => "eu-west-1") do
+      fresh = TranslationDiff::Configuration.new
+
+      assert_nil fresh.amazon_access_key_id
+      assert_nil fresh.amazon_secret_access_key
+      assert_nil fresh.amazon_region
+    end
   end
 
   def test_the_endpoint_is_regional

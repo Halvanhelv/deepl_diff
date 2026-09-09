@@ -1,6 +1,9 @@
 require "test_helper"
+require "support/env_stub"
 
 class ConfigurationTest < Minitest::Test
+  include EnvStub
+
   # A hand-written double for TranslationDiff::Registry: Minitest 6.0 dropped minitest/mock.
   ResolvingRegistry = Struct.new(:answer) do
     attr_reader :asked
@@ -140,6 +143,74 @@ class ConfigurationTest < Minitest::Test
     TranslationDiff::Configuration.register_provider_options(%i[fresh_option], RivalOptionOwner)
 
     assert_includes TranslationDiff::Configuration.options, :fresh_option
+  end
+
+  # A provider needing no default keeps the bare-symbol form; one needing a default declares `key => default`.
+  class DefaultingOptionOwner
+    def self.configuration_options
+      [:defaulting_bare, { defaulting_keyed: -> { ENV.fetch("DEFAULTING_TEST_VAR", nil) } }]
+    end
+  end
+
+  def test_a_provider_declares_bare_symbols_and_defaults_in_one_list
+    TranslationDiff::Configuration.register_provider_options(
+      DefaultingOptionOwner.configuration_options, DefaultingOptionOwner
+    )
+
+    assert_includes TranslationDiff::Configuration.options, :defaulting_bare
+    assert_includes TranslationDiff::Configuration.options, :defaulting_keyed
+    assert_nil TranslationDiff::Configuration.new.defaulting_bare
+  end
+
+  # Evaluated on read, not at load: an application that sets the variable after requiring us still gets it.
+  def test_a_declared_callable_default_is_evaluated_on_every_read
+    TranslationDiff::Configuration.register_provider_options(
+      DefaultingOptionOwner.configuration_options, DefaultingOptionOwner
+    )
+
+    with_env("DEFAULTING_TEST_VAR" => "from-the-environment") do
+      assert_equal "from-the-environment", TranslationDiff::Configuration.new.defaulting_keyed
+    end
+  end
+
+  def test_an_assigned_value_wins_over_a_declared_default
+    TranslationDiff::Configuration.register_provider_options(
+      DefaultingOptionOwner.configuration_options, DefaultingOptionOwner
+    )
+    config = TranslationDiff::Configuration.new
+    config.defaulting_keyed = "assigned"
+
+    with_env("DEFAULTING_TEST_VAR" => "from-the-environment") do
+      assert_equal "assigned", config.defaulting_keyed
+    end
+  end
+
+  # The blank rule the writer already applies: a variable exported empty means unset, not an empty credential.
+  def test_a_blank_default_reads_as_unset
+    TranslationDiff::Configuration.register_provider_options(
+      DefaultingOptionOwner.configuration_options, DefaultingOptionOwner
+    )
+
+    with_env("DEFAULTING_TEST_VAR" => "   ") do
+      assert_nil TranslationDiff::Configuration.new.defaulting_keyed
+    end
+  end
+
+  class KeyedConflictOwner
+    def self.configuration_options = [:keyed_fresh_option, { owned_by_acme: -> { "x" } }]
+  end
+
+  # Ownership is claimed for every key however it was written, so a keyed clash still leaves no partial state.
+  def test_a_conflict_on_a_keyed_option_leaves_no_partial_state
+    TranslationDiff::Configuration.register_provider_options(%i[owned_by_acme], AcmeOptionOwner)
+
+    assert_raises(TranslationDiff::Error) do
+      TranslationDiff::Configuration.register_provider_options(
+        KeyedConflictOwner.configuration_options, KeyedConflictOwner
+      )
+    end
+
+    refute_includes TranslationDiff::Configuration.options, :keyed_fresh_option
   end
 
   def test_registering_an_option_twice_does_not_clobber_the_first_default

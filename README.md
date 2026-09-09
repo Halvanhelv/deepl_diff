@@ -69,7 +69,9 @@ TranslationDiff.translate("Привет.", from: "ru", to: "en")
 
 `deepl_api_key` is required -- the provider checks for it at build time and
 raises `TranslationDiff::ConfigurationError` naming what is missing, rather
-than failing on the first real request. `redis_url` is optional: without it
+than failing on the first real request. Leave it unset and `DEEPL_AUTH_KEY`
+is read instead, on use rather than at load, so the variable may be exported
+after this gem is required. `redis_url` is optional: without it
 the cache lives in the process, which means the library runs before any
 infrastructure does.
 
@@ -116,10 +118,10 @@ Every provider declares its own configuration options, registered the moment
 
 | Provider | Options | Meaning |
 | --- | --- | --- |
-| `:deepl` | `deepl_api_key` (required) | Sent as `DeepL-Auth-Key`. |
+| `:deepl` | `deepl_api_key` (required) | Sent as `DeepL-Auth-Key`. Falls back to `ENV["DEEPL_AUTH_KEY"]`. |
 | | `deepl_api_base` | Overrides the automatic free/paid host selection (from the `:fx` suffix on the key). Rarely needed. |
-| `:google` | `google_api_key` (required) | Sent as the `key` query parameter. |
-| | `google_project_id` | Declared for a future credentials path; not currently read -- an API key needs no project. |
+| `:google` | `google_api_key` (required) | Sent as the `key` query parameter. Falls back to `ENV["TRANSLATE_KEY"]`, then `ENV["GOOGLE_CLOUD_KEY"]`. |
+| | `google_project_id` | Declared for a future credentials path; not currently read -- an API key needs no project. Falls back to `ENV["TRANSLATE_PROJECT"]`. |
 | | `google_api_base` | Overrides the default `https://translation.googleapis.com`. |
 | `:azure` | `azure_api_key` (required) | Sent as `Ocp-Apim-Subscription-Key`. |
 | | `azure_region` | Sent as `Ocp-Apim-Subscription-Region`. Required by a multi-service Azure resource; a single-service resource needs no region. |
@@ -128,7 +130,7 @@ Every provider declares its own configuration options, registered the moment
 | | `modernmt_api_base` | Overrides the default `https://api.modernmt.com`. |
 | `:libretranslate` | `libretranslate_api_base` (required) | Every instance is self-hosted; there is no default to fall back to. |
 | | `libretranslate_api_key` | Sent as `api_key` in the request body. Most instances do not require one. |
-| `:amazon` | `amazon_access_key_id`, `amazon_secret_access_key`, `amazon_region` (all required) | Used to sign each request with `aws-sigv4`. |
+| `:amazon` | `amazon_access_key_id`, `amazon_secret_access_key`, `amazon_region` (all required) | Used to sign each request with `aws-sigv4`. No environment fallback: this library does not implement the AWS credential chain, so `AWS_ACCESS_KEY_ID` and friends are not read. |
 | | `amazon_session_token` | For temporary credentials. |
 | | `amazon_api_base` | Overrides the default `https://translate.<amazon_region>.amazonaws.com`. |
 
@@ -314,6 +316,21 @@ another service's cache, for as long as those entries live, with nothing in
 the log to say so. Registering over an existing name is not a way to
 substitute a service -- give the replacement its own name, or clear the cache
 (`cache_namespace` is the cheapest way to do that).
+
+**An option can declare a default.** A bare symbol in
+`configuration_options` declares an option with no default. Writing
+`key => default` instead declares one, and a callable default is evaluated on
+every read rather than at load time -- which is what lets an environment
+variable work when the application exports it after requiring this gem:
+
+```ruby
+def self.configuration_options
+  [:yandex_api_base, { yandex_api_key: -> { ENV.fetch("YANDEX_API_KEY", nil) } }]
+end
+```
+
+An explicitly configured value always wins over a default, and a default that
+resolves to a blank string reads as unset -- the same rule assignment follows.
 
 **Option names are unique too, and enforced.** Two providers declaring the
 same `configuration_options` name would share one accessor on
@@ -637,8 +654,9 @@ TranslationDiff::Error
 │                                                # timed out, or TLS failed
 ├── TranslationDiff::ResponseError              # the answer was well-formed HTTP but broke
 │                                                # this library's contract -- a body that
-│                                                # is not JSON, or a provider that returned
-│                                                # the wrong number of translations
+│                                                # is not JSON, a provider that returned
+│                                                # the wrong number of translations, or one
+│                                                # that returned no translation for an input
 ├── TranslationDiff::InvalidProviderError       # a class registered without inheriting
 │                                                # TranslationDiff::Provider
 ├── TranslationDiff::Request::Error             # from: missing and the provider cannot

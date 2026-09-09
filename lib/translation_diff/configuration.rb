@@ -16,16 +16,25 @@ class TranslationDiff::Configuration
     end
 
     # See ProviderOptionOwners for the conflict rules and the all-or-nothing guarantee.
-    def register_provider_options(keys, provider)
-      keys = Array(keys).map(&:to_sym)
-      provider_option_owners.claim(keys, provider)
-      keys.each { |key| option(key) }
+    def register_provider_options(declared, provider)
+      declared = normalise_declarations(declared)
+      provider_option_owners.claim(declared.keys, provider)
+      declared.each { |key, default| option(key, default) }
     end
 
     def options = @options ||= []
     def defaults = @defaults ||= {}
 
     private
+
+    # `:key` declares an option with no default; `{ key => default }` declares one, and a callable is read lazily.
+    def normalise_declarations(declared)
+      entries = declared.is_a?(Hash) ? [declared] : Array(declared)
+
+      entries.each_with_object({}) do |entry, result|
+        entry.is_a?(Hash) ? result.merge!(entry.transform_keys(&:to_sym)) : result[entry.to_sym] = nil
+      end
+    end
 
     def provider_option_owners = @provider_option_owners ||= ProviderOptionOwners.new
   end
@@ -98,13 +107,16 @@ class TranslationDiff::Configuration
           '`gem "redis-namespace"` to your Gemfile.'
   end
 
+  # A default is resolved on every read, and a blank one is unset -- the rule the writer already applies.
   def read(key)
     value = instance_variable_get(:"@#{key}")
     return value unless value.nil?
 
     default = self.class.defaults[key]
-    default.respond_to?(:call) ? default.call : default
+    blank_to_nil(default.respond_to?(:call) ? default.call : default)
   end
+
+  def blank_to_nil(value) = value.is_a?(String) && value.strip.empty? ? nil : value
 
   # The symbol-or-object rule, implemented once for all three extension points.
   def resolve(value, registry)

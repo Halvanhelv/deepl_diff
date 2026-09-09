@@ -14,6 +14,7 @@ class TranslationDiff::Providers::Amazon < TranslationDiff::HTTPProvider
     )
   end
 
+  # Deliberately no environment fallback: this library does not implement the AWS credential chain.
   def self.configuration_options
     %i[amazon_access_key_id amazon_secret_access_key amazon_session_token
        amazon_region amazon_api_base]

@@ -13,7 +13,13 @@ class TranslationDiff::Providers::Google < TranslationDiff::HTTPProvider
     )
   end
 
-  def self.configuration_options = %i[google_api_key google_project_id google_api_base]
+  # TRANSLATE_KEY then GOOGLE_CLOUD_KEY, the order google-cloud-translate-v2 read them in.
+  def self.configuration_options
+    [:google_api_base,
+     { google_api_key: -> { ENV.fetch("TRANSLATE_KEY", nil) || ENV.fetch("GOOGLE_CLOUD_KEY", nil) },
+       google_project_id: -> { ENV.fetch("TRANSLATE_PROJECT", nil) } }]
+  end
+
   def self.configuration_requirements = %i[google_api_key]
 
   # A bare code is downcased for DeepL-style configs ("EN"); a subtag ("zh-Hans") is passed through untouched.

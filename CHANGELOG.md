@@ -91,6 +91,20 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
 - `deepl-rb` and `google-cloud-translate-v2` are no longer used at all.
   `faraday` and `faraday-retry` become runtime dependencies; `aws-sigv4` is
   required lazily by the Amazon provider only.
+- `config.deepl_host` is renamed `config.deepl_api_base`, matching the
+  `<provider>_api_base` name every other provider uses. There is no alias: a
+  configuration still setting `deepl_host` raises `NoMethodError` on
+  `TranslationDiff.configure`. Rename it.
+- A provider returning the wrong number of translations now raises
+  `TranslationDiff::ResponseError`, not `TranslationDiff::Request::Error`.
+  `Request::Error` still exists, and still means "`from:` is missing and the
+  provider cannot detect"; a `rescue TranslationDiff::Request::Error` written
+  to catch a short response no longer catches one. Both are
+  `TranslationDiff::Error`, so a rescue of the base class is unaffected.
+- A provider returning a well-formed response that carries no translation for
+  one input -- Azure answers 200 for a batch where a single string failed --
+  also raises `TranslationDiff::ResponseError`, naming the position. It
+  previously reached `Spacing.restore` and died there as `NoMethodError`.
 
 ### Removed
 
@@ -102,15 +116,29 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
 ### Added
 
 - A Google provider: `config.provider = :google` translates through Cloud
-  Translation v2 (Basic), on the `google-cloud-translate-v2` gem, required
-  lazily so an application using DeepL never needs it installed. It declares
-  `google_api_key` and `google_project_id`; an API key alone is enough, and
-  with none configured the gem reads `TRANSLATE_KEY`/`GOOGLE_CLOUD_KEY` or
-  falls back to application default credentials. The provider asks for
-  `format: :html`, which the tokenizer's output requires -- a `notranslate`
-  span is handed over with its tags -- and downcases bare language codes so
-  a configuration written for DeepL (`"EN"`) keeps working, leaving
-  subtagged codes such as `"zh-Hans"` alone.
+  Translation v2 (Basic) over HTTP directly, with no Google gem installed. It
+  declares `google_api_key`, `google_project_id` and `google_api_base`; an API
+  key alone is enough. With no key configured it reads `TRANSLATE_KEY` and
+  then `GOOGLE_CLOUD_KEY`, and `google_project_id` falls back to
+  `TRANSLATE_PROJECT` -- the variables `google-cloud-translate-v2` used to
+  read on your behalf. Application default credentials are **not** supported:
+  that path lived in the gem that is gone, and an application relying on ADC
+  must now configure an API key. The provider asks for `format: :html`, which
+  the tokenizer's output requires -- a `notranslate` span is handed over with
+  its tags -- and downcases bare language codes so a configuration written for
+  DeepL (`"EN"`) keeps working, leaving subtagged codes such as `"zh-Hans"`
+  alone.
+- Environment-variable credential fallbacks, read by this library now that the
+  vendor SDKs that read them are gone: `DEEPL_AUTH_KEY` for `deepl_api_key`,
+  `TRANSLATE_KEY` then `GOOGLE_CLOUD_KEY` for `google_api_key`, and
+  `TRANSLATE_PROJECT` for `google_project_id`. Each is read on use rather than
+  at load, so setting one after requiring the gem still works, and an
+  explicitly configured value always wins. The Amazon provider deliberately
+  has no environment fallback: `aws-sigv4` is handed explicit credentials and
+  this library does not implement the AWS credential chain.
+- A provider declares a default for one of its options by writing
+  `key => default` in `configuration_options` instead of a bare symbol; a
+  callable default is evaluated on every read.
 - `TranslationDiff::Configuration`, a declarative settings object built
   through the `option(key, default)` macro. Options fall back to their
   default until assigned, treat a blank string as unset, and support a
