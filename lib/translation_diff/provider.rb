@@ -28,6 +28,12 @@ class TranslationDiff::Provider
     self.class.language_case == :upcase ? code.upcase : code.downcase
   end
 
+  # nil means the provider reported no billing at all; 0 means it reported zero. Both are claims.
+  def billed_characters(reported)
+    values = reported.compact
+    values.empty? ? nil : values.sum
+  end
+
   def translate(_request) = raise NotImplementedError, "#{self.class} must implement #translate"
 
   # Only called when `capabilities.detects_language?`.

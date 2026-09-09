@@ -72,6 +72,22 @@ class ModernMTProviderTest < Minitest::Test
     assert_equal 6, response.usage.billed_characters
   end
 
+  # Same convention as DeepL and Azure: a reported 0 is a claim, not "unknown".
+  def test_a_reported_zero_is_zero_not_unknown
+    body = { "data" => [{ "translation" => "один", "billedCharacters" => 0 },
+                        { "translation" => "два", "billedCharacters" => 0 }] }
+    response = provider(body: body).translate(translation_request(%w[one two]))
+
+    assert_equal 0, response.usage.billed_characters
+  end
+
+  def test_billed_characters_is_nil_when_no_result_reported_it
+    body = { "data" => [{ "translation" => "один" }, { "translation" => "два" }] }
+    response = provider(body: body).translate(translation_request(%w[one two]))
+
+    assert_nil response.usage.billed_characters
+  end
+
   # One text comes back as an object, not a one-element array, which would hand the pipeline a bare Hash.
   def test_a_single_text_comes_back_unwrapped_and_is_still_a_list
     single = { "data" => { "translation" => "один", "detectedLanguage" => "en" } }

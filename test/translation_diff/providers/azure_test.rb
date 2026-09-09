@@ -133,6 +133,14 @@ class AzureProviderTest < Minitest::Test
     assert_nil response.usage.billed_characters
   end
 
+  # The same convention the other two billing providers now follow.
+  def test_a_reported_zero_is_zero_not_unknown
+    response = provider(body: BODY, headers: { "X-metered-usage" => "0" })
+               .translate(translation_request(%w[one two]))
+
+    assert_equal 0, response.usage.billed_characters
+  end
+
   def test_a_short_response_raises_rather_than_shifting_nils_into_the_results
     short = [BODY.first]
 

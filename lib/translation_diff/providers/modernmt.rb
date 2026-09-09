@@ -56,11 +56,9 @@ class TranslationDiff::Providers::ModernMT < TranslationDiff::HTTPProvider
   end
 
   def usage_for(request, results)
-    billed = results.filter_map { |r| r["billedCharacters"] }.sum
-
     TranslationDiff::Translation::Usage.new(
       characters: request.texts.sum(&:size),
-      billed_characters: billed.positive? ? billed : nil
+      billed_characters: billed_characters(results.map { |r| r["billedCharacters"] })
     )
   end
 end

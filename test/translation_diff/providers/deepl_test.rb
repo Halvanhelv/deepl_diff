@@ -168,6 +168,22 @@ class DeepLProviderTest < Minitest::Test
     assert_equal 6, response.usage.billed_characters
   end
 
+  # nil means "the provider did not say"; a reported 0 is a claim, and mapping it to nil erased one.
+  def test_a_reported_zero_is_zero_not_unknown
+    body = { "translations" => [{ "text" => "один", "billed_characters" => 0 },
+                                { "text" => "два", "billed_characters" => 0 }] }
+    response = provider(body: body).translate(translation_request(%w[one two]))
+
+    assert_equal 0, response.usage.billed_characters
+  end
+
+  def test_billed_characters_is_nil_when_no_translation_reported_it
+    body = { "translations" => [{ "text" => "один" }, { "text" => "два" }] }
+    response = provider(body: body).translate(translation_request(%w[one two]))
+
+    assert_nil response.usage.billed_characters
+  end
+
   def test_a_short_response_raises_rather_than_shifting_nils_into_the_results
     short = { "translations" => [{ "text" => "один" }] }
 

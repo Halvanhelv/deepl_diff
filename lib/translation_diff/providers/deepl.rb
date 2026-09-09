@@ -68,11 +68,9 @@ class TranslationDiff::Providers::DeepL < TranslationDiff::HTTPProvider
   def free_key? = config.deepl_api_key.to_s.end_with?(FREE_KEY_SUFFIX)
 
   def usage_for(request, translations)
-    billed = translations.filter_map { |t| t["billed_characters"] }.sum
-
     TranslationDiff::Translation::Usage.new(
       characters: request.texts.sum(&:size),
-      billed_characters: billed.positive? ? billed : nil
+      billed_characters: billed_characters(translations.map { |t| t["billed_characters"] })
     )
   end
 end

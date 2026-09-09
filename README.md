@@ -189,6 +189,11 @@ runtime:
 | LibreTranslate | `:libretranslate` | `libretranslate_api_base` | 50 | 5,000 | yes (`format`) | no | yes | no |
 | Amazon | `:amazon` | `amazon_access_key_id`, `amazon_secret_access_key`, `amazon_region` | 1 | 10,000 | no | no | yes | no |
 
+**`usage.billed_characters` is `nil` when the provider said nothing about
+billing and a number -- `0` included -- when it said something.** All three
+providers that report billing follow that rule; the other four always answer
+`nil`.
+
 **Language codes are normalised per vendor, so switching provider needs no
 other change.** A bare code (`"EN"`, `:ru`) is cased the way the vendor
 documents it -- DeepL takes upper case, every other provider here takes lower
