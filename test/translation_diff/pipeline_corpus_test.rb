@@ -11,15 +11,27 @@ class PipelineCorpusTest < ConfiguredTest
     @baseline_outputs ||= File.read(BASELINE_PATH).scan(/^=== (.+) ===\nOUTPUT: (.*)\n/).to_h
   end
 
+  # Still the old pipeline until task 9, so this half of an EXPECTED_TO_CHANGE case only holds the line.
   def translated(name)
     TranslationDiff.translate(PipelineCorpus::INPUTS.fetch(name), from: "en", to: "ru", provider: :null).inspect
   end
 
-  # What Passage now hands a provider, which is where the four fixed inputs actually differ.
-  def provider_texts(name)
-    passage = TranslationDiff::Passage.new(PipelineCorpus::INPUTS.fetch(name),
-                                           segmenter: TranslationDiff::Segmenters::Pragmatic.new)
-    passage.segments.reject(&:empty?).map(&:core)
+  def passage(name)
+    TranslationDiff::Passage.new(PipelineCorpus::INPUTS.fetch(name),
+                                 segmenter: TranslationDiff::Segmenters::Pragmatic.new)
+  end
+
+  # What Passage now hands a provider, which is where the fixed inputs actually differ.
+  def provider_texts(name) = passage(name).segments.reject(&:empty?).map(&:core)
+
+  # Nothing translated, so the document owes its caller the bytes it arrived as.
+  def untranslated_render(name) = passage(name).render
+
+  # Every sentence back as it was sent, which is what :null does -- the new pipeline's answer to the document column.
+  def echoed_render(name)
+    subject = passage(name)
+    subject.segments.reject(&:empty?).each { |segment| segment.translation = segment.core }
+    subject.render
   end
 
   def self.method_name_for(name) = :"test_#{name.gsub(/[^a-zA-Z0-9]+/, '_')}"
@@ -30,21 +42,51 @@ class PipelineCorpusTest < ConfiguredTest
     end
   end
 
-  # The four named in EXPECTED_TO_CHANGE, written out: the document each produces, and the texts a provider is sent.
-  # The document is unchanged and has to stay so -- :null echoes, so an echoed document proves the round trip only.
-  # What the rewrite fixes is the second half. The old path sends ["Salt &amp; pepper.", "Fine."] for the first,
-  # ["Hard&nbsp;space here.", "Fine."] for the second, ["if a"] for the third and ["5", "6.", "True."] for the fourth.
+  # The names in EXPECTED_TO_CHANGE, written out: the texts a provider is sent, the document the old path still
+  # produces, and both of Passage's renders -- byte-exact untranslated, equivalent markup once every sentence is back.
+  # The old path sends ["Salt &amp; pepper.", "Fine."] for the first, ["Hard&nbsp;space here.", "Fine."] for the
+  # second, ["if a"] for the third, ["5", "6.", "True."] for the fourth and ["a"] for the fifth.
   CHANGED = {
-    "entity ampersand" => ["Salt &amp; pepper. Fine.", ["Salt & pepper.", "Fine."]],
-    "entity nbsp" => ["Hard&nbsp;space here. Fine.", ["Hard\u00A0space here.", "Fine."]],
-    "bare less-than" => ["if a < b then stop. Fine.", ["if a < b then stop.", "Fine."]],
-    "bare less-than and greater" => ["5 < 6 and 7 > 6. True.", ["5 < 6 and 7 > 6.", "True."]]
+    "entity ampersand" => {
+      texts: ["Salt & pepper.", "Fine."],
+      document: "Salt &amp; pepper. Fine.",
+      echoed: "Salt &amp; pepper. Fine."
+    },
+    "entity nbsp" => {
+      texts: ["Hard\u00A0space here.", "Fine."],
+      document: "Hard&nbsp;space here. Fine.",
+      # The entity is spelled as the character it means, which is the same document to a browser and not the same bytes.
+      echoed: "Hard\u00A0space here. Fine."
+    },
+    "bare less-than" => {
+      texts: ["if a < b then stop.", "Fine."],
+      document: "if a < b then stop. Fine.",
+      echoed: "if a < b then stop. Fine."
+    },
+    "bare less-than and greater" => {
+      texts: ["5 < 6 and 7 > 6.", "True."],
+      document: "5 < 6 and 7 > 6. True.",
+      echoed: "5 < 6 and 7 > 6. True."
+    },
+    # The recorded limit: `<b` is read as a tag, so the sentence after it is markup and never reaches a provider.
+    "bare less-than before a letter" => {
+      texts: ["a"],
+      document: "a <b then stop. Fine.",
+      echoed: "a <b then stop. Fine."
+    }
   }.freeze
 
-  CHANGED.each do |name, (document, texts)|
+  CHANGED.each do |name, expected|
     define_method(method_name_for(name)) do
-      assert_equal document.inspect, translated(name)
-      assert_equal texts, provider_texts(name)
+      assert_equal expected[:texts], provider_texts(name)
+      assert_equal expected[:document].inspect, translated(name)
+      assert_equal PipelineCorpus::INPUTS.fetch(name), untranslated_render(name)
+      assert_equal expected[:echoed], echoed_render(name)
     end
+  end
+
+  # Without this, a sixth name in EXPECTED_TO_CHANGE would be subtracted from the generic loop and tested by neither.
+  def test_every_expected_change_is_actually_asserted
+    assert_equal PipelineCorpus::EXPECTED_TO_CHANGE.sort, CHANGED.keys.sort
   end
 end

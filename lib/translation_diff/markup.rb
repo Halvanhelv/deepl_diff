@@ -11,15 +11,17 @@ module TranslationDiff::Markup
   # `&lt;` was a lone `<`; every further `amp;` is a level the source itself wrote and escaping pushed up by one.
   ESCAPED_ANGLE = /&((?:amp;)*)lt;/
 
-  # `&amp;` and `&nbsp;` reach Google raw today and it stops translating at them; `&lt;` is this module's own escape.
-  DECODED = { "&amp;" => "&", "&lt;" => "<", "&nbsp;" => "\u00A0" }.freeze
+  # The bargain: an untranslated segment renders byte-exact, a translated one renders equivalent HTML, not equal bytes.
 
-  DECODABLE = /&(?:amp|lt|nbsp);/
+  # Named and numeric alike, so nothing an `&` opens survives to be escaped again; `&nbsp;` because Google breaks on it.
+  DECODABLE = /&(?:nbsp|amp|lt|gt|quot|apos|#\d+|#[xX]\h+);/
 
-  # `<` is missing on purpose: restoring a lone angle is the escape's job, and a real tag in prose must stay a tag.
-  ENCODED = { "&" => "&amp;", "\u00A0" => "&nbsp;" }.freeze
+  NBSP = "\u00A0".freeze
 
-  ENCODABLE = /[&\u00A0]/
+  # Only the two characters that are unsafe in HTML text; every other decoded character is left as the character it is.
+  ENCODED = { "&" => "&amp;", "<" => "&lt;" }.freeze
+
+  ENCODABLE = /[&<]/
 
   # Hands back markup `ox` can parse: same document, with every lone `<` written as the entity it should have been.
   def self.escape_bare_angles(source)
@@ -34,9 +36,17 @@ module TranslationDiff::Markup
     end
   end
 
-  # What a provider is sent is text, so it gets the characters; a document arriving without entities gains none.
-  def self.decode_entities(text) = text.gsub(DECODABLE, DECODED)
+  # What a provider is sent is text, so it gets the characters; one left-to-right pass, so nothing is decoded twice.
+  def self.decode_entities(text) = text.gsub(DECODABLE) { |entity| decoded(entity) }
 
-  # What a document renders is markup, so a decoded character goes back to its entity -- a lone `&` gains one.
+  # An entity CGI cannot decode stays as it arrived, and so does a surrogate: that decodes to invalid UTF-8.
+  def self.decoded(entity)
+    return NBSP if entity == "&nbsp;"
+
+    plain = CGI.unescapeHTML(entity)
+    plain.valid_encoding? ? plain : entity
+  end
+
+  # What a document renders is markup, so text that changed is made safe again -- and only where it is unsafe.
   def self.encode_entities(text) = text.gsub(ENCODABLE, ENCODED)
 end

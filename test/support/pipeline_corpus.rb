@@ -32,7 +32,9 @@ module PipelineCorpus
     "entity ampersand" => "Salt &amp; pepper. Fine.",
     "entity nbsp" => "Hard&nbsp;space here. Fine.",
     "bare less-than" => "if a < b then stop. Fine.",
-    "bare less-than and greater" => "5 < 6 and 7 > 6. True."
+    "bare less-than and greater" => "5 < 6 and 7 > 6. True.",
+    # A recorded limit, not a defect: `<b` cannot be prose here and a tag in "<b>Bold</b>" without a lexer of our own.
+    "bare less-than before a letter" => "a <b then stop. Fine."
   }.freeze
 
   # Written before the rewrite, on purpose, so it can fail -- unlike a list assembled after seeing what changed.
@@ -40,6 +42,7 @@ module PipelineCorpus
     "entity ampersand",
     "entity nbsp",
     "bare less-than",
-    "bare less-than and greater"
+    "bare less-than and greater",
+    "bare less-than before a letter"
   ].freeze
 end

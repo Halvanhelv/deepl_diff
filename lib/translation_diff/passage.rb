@@ -13,19 +13,12 @@ class TranslationDiff::Passage
   # The translatable sentences, in document order; the empty ones are whitespace a provider has no use for.
   def segments = fragments.flat_map(&:segments)
 
-  # Prose is handed back as the markup it came from; markup was never decoded, so only the escaped angles undo.
+  # Entities are a segment's business, so the only thing left to undo here is the escape this class put in.
   def render
-    TranslationDiff::Markup.restore_bare_angles(fragments.map { |fragment| rendered(fragment) }.join)
+    TranslationDiff::Markup.restore_bare_angles(fragments.map(&:render).join)
   end
 
   private
-
-  # Only prose was decoded, so only prose is encoded again; markup still holds the entities the document arrived with.
-  def rendered(fragment)
-    return fragment.render if fragment.markup?
-
-    TranslationDiff::Markup.encode_entities(fragment.render)
-  end
 
   # Every fragment is a slice of the source, never a rebuilt string; that is what makes an untranslated render exact.
   def fragment(run)
@@ -33,8 +26,7 @@ class TranslationDiff::Passage
     slice = @source.byteslice(from, to - from)
     return TranslationDiff::Fragment.markup(slice) unless prose
 
-    TranslationDiff::Fragment.prose(TranslationDiff::Markup.decode_entities(slice),
-                                    segmenter: @segmenter, language: @language)
+    TranslationDiff::Fragment.prose(slice, segmenter: @segmenter, language: @language)
   end
 
   # Ox reports a byte position for every construct it sees; recording those is what lets rendering slice the source.

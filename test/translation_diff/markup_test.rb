@@ -13,6 +13,13 @@ class MarkupTest < Minitest::Test
     subject.render
   end
 
+  # What the :null provider does: every sentence comes back as the text it was sent, so only markup handling shows.
+  def echoed(source)
+    subject = passage(source)
+    subject.segments.reject(&:empty?).each { |s| s.translation = s.core }
+    subject.render
+  end
+
   def assert_round_trips(source)
     assert_equal source, passage(source).render, "render must return the source byte for byte"
   end
@@ -109,14 +116,52 @@ class MarkupTest < Minitest::Test
 
   # -- decoding and encoding -----------------------------------------------
 
-  def test_decoding_resolves_only_the_entities_encoding_can_put_back
-    assert_equal "& \u00A0 < &gt;", TranslationDiff::Markup.decode_entities("&amp; &nbsp; &lt; &gt;")
+  # Every entity is decoded, not the two that were measured: an `&` we leave behind is an `&` encoding corrupts.
+  def test_decoding_resolves_named_and_numeric_entities
+    assert_equal "& < > \" ' \u00A0", TranslationDiff::Markup.decode_entities("&amp; &lt; &gt; &quot; &apos; &nbsp;")
+    assert_equal "& & \u00A0 \u00A0", TranslationDiff::Markup.decode_entities("&#38; &#x26; &#160; &#xA0;")
   end
 
-  # < is left alone on purpose: restoring a bare angle is the escape's job, and
-  # a real tag inside a protected element must stay a real tag.
-  def test_encoding_puts_back_the_characters_decoding_took
-    assert_equal "&amp; &nbsp; <b>", TranslationDiff::Markup.encode_entities("& \u00A0 <b>")
+  # Sane rather than an exception, and sane here means untouched: what is not an entity is text, and stays text.
+  def test_decoding_leaves_a_malformed_entity_exactly_as_it_arrived
+    ["&notanentity;", "&#xZZ;", "&#;", "&#999999999;", "&hellip;", "AT&T", "a &gt b", "&"].each do |text|
+      assert_equal text, TranslationDiff::Markup.decode_entities(text)
+    end
+  end
+
+  # A numeric reference can name a surrogate; decoding one would hand back invalid UTF-8 for a later regexp to raise on.
+  def test_decoding_refuses_a_reference_that_would_not_be_valid_utf8
+    decoded = TranslationDiff::Markup.decode_entities("&#xD800;")
+
+    assert_equal "&#xD800;", decoded
+    assert_predicate decoded, :valid_encoding?
+  end
+
+  # Only the two characters that are unsafe in HTML text; a decoded character stays the character it decoded to.
+  def test_encoding_touches_only_the_ampersand_and_the_opening_angle
+    assert_equal "&amp; &lt;b> > \" ' \u00A0", TranslationDiff::Markup.encode_entities("& <b> > \" ' \u00A0")
+  end
+
+  # -- entities we never decoded -------------------------------------------
+
+  # Every one of these came back with its `&` escaped a second time before the decode was made whole.
+  def test_an_entity_outside_the_decoded_set_is_not_escaped_again
+    assert_round_trips("A &gt; B here. Fine.")
+    assert_round_trips("AT&T is a company. Fine.")
+    assert_round_trips("&copy; 2026. Fine.")
+    assert_round_trips("&notanentity; here. Fine.")
+  end
+
+  # The bargain, in a test: bytes are promised only while a segment is untranslated.
+  def test_a_translated_sentence_renders_equivalent_markup_rather_than_equal_bytes
+    assert_equal "A > B here. Fine.", echoed("A &gt; B here. Fine.")
+    assert_equal "AT&amp;T is a company. Fine.", echoed("AT&T is a company. Fine.")
+    assert_equal "Hard\u00A0space here. Fine.", echoed("Hard&nbsp;space here. Fine.")
+  end
+
+  # CGI's table is the HTML specials and the numeric forms, so a `&copy;` that is translated is spelled, not resolved.
+  def test_a_named_entity_cgi_cannot_decode_survives_translation_as_text
+    assert_equal "&amp;copy; 2026. Fine.", echoed("&copy; 2026. Fine.")
   end
 
   # -- what still has to hold ----------------------------------------------
@@ -124,6 +169,11 @@ class MarkupTest < Minitest::Test
   # A notranslate element is prose that contains real tags; encoding must not eat them.
   def test_a_notranslate_element_keeps_its_tags_through_a_render
     assert_round_trips(%(<span class="notranslate">Bold Mountain</span> is a good place.))
+  end
+
+  # Passed through untouched means untouched: an `&` inside a protected element is not ours to respell.
+  def test_a_notranslate_element_keeps_its_ampersands_through_a_render
+    assert_round_trips(%(<span class="notranslate">R&D & more</span> Fine.))
   end
 
   def test_an_entity_inside_markup_is_left_for_the_browser
