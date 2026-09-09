@@ -56,9 +56,9 @@ class TranslationDiff::Providers::Azure < TranslationDiff::HTTPProvider
   private
 
   def url_for(request)
-    params = { "api-version" => API_VERSION, "to" => request.to.to_s,
+    params = { "api-version" => API_VERSION, "to" => language(request.to),
                "textType" => DEFAULT_TEXT_TYPE }
-    params["from"] = request.from.to_s unless request.from.nil?
+    params["from"] = language(request.from) unless request.from.nil?
     params.merge!(request.options.transform_keys(&:to_s))
 
     "#{translate_url}?#{URI.encode_www_form(params)}"

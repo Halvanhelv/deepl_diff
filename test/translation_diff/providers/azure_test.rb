@@ -78,6 +78,21 @@ class AzureProviderTest < Minitest::Test
     assert_equal ["ru"], query["to"]
   end
 
+  # Azure rejected "&to=RU"; a caller keeping DeepL-style codes hit it on every call.
+  def test_it_downcases_a_bare_language_code_whichever_casing_the_caller_used
+    provider.translate(translation_request(%w[one], from: "EN", to: "RU"))
+
+    assert_equal ["en"], query["from"]
+    assert_equal ["ru"], query["to"]
+  end
+
+  def test_it_leaves_a_subtagged_code_untouched
+    provider.translate(translation_request(%w[one], from: "zh-Hans", to: "pt-BR"))
+
+    assert_equal ["zh-Hans"], query["from"]
+    assert_equal ["pt-BR"], query["to"]
+  end
+
   def test_it_omits_from_when_none_was_given
     provider.translate(translation_request(%w[one], from: nil))
 

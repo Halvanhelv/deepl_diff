@@ -60,6 +60,23 @@ class AmazonProviderTest < Minitest::Test
     end
   end
 
+  # Amazon Translate rejected "EN"/"RU" outright, on every call.
+  def test_it_downcases_a_bare_language_code_whichever_casing_the_caller_used
+    provider.translate(translation_request(%w[one], from: "EN", to: "RU"))
+    body = JSON.parse(requests.first.body)
+
+    assert_equal "en", body["SourceLanguageCode"]
+    assert_equal "ru", body["TargetLanguageCode"]
+  end
+
+  def test_it_leaves_a_subtagged_code_untouched
+    provider.translate(translation_request(%w[one], from: "zh-Hans", to: "pt-BR"))
+    body = JSON.parse(requests.first.body)
+
+    assert_equal "zh-Hans", body["SourceLanguageCode"]
+    assert_equal "pt-BR", body["TargetLanguageCode"]
+  end
+
   def test_the_endpoint_is_regional
     assert_equal "https://translate.eu-central-1.amazonaws.com",
                  TranslationDiff::Providers::Amazon.new(config).api_base

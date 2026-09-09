@@ -51,8 +51,8 @@ class TranslationDiff::Providers::Amazon < TranslationDiff::HTTPProvider
   def call(text, request)
     payload = {
       "Text" => text,
-      "SourceLanguageCode" => request.from.nil? ? AUTO : request.from.to_s,
-      "TargetLanguageCode" => request.to.to_s
+      "SourceLanguageCode" => request.from.nil? ? AUTO : language(request.from),
+      "TargetLanguageCode" => language(request.to)
     }.merge(request.options.transform_keys(&:to_s))
 
     post_signed(JSON.generate(payload)).body

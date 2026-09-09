@@ -16,6 +16,47 @@ class ProviderTest < Minitest::Test
     @config = TranslationDiff::Configuration.new
   end
 
+  class Upcasing < TranslationDiff::Provider
+    def self.language_case = :upcase
+  end
+
+  # The rule lived in google.rb and nowhere else; four providers shipped without it.
+  def test_a_bare_code_is_cased_the_way_the_vendor_documents_it
+    downcasing = Bare.new(@config)
+    upcasing = Upcasing.new(@config)
+
+    assert_equal "ru", downcasing.language("RU")
+    assert_equal "ru", downcasing.language(:ru)
+    assert_equal "RU", upcasing.language("ru")
+    assert_equal "RU", upcasing.language(:RU)
+  end
+
+  # A script or region subtag has its own casing; a blanket transform corrupts it.
+  def test_a_subtagged_code_passes_through_untouched
+    downcasing = Bare.new(@config)
+    upcasing = Upcasing.new(@config)
+
+    %w[zh-Hans pt-BR EN-GB sr-Latn-RS].each do |code|
+      assert_equal code, downcasing.language(code)
+      assert_equal code, upcasing.language(code)
+    end
+  end
+
+  # nil so a provider can leave the field out of the payload entirely rather than sending "".
+  def test_an_absent_code_is_nil
+    assert_nil Bare.new(@config).language(nil)
+    assert_nil Bare.new(@config).language("")
+  end
+
+  def test_providers_downcase_unless_they_say_otherwise
+    assert_equal :downcase, TranslationDiff::Provider.language_case
+    assert_equal :upcase, TranslationDiff::Providers::DeepL.language_case
+
+    %w[Google Azure ModernMT LibreTranslate Amazon].each do |name|
+      assert_equal :downcase, TranslationDiff::Providers.const_get(name).language_case
+    end
+  end
+
   def test_a_provider_without_requirements_builds
     assert_instance_of Bare, Bare.new(@config)
   end

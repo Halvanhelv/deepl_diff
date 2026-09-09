@@ -71,6 +71,22 @@ class DeepLProviderTest < Minitest::Test
     end
   end
 
+  # DeepL documents upper-case codes; a caller writing Google-style lower case must still work.
+  def test_it_upcases_a_bare_language_code_whichever_casing_the_caller_used
+    provider.translate(translation_request(%w[one], from: "en", to: "ru"))
+
+    assert_equal "EN", sent["source_lang"]
+    assert_equal "RU", sent["target_lang"]
+  end
+
+  # The casing of a script or region subtag is its own; upcasing "pt-BR" corrupts it.
+  def test_it_leaves_a_subtagged_code_untouched
+    provider.translate(translation_request(%w[one], from: "zh-Hans", to: "pt-BR"))
+
+    assert_equal "zh-Hans", sent["source_lang"]
+    assert_equal "pt-BR", sent["target_lang"]
+  end
+
   def test_a_free_key_selects_the_free_host
     assert_equal "https://api-free.deepl.com", TranslationDiff::Providers::DeepL.new(config).api_base
   end

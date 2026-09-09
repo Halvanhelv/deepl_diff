@@ -22,9 +22,6 @@ class TranslationDiff::Providers::Google < TranslationDiff::HTTPProvider
 
   def self.configuration_requirements = %i[google_api_key]
 
-  # A bare code is downcased for DeepL-style configs ("EN"); a subtag ("zh-Hans") is passed through untouched.
-  BARE_LANGUAGE_CODE = /\A[A-Za-z]{2,3}\z/
-
   def api_base = config.google_api_base || HOST
   def translate_url = "language/translate/v2?key=#{CGI.escape(config.google_api_key.to_s)}"
   def detect_url = "language/translate/v2/detect?key=#{CGI.escape(config.google_api_key.to_s)}"
@@ -50,15 +47,6 @@ class TranslationDiff::Providers::Google < TranslationDiff::HTTPProvider
   def detect(text)
     response = post(detect_url, { q: [text] })
     response.body.dig("data", "detections", 0, 0, "language")&.downcase
-  end
-
-  private
-
-  def language(value)
-    code = value.to_s
-    return nil if code.empty?
-
-    code.match?(BARE_LANGUAGE_CODE) ? code.downcase : code
   end
 end
 

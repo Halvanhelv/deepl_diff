@@ -189,6 +189,15 @@ runtime:
 | LibreTranslate | `:libretranslate` | `libretranslate_api_base` | 50 | 5,000 | yes (`format`) | no | yes | no |
 | Amazon | `:amazon` | `amazon_access_key_id`, `amazon_secret_access_key`, `amazon_region` | 1 | 10,000 | no | no | yes | no |
 
+**Language codes are normalised per vendor, so switching provider needs no
+other change.** A bare code (`"EN"`, `:ru`) is cased the way the vendor
+documents it -- DeepL takes upper case, every other provider here takes lower
+case -- whichever casing you wrote. A code carrying a script or region subtag
+(`"zh-Hans"`, `"pt-BR"`) is passed through untouched, because the casing of a
+subtag is its own. A provider of your own gets the same rule from
+`TranslationDiff::Provider#language`; declare `def self.language_case =
+:upcase` if your vendor wants upper case.
+
 "Request size" is what `Chunker` measures: the URL-escaped form of each
 string (`CGI.escape(text).size`), which is never smaller than its UTF-8 byte
 count. "HTML support" names the provider option that turns HTML handling on

@@ -6,6 +6,9 @@ class TranslationDiff::Provider
     html: :none, notranslate: false, detects_language: false, reports_billing: false
   ).freeze
 
+  # A bare alphabetic code is cased the way the vendor documents; anything with a subtag is left alone.
+  BARE_LANGUAGE_CODE = /\A[A-Za-z]{2,3}\z/
+
   # Stamped by the registry at build time. See #cache_key.
   attr_accessor :name
 
@@ -14,6 +17,15 @@ class TranslationDiff::Provider
   def initialize(config)
     @config = config
     ensure_configured!
+  end
+
+  # Callers write whichever casing their old configuration used; the vendor gets the one it documents.
+  def language(value)
+    code = value.to_s
+    return nil if code.empty?
+    return code unless code.match?(BARE_LANGUAGE_CODE)
+
+    self.class.language_case == :upcase ? code.upcase : code.downcase
   end
 
   def translate(_request) = raise NotImplementedError, "#{self.class} must implement #translate"
@@ -32,6 +44,9 @@ class TranslationDiff::Provider
   end
 
   class << self
+    # The casing this vendor documents for a bare code. DeepL upcases; everyone else takes lower case.
+    def language_case = :downcase
+
     def configuration_options = []
 
     # Checked once, at build time, so a caller learns what to set before a vendor's own exception does.

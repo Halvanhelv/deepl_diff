@@ -26,8 +26,8 @@ class TranslationDiff::Providers::LibreTranslate < TranslationDiff::HTTPProvider
   def render_translate_payload(request)
     { format: DEFAULT_FORMAT }
       .merge(request.options)
-      .merge(q: request.texts, target: request.to.to_s,
-             source: request.from.nil? ? AUTO : request.from.to_s)
+      .merge(q: request.texts, target: language(request.to),
+             source: request.from.nil? ? AUTO : language(request.from))
       .tap { |payload| payload[:api_key] = config.libretranslate_api_key if config.libretranslate_api_key }
   end
 

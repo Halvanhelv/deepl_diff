@@ -88,6 +88,16 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
   `Capabilities`.
 - `TranslationDiff::Providers::Naming` is gone; the registry stamps
   `cache_key` and `Provider` implements it.
+- Every provider normalises language codes to the casing its own vendor
+  documents and accepts either casing from the caller: DeepL upper-cases, the
+  other five lower-case. A code carrying a script or region subtag
+  (`"zh-Hans"`, `"pt-BR"`) is passed through untouched. `Provider#language`
+  is the shared rule and `self.language_case` selects the casing, so a
+  provider of your own gets it by inheriting. Previously only Google and
+  DeepL normalised at all -- Amazon Translate rejected `"EN"`/`"RU"` and
+  LibreTranslate answered 400, on every call, for anyone who followed the
+  README's "switch provider by changing `config.provider`" with DeepL-style
+  codes -- and DeepL upper-cased subtags too, corrupting `"zh-Hans"`.
 - `deepl-rb` and `google-cloud-translate-v2` are no longer used at all.
   `faraday` and `faraday-retry` become runtime dependencies; `aws-sigv4` is
   required lazily by the Amazon provider only.

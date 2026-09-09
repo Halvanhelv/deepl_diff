@@ -27,8 +27,8 @@ class TranslationDiff::Providers::ModernMT < TranslationDiff::HTTPProvider
   def render_translate_payload(request)
     { format: DEFAULT_FORMAT }
       .merge(request.options)
-      .merge(q: request.texts, target: request.to.to_s)
-      .tap { |payload| payload[:source] = request.from.to_s unless request.from.nil? }
+      .merge(q: request.texts, target: language(request.to))
+      .tap { |payload| payload[:source] = language(request.from) unless request.from.nil? }
   end
 
   # One text comes back as an object rather than a one-element array, so the envelope is always coerced.

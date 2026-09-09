@@ -67,6 +67,20 @@ class GoogleProviderTest < Minitest::Test
     end
   end
 
+  def test_it_downcases_a_bare_language_code_whichever_casing_the_caller_used
+    provider.translate(translation_request(%w[one], from: "EN", to: "RU"))
+
+    assert_equal "en", sent["source"]
+    assert_equal "ru", sent["target"]
+  end
+
+  def test_it_leaves_a_subtagged_code_untouched
+    provider.translate(translation_request(%w[one], from: "zh-Hans", to: "pt-BR"))
+
+    assert_equal "zh-Hans", sent["source"]
+    assert_equal "pt-BR", sent["target"]
+  end
+
   def test_the_key_travels_in_the_query_string
     provider.translate(translation_request(%w[one]))
 

@@ -24,6 +24,9 @@ class TranslationDiff::Providers::DeepL < TranslationDiff::HTTPProvider
 
   def self.configuration_requirements = %i[deepl_api_key]
 
+  # DeepL is the one vendor documenting upper-case codes.
+  def self.language_case = :upcase
+
   # DeepL requires a target language even when only detection is wanted, so the provider picks one.
   DETECTION_TARGET = "EN".freeze
 
@@ -63,9 +66,6 @@ class TranslationDiff::Providers::DeepL < TranslationDiff::HTTPProvider
   private
 
   def free_key? = config.deepl_api_key.to_s.end_with?(FREE_KEY_SUFFIX)
-
-  # DeepL's language codes are upper case.
-  def language(value) = value.to_s.upcase
 
   def usage_for(request, translations)
     billed = translations.filter_map { |t| t["billed_characters"] }.sum
