@@ -26,3 +26,10 @@ gem "ratelimit", "~> 1.1", require: false
 # query string it sent, and Ruby 4.0 removed CGI.parse from the default
 # load path; "install cgi gem" is Ruby's own suggested fix.
 gem "cgi", "~> 0.5", require: false
+
+# Not a runtime dependency of the gem (see the gemspec) -- the Amazon
+# provider requires it lazily when it signs its first request, so an
+# application using another provider never needs it installed. It is here so
+# the test suite, which signs against the real library rather than a
+# stand-in, has it available.
+gem "aws-sigv4", "~> 1.12", require: false

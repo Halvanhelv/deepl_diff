@@ -28,6 +28,7 @@ require "translation_diff/providers/google"
 require "translation_diff/providers/azure"
 require "translation_diff/providers/modernmt"
 require "translation_diff/providers/libretranslate"
+require "translation_diff/providers/amazon"
 
 require "translation_diff/segmenters"
 require "translation_diff/segmenters/simple"
