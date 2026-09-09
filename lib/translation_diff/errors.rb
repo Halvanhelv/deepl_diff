@@ -44,4 +44,10 @@ module TranslationDiff
 
   class TransportError < Error; end
   class ResponseError < Error; end
+
+  # Raised when a class is offered to a registry that requires a particular
+  # ancestor. Its own class, rather than the generic Error, so that a caller
+  # rescuing "this class is the wrong shape" cannot also swallow an unrelated
+  # failure such as an option-name collision.
+  class InvalidProviderError < Error; end
 end

@@ -20,7 +20,7 @@ module TranslationDiff::Providers
     # having replaced anything under `name`.
     def register(name, klass)
       unless klass < TranslationDiff::Provider
-        raise TranslationDiff::Error,
+        raise TranslationDiff::InvalidProviderError,
               "#{klass} cannot be registered as a provider: it does not inherit " \
               "TranslationDiff::Provider. The base class supplies the transport, the " \
               "configuration check and the capability defaults, so a provider that " \
