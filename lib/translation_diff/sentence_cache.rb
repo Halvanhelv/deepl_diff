@@ -46,7 +46,7 @@ class TranslationDiff::SentenceCache
 
   # Sorted on the name's string form, because a Symbol and a String key are not comparable with each other.
   def canonical_options
-    @options.sort_by { |name, _| name.to_s }.map { |name, value| "#{name}=#{stable(name, value)}" }.join("&")
+    @options.sort_by { |name, _| name.to_s }.map { |name, value| "#{name}=#{stable(name, value)}" }.join(",")
   end
 
   # A value that renders as an address makes a key nothing can ever hit twice, so say so where a caller will see it.

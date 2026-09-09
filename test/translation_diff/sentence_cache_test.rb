@@ -136,14 +136,20 @@ class SentenceCacheTest < Minitest::Test
     assert_equal 5, cache(RecordingStore.new, options: { formality: :more }).key(segment).split(":").size
   end
 
-  # Pinned as a literal: anyone passing formality or a glossary id has to keep hitting this exact key.
-  def test_a_key_carrying_options_is_pinned_field_by_field
-    subject_cache = TranslationDiff::SentenceCache.new(
-      store: RecordingStore.new, provider: "null", from: "en", to: "ru", options: { formality: :more }
-    )
+  # Recovered from the pipeline being replaced by running it against a recording store: one option, two
+  # options, and two whose sort order is not their literal order, which is the pair that proves the sort.
+  def test_the_options_digest_matches_the_keys_the_previous_pipeline_produced
+    segment = segments("One.").first
 
-    assert_equal "null:en:ru:c09f3c46:900019fa233e608091ba641d50d69b81",
-                 subject_cache.key(segments("One.").first)
+    { { formality: :more } => "null:en:ru:c09f3c46:900019fa233e608091ba641d50d69b81",
+      { formality: :more, glossary_id: "g1" } => "null:en:ru:c1ee2461:900019fa233e608091ba641d50d69b81",
+      { b: 2, a: 1 } => "null:en:ru:9dc867b7:900019fa233e608091ba641d50d69b81" }.each do |options, expected|
+      subject_cache = TranslationDiff::SentenceCache.new(
+        store: RecordingStore.new, provider: "null", from: "en", to: "ru", options: options
+      )
+
+      assert_equal expected, subject_cache.key(segment)
+    end
   end
 
   # A Symbol and a String are not comparable with each other, so sorting on the raw keys raises on this hash.
