@@ -189,11 +189,13 @@ class ProvidersTest < Minitest::Test
     refute TranslationDiff::Providers.registered?(:impostor)
   end
 
-  # The transitional bridges in lib/translation_diff.rb rescue
-  # InvalidProviderError so an unported provider cannot make the library
-  # unloadable. An option-name collision is a genuine bug and must stay
-  # outside that net.
-  def test_an_option_collision_does_not_raise_the_class_the_require_bridges_rescue
+  # InvalidProviderError is specific to a provider of the wrong shape (see
+  # its definition in errors.rb): a caller rescuing "this class cannot be a
+  # provider" must not also, by accident, swallow an unrelated failure. An
+  # option-name collision is that unrelated failure -- two well-shaped
+  # providers fighting over one option name -- so it must raise the generic
+  # TranslationDiff::Error, not the specific one.
+  def test_an_option_collision_raises_the_generic_error_not_the_invalid_provider_one
     TranslationDiff::Providers.register(:collision_a, ConflictingProviderA)
 
     error = assert_raises(TranslationDiff::Error) do
