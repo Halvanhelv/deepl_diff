@@ -9,50 +9,65 @@ class TranslationDiff::Translator
 
   # `provider:` and `config:` are reserved; every other keyword is forwarded to the provider untouched.
   def initialize(values, from: nil, to: nil, provider: nil, config: nil, **options)
+    raise ArgumentError, "a translation needs a target language: pass `to:` a language code." if to.nil?
+
     @values = values
     @from = from
     @to = to
     @options = options
     @config = config || TranslationDiff.config
-    @provider = resolve(provider)
-    @name = provider_name(@provider)
-    log("provider #{@provider.class}")
+    @requested_provider = provider
   end
 
   # Hands back the caller's value untouched unless something in it was actually translated.
   def call
-    document = TranslationDiff::Document.new(@values)
+    document = TranslationDiff::Document.new(TranslationDiff::Leaves.collapse_nils(@values))
     passages = document.strings.map { |string| passage(string) }
     segments = passages.flat_map(&:segments).reject(&:empty?)
     return @values if segments.empty?
 
-    from = source_language(segments)
+    provider = resolve_provider
+    from = source_language(provider, segments)
     return @values if same_language?(from)
 
-    instrument("translate", from: from, to: @to, provider: @name, values: passages.size) do
-      fill(segments, from)
-      rebuild(document, passages)
-    end
+    translated(document, passages, segments, provider, from)
   end
 
   private
 
-  # A provider arrives as a name to build, as an object to use as it is, or not at all -- then it is the configured one.
-  def resolve(provider)
-    return config.provider_instance if provider.nil?
-    return TranslationDiff::Providers.build(provider, config) if provider.is_a?(Symbol) || provider.is_a?(String)
+  # The `translate` event wraps everything a call that reaches a provider does, and nothing an early return does.
+  def translated(document, passages, segments, provider, from)
+    values = TranslationDiff::Leaves.count(@values)
+    payload = { from: from.to_s, to: @to.to_s, provider: provider.cache_key, values: values }
+    instrument("translate", payload) do
+      fill(provider, segments, from)
+      rebuild(document, passages)
+    end
+  end
 
-    TranslationDiff::Providers.ensure_provider!(provider)
+  # Resolved at first use, never in the constructor: a value with nothing to translate needs no provider at all.
+  def resolve_provider
+    build_provider.tap do |provider|
+      log("provider #{provider.class}")
+      ensure_cache_key!(provider)
+    end
+  end
+
+  # A provider arrives as a name to build, as an object to use as it is, or not at all -- then it is the configured one.
+  def build_provider
+    requested = @requested_provider
+    return config.provider_instance if requested.nil?
+    return TranslationDiff::Providers.build(requested, config) if requested.is_a?(Symbol) || requested.is_a?(String)
+
+    TranslationDiff::Providers.ensure_provider!(requested)
   end
 
   # The cache key names the provider in every payload too: it is the one identifier every provider must have.
-  def provider_name(provider)
-    key = provider.cache_key.to_s
-    return key unless key.strip.empty?
+  def ensure_cache_key!(provider)
+    return unless provider.cache_key.to_s.strip.empty?
 
-    raise Error,
-          "#{provider.class} must define #cache_key: a blank one would file its translations " \
-          "in every other provider's cache namespace."
+    raise Error, "#{provider.class} must define #cache_key: a blank one would file its " \
+                 "translations in every other provider's cache namespace."
   end
 
   def passage(string)
@@ -66,51 +81,48 @@ class TranslationDiff::Translator
   end
 
   # Detection is attempted only where it is declared: every provider inherits a #detect that raises.
-  def source_language(segments)
+  def source_language(provider, segments)
     return @from unless @from.nil?
 
-    ensure_detects_language!
-    @provider.detect(segments.first.core)
+    ensure_detects_language!(provider)
+    provider.detect(segments.first.core)
   end
 
-  def ensure_detects_language!
-    return if @provider.class.capabilities.detects_language?
+  def ensure_detects_language!(provider)
+    return if provider.class.capabilities.detects_language?
 
-    raise Error,
-          "Provider #{@name} cannot detect the source language. Pass `from:` with the " \
-          "source language code of the values you are translating."
+    raise Error, "Provider #{provider.cache_key} cannot detect the source language. Pass " \
+                 "`from:` with the source language code of the values you are translating."
   end
 
   # A detected language arrives as a String while `to:` is usually a Symbol, so neither type nor case can be assumed.
   def same_language?(from) = from.to_s.casecmp?(@to.to_s)
 
   # The cache answers for what it has, the provider for the rest, and only what came back is written home.
-  def fill(segments, from)
-    cache = sentence_cache(from)
+  def fill(provider, segments, from)
+    cache = sentence_cache(provider, from)
     misses = cache.fill(segments)
-    instrument("cache", provider: @name, hits: segments.size - misses.size, misses: misses.size)
-    dispatch(misses, from)
+    instrument("cache", provider: provider.cache_key, hits: segments.size - misses.size, misses: misses.size)
+    dispatch(provider, misses, from)
     cache.store(misses)
   end
 
-  def sentence_cache(from)
-    TranslationDiff::SentenceCache.new(store: config.cache_store, provider: @name,
+  def sentence_cache(provider, from)
+    TranslationDiff::SentenceCache.new(store: config.cache_store, provider: provider.cache_key,
                                        from: from, to: @to, options: @options)
   end
 
-  def dispatch(segments, from)
-    capabilities = @provider.class.capabilities
-    TranslationDiff::Batch.pack(segments, capabilities: capabilities).each { |batch| send_batch(batch, from) }
+  def dispatch(provider, segments, from)
+    batches = TranslationDiff::Batch.pack(segments, capabilities: provider.class.capabilities)
+    batches.each { |batch| send_batch(provider, batch, from) }
   end
 
   # The batch applies the reply to the segments that produced it, so no step ever correlates by position again.
-  def send_batch(batch, from)
+  def send_batch(provider, batch, from)
     texts = batch.texts
-    characters = texts.sum(&:size)
-    throttle(characters)
-    response = instrument("request", provider: @name, batch: texts.size, characters: characters) do
-      @provider.translate(request(texts, from))
-    end
+    payload = { provider: provider.cache_key, batch: texts.size, characters: texts.sum(&:size) }
+    throttle(provider, payload[:characters])
+    response = instrument("request", payload) { provider.translate(request(texts, from)) }
     batch.apply(response.texts)
   end
 
@@ -119,10 +131,10 @@ class TranslationDiff::Translator
   end
 
   # Consulted with what is about to be sent, before it is sent; nil means no rate limiting was configured at all.
-  def throttle(characters)
+  def throttle(provider, characters)
     limiter = config.rate_limiter_instance
     return if limiter.nil?
 
-    instrument("rate_limit", provider: @name, characters: characters) { limiter.check(characters) }
+    instrument("rate_limit", provider: provider.cache_key, characters: characters) { limiter.check(characters) }
   end
 end

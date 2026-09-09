@@ -44,6 +44,14 @@ class TranslatorTest < ConfiguredTest
     def cache_key = "   "
   end
 
+  class FakeLogger
+    attr_reader :lines
+
+    def initialize = @lines = []
+
+    def debug(&) = @lines << yield
+  end
+
   class Recorder
     attr_reader :events
 
@@ -257,6 +265,64 @@ class TranslatorTest < ConfiguredTest
     refute_includes serialised, "Zaphod"
     refute_includes serialised, secret
     refute_includes serialised, secret.upcase
+  end
+
+  # Captured from the old pipeline: a nested nil has always come back as "" from a call that reached a provider.
+  def test_a_nested_nil_collapses_to_an_empty_string
+    assert_equal({ a: "ONE.", n: 42, skip: "" },
+                 translate({ a: "one.", n: 42, skip: nil }, from: "en", to: "ru"))
+    assert_equal ["ONE.", "", 42], translate(["one.", nil, 42], from: "en", to: "ru")
+  end
+
+  # And only then: a call with nothing to translate hands the caller's value back exactly as it was given.
+  def test_a_nil_survives_a_call_that_translates_nothing
+    assert_nil translate(nil, from: "en", to: "ru")
+    assert_equal [nil], translate([nil], from: "en", to: "ru")
+    assert_equal({ a: nil }, translate({ a: nil }, from: "en", to: "ru"))
+  end
+
+  # A subscriber grouping by payload[:to] must not see :ru and "ru" as two different series.
+  def test_the_translate_event_reports_languages_as_strings_whatever_the_caller_passed
+    recorder = instrumented
+    TranslationDiff::Translator.new("Hello there.", from: :en, to: :ru, provider: @provider).call
+
+    payload = payload_for(recorder, "translate")
+
+    assert_equal "en", payload[:from]
+    assert_equal "ru", payload[:to]
+  end
+
+  # `values` is the size of the document as the caller wrote it, not the number of translatable strings in it.
+  def test_the_translate_event_counts_every_leaf_the_caller_wrote
+    recorder = instrumented
+    instrumented_translate({ a: "one.", n: 42, skip: nil })
+
+    assert_equal 3, payload_for(recorder, "translate")[:values]
+  end
+
+  def test_a_value_with_nothing_to_translate_never_resolves_a_provider
+    assert_equal 42, TranslationDiff::Translator.new(42, from: "en", to: "ru", provider: Object.new).call
+  end
+
+  def test_the_provider_is_logged_once_and_only_when_it_is_resolved
+    logger = FakeLogger.new
+    TranslationDiff.configure { |c| c.logger = logger }
+
+    translate(42, from: "en", to: "ru")
+
+    assert_empty logger.lines
+
+    translate("one.", from: "en", to: "ru")
+
+    assert_equal 1, logger.lines.size
+    assert_match(/RecordingProvider/, logger.lines.first)
+  end
+
+  # A nil target used to reach the cache key and die there on #downcase; it is a caller's mistake, not a defect.
+  def test_a_missing_target_language_is_refused_by_name
+    error = assert_raises(ArgumentError) { translate("one.", from: "en") }
+
+    assert_match(/to:/, error.message)
   end
 
   private
