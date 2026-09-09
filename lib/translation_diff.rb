@@ -18,10 +18,29 @@ require "translation_diff/registry"
 require "translation_diff/configuration"
 require "translation_diff/configuration/provider_option_owners"
 
+require "translation_diff/provider"
 require "translation_diff/providers"
 require "translation_diff/providers/null"
-require "translation_diff/providers/deepl"
-require "translation_diff/providers/google"
+
+# DeepL and Google still wrap their vendor SDKs directly instead of
+# inheriting Provider -- Tasks 4 and 5 port them. Providers.register now
+# raises for exactly that shape of class, which would otherwise take this
+# entire require chain, and therefore every caller of this library, down
+# with it before either provider is ever used. Until they are ported,
+# `:deepl` and `:google` are simply absent from the registry; requesting
+# either through TranslationDiff::Providers.build raises the ordinary
+# "unknown provider" error instead.
+begin
+  require "translation_diff/providers/deepl"
+rescue TranslationDiff::Error
+  nil
+end
+
+begin
+  require "translation_diff/providers/google"
+rescue TranslationDiff::Error
+  nil
+end
 require "translation_diff/segmenters"
 require "translation_diff/segmenters/simple"
 require "translation_diff/segmenters/pragmatic"

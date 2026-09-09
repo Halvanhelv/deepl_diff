@@ -5,34 +5,32 @@ require "test_helper"
 class ProvidersTest < Minitest::Test
   # A provider defined entirely outside this library, to prove that adding a
   # translation service requires no change to lib/.
-  class AcmeProvider
+  class AcmeProvider < TranslationDiff::Provider
     def self.configuration_options = %i[acme_token]
-    def self.build(config) = new(config.acme_token)
 
-    attr_accessor :name
-
-    def initialize(token)
-      @token = token
+    def self.capabilities
+      TranslationDiff::Capabilities.new(
+        max_request_size: 1_000, max_batch_size: 10, max_text_size: nil,
+        html: :none, notranslate: false, detects_language: false, reports_billing: false
+      )
     end
 
-    def translate(texts, from:, to:, **_options)
-      texts.map { |text| "#{@token}:#{from}-#{to}:#{text}" }
+    def translate(request)
+      TranslationDiff::Translation::Response.build(
+        request: request,
+        texts: request.texts.map { |text| "#{config.acme_token}:#{request.from}-#{request.to}:#{text}" }
+      )
     end
-
-    def max_request_size = 1_000
-    def max_batch_size = 10
   end
 
   # Two providers that both want the same option name. Registering the
   # second must raise rather than hand it the first one's accessor.
-  class ConflictingProviderA
+  class ConflictingProviderA < TranslationDiff::Provider
     def self.configuration_options = %i[shared_provider_token]
-    def self.build(_config) = new
   end
 
-  class ConflictingProviderB
+  class ConflictingProviderB < TranslationDiff::Provider
     def self.configuration_options = %i[shared_provider_token]
-    def self.build(_config) = new
   end
 
   # A subclass wanting AcmeProvider's own option -- subclassing a provider
@@ -42,19 +40,16 @@ class ProvidersTest < Minitest::Test
   # The second-key-conflicts shape: PartialB would declare :partial_own_key
   # successfully if checked eagerly, but conflicts with PartialA's
   # :partial_shared_key on its second option.
-  class PartialProviderA
+  class PartialProviderA < TranslationDiff::Provider
     def self.configuration_options = %i[partial_shared_key]
-    def self.build(_config) = new
   end
 
-  class PartialProviderB
+  class PartialProviderB < TranslationDiff::Provider
     def self.configuration_options = %i[partial_own_key partial_shared_key]
-    def self.build(_config) = new
   end
 
-  class PartialProviderC
+  class PartialProviderC < TranslationDiff::Provider
     def self.configuration_options = %i[partial_own_key]
-    def self.build(_config) = new
   end
 
   def setup
@@ -69,8 +64,9 @@ class ProvidersTest < Minitest::Test
 
   def test_building_produces_a_working_provider
     provider = TranslationDiff::Providers.build(:acme, @config)
+    request = TranslationDiff::Translation::Request.new(texts: %w[hi], from: :en, to: :ru)
 
-    assert_equal ["T:en-ru:hi"], provider.translate(["hi"], from: :en, to: :ru)
+    assert_equal ["T:en-ru:hi"], provider.translate(request).texts
   end
 
   def test_the_registered_name_becomes_the_cache_key
@@ -78,7 +74,6 @@ class ProvidersTest < Minitest::Test
   end
 
   def test_the_built_in_providers_are_registered
-    assert TranslationDiff::Providers.registered?(:deepl)
     assert TranslationDiff::Providers.registered?(:null)
   end
 
@@ -142,9 +137,8 @@ class ProvidersTest < Minitest::Test
   # An unrelated class is still refused for the very option a subclass may
   # now share -- the relaxation is specific to an inheritance relationship.
   def test_an_unrelated_class_claiming_a_subclassable_option_still_raises
-    unrelated = Class.new do
+    unrelated = Class.new(TranslationDiff::Provider) do
       def self.configuration_options = %i[acme_token]
-      def self.build(_config) = new
     end
 
     error = assert_raises(TranslationDiff::Error) do
@@ -175,24 +169,29 @@ class ProvidersTest < Minitest::Test
     assert_includes TranslationDiff::Configuration.options, :partial_own_key
   end
 
-  # A provider instantiated directly, bypassing TranslationDiff::Providers.build,
-  # never gets its #name stamped. Falling back to "" there would let two such
-  # providers share the same cache namespace silently, so this must raise
-  # instead.
-  def test_cache_key_raises_when_the_provider_was_never_built_through_the_registry
-    provider = AcmeProvider.new("T")
+  # ruby_llm requires a Provider subclass and so do we now. A duck-typed
+  # object cannot be given the transport, the requirement check or the
+  # capability defaults, and every one of those is a place this library has
+  # already been bitten.
+  def test_registering_a_class_that_is_not_a_provider_raises
+    not_a_provider = Class.new do
+      def self.configuration_options = []
+      def self.build(_config) = new
+    end
 
-    error = assert_raises(TranslationDiff::Error) { provider.cache_key }
+    error = assert_raises(TranslationDiff::Error) do
+      TranslationDiff::Providers.register(:impostor, not_a_provider)
+    end
 
-    assert_match(/registry/, error.message)
+    assert_match(/TranslationDiff::Provider/, error.message)
+    refute TranslationDiff::Providers.registered?(:impostor)
   end
 
   private
 
   def reloadable_provider_class
-    Class.new do
+    Class.new(TranslationDiff::Provider) do
       def self.configuration_options = %i[reloaded_token]
-      def self.build(_config) = new
     end
   end
 end

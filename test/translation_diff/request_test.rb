@@ -29,6 +29,38 @@ class RequestTest < ConfiguredTest
     def cache_key = "fake"
   end
 
+  # request.rb still asks `respond_to?(:detect)` to learn whether a provider
+  # can detect a source language -- the capability this library now expresses
+  # through Capabilities#detects_language? for anything built as a
+  # TranslationDiff::Provider. TranslationDiff::Providers::Null moved onto
+  # that base class (provider-transport work) and, like every Provider,
+  # always defines #detect (raising NotImplementedError), so it no longer
+  # answers `respond_to?(:detect)` honestly for this still-old pipeline. This
+  # double keeps the pre-migration shape -- no #detect at all -- so this file
+  # can keep testing request.rb's own "cannot detect" guard without touching
+  # request.rb itself.
+  class NonDetectingApi
+    # rubocop:disable-next Lint/UnusedMethodArgument
+    def translate(texts, from:, to:, **_options) = texts
+    def max_request_size = 1_000_000
+    def max_batch_size = 1_000_000
+    def cache_key = "null"
+  end
+
+  # Same rationale as NonDetectingApi: a Provider built through the registry
+  # now speaks Translation::Request/Response, which request.rb does not call
+  # yet. This double is registered under :echo so
+  # test_the_provider_keyword_overrides_the_configured_provider_for_one_call
+  # can still exercise resolving a provider by name through the registry.
+  class EchoProvider < TranslationDiff::Provider
+    # rubocop:disable-next Lint/UnusedMethodArgument
+    def translate(texts, from:, to:, **_options) = texts
+    def max_request_size = 1_000_000
+    def max_batch_size = 1_000_000
+    def cache_key = "echo"
+  end
+  TranslationDiff::Providers.register(:echo, EchoProvider) unless TranslationDiff::Providers.registered?(:echo)
+
   # Always misses, so every value reaches the API.
   class FakeCacheStore
     attr_reader :writes
@@ -163,7 +195,7 @@ class RequestTest < ConfiguredTest
   end
 
   def test_raises_when_from_is_missing_and_the_adapter_cannot_detect
-    configure_with(TranslationDiff::Providers::Null.new)
+    configure_with(NonDetectingApi.new)
 
     error = assert_raises(TranslationDiff::Request::Error) do
       TranslationDiff::Request.new("text", to: :ru).call
@@ -244,7 +276,7 @@ class RequestTest < ConfiguredTest
     api = FakeApi.new(%w[Один])
     configure_with(api)
 
-    result = TranslationDiff::Request.new("One", from: :en, to: :ru, provider: :null).call
+    result = TranslationDiff::Request.new("One", from: :en, to: :ru, provider: :echo).call
 
     assert_equal "One", result
     assert_empty api.calls

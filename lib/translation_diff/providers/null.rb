@@ -2,19 +2,22 @@
 
 # Hands back what it was given. For tests, and for wiring a pipeline up
 # before a real provider is available.
-class TranslationDiff::Providers::Null
-  def self.configuration_options = []
-  def self.build(_config) = new
-
-  # No #detect on purpose: detection is optional in the contract, and this
-  # is the provider that proves the optional branch works.
-  # rubocop:disable-next Lint/UnusedMethodArgument
-  def translate(texts, from:, to:, **options)
-    texts.map(&:to_s)
+class TranslationDiff::Providers::Null < TranslationDiff::Provider
+  # Deliberately not detecting: detection is optional in the contract, and
+  # this is the provider that proves the optional branch works.
+  def self.capabilities
+    TranslationDiff::Capabilities.new(
+      max_request_size: 1_000_000, max_batch_size: 1_000_000, max_text_size: nil,
+      html: :none, notranslate: false, detects_language: false, reports_billing: false
+    )
   end
 
-  def max_request_size = 1_000_000
-  def max_batch_size = 1_000_000
+  def translate(request)
+    TranslationDiff::Translation::Response.build(
+      request: request, texts: request.texts.map(&:to_s)
+    )
+  end
+
   def cache_key = "null"
 end
 
