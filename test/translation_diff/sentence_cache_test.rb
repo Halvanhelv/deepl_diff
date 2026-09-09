@@ -152,6 +152,31 @@ class SentenceCacheTest < Minitest::Test
     end
   end
 
+  # Container values recurse: a Hash canonicalises the way the options hash itself does, an Array in order.
+  # The first two were captured from the pipeline being replaced; the third goes a level deeper than either.
+  def test_container_option_values_recurse_the_way_the_previous_pipeline_did
+    segment = segments("One.").first
+
+    { { glossary: { a: 1, b: 2 } } => "null:en:ru:4dbc310c:900019fa233e608091ba641d50d69b81",
+      { tags: %w[x y] } => "null:en:ru:6b1bf7d6:900019fa233e608091ba641d50d69b81",
+      { glossary: { a: [1, 2] } } => "null:en:ru:1948f701:900019fa233e608091ba641d50d69b81" }.each do |options, key|
+      subject_cache = TranslationDiff::SentenceCache.new(
+        store: RecordingStore.new, provider: "null", from: "en", to: "ru", options: options
+      )
+
+      assert_equal key, subject_cache.key(segment)
+    end
+  end
+
+  # An allowlist, not a denylist: a tidy #inspect with no address in it is still one the old pipeline refused.
+  def test_a_value_outside_the_permitted_types_raises_even_when_its_inspect_is_stable
+    subject_cache = cache(RecordingStore.new, options: { glossary: Struct.new(:x).new(1) })
+
+    error = assert_raises(TranslationDiff::SentenceCache::Error) { subject_cache.key(segments("One.").first) }
+
+    assert_includes error.message, "glossary"
+  end
+
   # A Symbol and a String are not comparable with each other, so sorting on the raw keys raises on this hash.
   def test_mixed_option_key_types_canonicalise_instead_of_raising
     segment = segments("One.").first

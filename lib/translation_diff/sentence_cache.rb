@@ -3,8 +3,8 @@ class TranslationDiff::SentenceCache
   # Its own class, so rescuing an unusable option cannot also swallow a store or provider failure.
   class Error < TranslationDiff::Error; end
 
-  # Ruby's default rendering of an object is its address, which would move the key every process.
-  ADDRESS = /#<[^>]*0x\h+/
+  # The value types the key format can render. An allowlist: what it cannot render must raise, not be guessed at.
+  SCALARS = [String, Symbol, Numeric, TrueClass, FalseClass, NilClass].freeze
 
   def initialize(store:, provider:, from:, to:, options: {})
     @store = store
@@ -46,14 +46,22 @@ class TranslationDiff::SentenceCache
 
   # Sorted on the name's string form, because a Symbol and a String key are not comparable with each other.
   def canonical_options
-    @options.sort_by { |name, _| name.to_s }.map { |name, value| "#{name}=#{stable(name, value)}" }.join(",")
+    @options.sort_by { |name, _| name.to_s }.map { |name, value| "#{name}=#{canonical(name, value)}" }.join(",")
   end
 
-  # A value that renders as an address makes a key nothing can ever hit twice, so say so where a caller will see it.
-  def stable(name, value)
-    rendered = value.inspect
-    raise Error, "cache option #{name} (a #{value.class}) has no stable string form" if rendered.match?(ADDRESS)
+  # A Hash canonicalises the way the options hash itself does, an Array its elements in order, joined the same way.
+  def canonical(name, value)
+    case value
+    when Hash then value.sort_by { |k, _| k.to_s }.map { |k, v| "#{k}=#{canonical(name, v)}" }.join(",")
+    when Array then value.map { |element| canonical(name, element) }.join(",")
+    else scalar(name, value)
+    end
+  end
 
-    rendered
+  # A key that is silently wrong costs a caller their whole cache and tells them nothing, so refuse to build one.
+  def scalar(name, value)
+    return value.inspect if SCALARS.any? { |type| value.is_a?(type) }
+
+    raise Error, "cache option #{name} (a #{value.class}) has no stable string form"
   end
 end
