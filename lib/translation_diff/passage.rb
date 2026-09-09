@@ -55,6 +55,7 @@ class TranslationDiff::Passage
       merge(bounds)
     end
 
+    # Protection beats opacity on purpose: a caller wrapping a subtree asked for it to be passed through as it is.
     def start_element(name)
       return @protected_depth += 1 if @protected_depth.positive?
 
@@ -64,7 +65,7 @@ class TranslationDiff::Passage
 
     # Attributes arrive straight after their own start element, so @pending is that element and never another.
     def attr(name, value)
-      return unless @pending && name == :class && value.split.include?(PROTECTED)
+      return unless @pending && protection?(name, value)
 
       @pending.prose = true
       @protected_depth = 1
@@ -89,6 +90,11 @@ class TranslationDiff::Passage
     def instruct(_target) = record(prose: false)
 
     private
+
+    # Ox lowercases element names but not attribute names; the value stays exact because HTML class tokens are.
+    def protection?(name, value)
+      name.to_s.casecmp?("class") && value.split.include?(PROTECTED)
+    end
 
     # Everything inside a protected element belongs to the run that element opened, so it records nothing of its own.
     def record(prose:)

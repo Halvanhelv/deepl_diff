@@ -28,5 +28,6 @@ class TranslationDiff::Fragment
 
   def segments = @segments || EMPTY
 
-  def render = markup? ? source : @segments.map(&:render).join
+  # The slice is copied on the way out, as Segment copies its own: rendering must not hand a caller the passage.
+  def render = markup? ? source.dup : @segments.map(&:render).join
 end

@@ -73,6 +73,19 @@ class PassageTest < Minitest::Test
     assert_equal [%(<span class="notranslate">Bold Mountain</span> is a good place.)], cores(source)
   end
 
+  # Ox lowercases element names but not attribute names, and HTML attribute names are case-insensitive.
+  def test_an_uppercase_class_attribute_still_protects
+    source = %(<span CLASS="notranslate">Bold Mountain</span> is a good place.)
+
+    assert_equal [source], cores(source)
+  end
+
+  # Class token values are case-sensitive in HTML and providers look for the lowercase word, so this asks for nothing.
+  def test_an_uppercase_notranslate_value_does_not_protect
+    assert_equal ["Bold Mountain", "is a good place."],
+                 cores(%(<span class="NOTRANSLATE">Bold Mountain</span> is a good place.))
+  end
+
   def test_a_notranslate_span_nested_in_another_is_one_unit
     source = "<span class='notranslate'>foo<span class='notranslate'>bar</span>baz</span>"
 
@@ -83,6 +96,13 @@ class PassageTest < Minitest::Test
     source = "<span><span class='notranslate'>foo<span>bar<br></span>baz</span></span>"
 
     assert_equal ["<span class='notranslate'>foo<span>bar<br></span>baz</span>"], cores(source)
+  end
+
+  # Protection beats opacity: the caller asked for this subtree to be passed through, script and all.
+  def test_a_script_inside_a_notranslate_element_stays_inside_the_protected_unit
+    source = %(<span class="notranslate"><script>alert(1)</script></span>)
+
+    assert_equal [source], cores(source)
   end
 
   # -- sentence boundaries -------------------------------------------------
