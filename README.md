@@ -368,16 +368,16 @@ LLM client -- and implement `#translate` outright, the way
 `TranslationDiff::Providers::Amazon` does.
 
 Registering a provider also declares the options it needs, so
-`config.yandex_api_key` below does not exist until `YandexProvider` is
+`config.acme_api_key` below does not exist until `AcmeProvider` is
 registered:
 
 ```ruby
-class YandexProvider < TranslationDiff::HTTPProvider
+class AcmeProvider < TranslationDiff::HTTPProvider
   # Declares this provider's own configuration options.
   # TranslationDiff::Providers.register adds each one to
   # TranslationDiff::Configuration as a side effect.
-  def self.configuration_options = %i[yandex_api_key]
-  def self.configuration_requirements = %i[yandex_api_key]
+  def self.configuration_options = %i[acme_api_key]
+  def self.configuration_requirements = %i[acme_api_key]
 
   # What this provider can do, checked once by the pipeline for chunking,
   # detection and cache-key safety.
@@ -389,9 +389,9 @@ class YandexProvider < TranslationDiff::HTTPProvider
     )
   end
 
-  def api_base = "https://translate.api.cloud.yandex.net"
-  def headers = { "Authorization" => "Api-Key #{config.yandex_api_key}" }
-  def translate_url = "translate/v2/translate"
+  def api_base = config.acme_api_base || "https://api.acme.example/v1"
+  def headers = { "Authorization" => "Bearer #{config.acme_api_key}" }
+  def translate_url = "translate"
 
   # The three seams: build the request body, decode the reply.
   def render_translate_payload(request)
@@ -423,11 +423,11 @@ class YandexProvider < TranslationDiff::HTTPProvider
   # registry -- see "Provider objects and cache_key" below.
 end
 
-TranslationDiff::Providers.register(:yandex, YandexProvider)
+TranslationDiff::Providers.register(:acme, AcmeProvider)
 
 TranslationDiff.configure do |config|
-  config.provider = :yandex
-  config.yandex_api_key = ENV["YANDEX_API_KEY"]
+  config.provider = :acme
+  config.acme_api_key = ENV["ACME_API_KEY"]
 end
 ```
 
@@ -462,7 +462,7 @@ variable work when the application exports it after requiring this gem:
 
 ```ruby
 def self.configuration_options
-  [:yandex_api_base, { yandex_api_key: -> { ENV.fetch("YANDEX_API_KEY", nil) } }]
+  [:acme_api_base, { acme_api_key: -> { ENV.fetch("ACME_API_KEY", nil) } }]
 end
 ```
 
@@ -479,7 +479,7 @@ provider redeclaring its own options is not a conflict: a double `require`
 and a Rails reload both re-run registration.
 
 `TranslationDiff::Providers.names` lists every registered provider;
-`TranslationDiff::Providers.registered?(:yandex)` checks one.
+`TranslationDiff::Providers.registered?(:acme)` checks one.
 
 `test/support/provider_contract.rb` and `test/support/http_provider_contract.rb`
 are the executable form of the provider contract: include `ProviderContract`
