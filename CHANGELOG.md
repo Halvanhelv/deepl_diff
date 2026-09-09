@@ -106,15 +106,53 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
   configuration still setting `deepl_host` raises `NoMethodError` on
   `TranslationDiff.configure`. Rename it.
 - A provider returning the wrong number of translations now raises
-  `TranslationDiff::ResponseError`, not `TranslationDiff::Request::Error`.
-  `Request::Error` still exists, and still means "`from:` is missing and the
-  provider cannot detect"; a `rescue TranslationDiff::Request::Error` written
-  to catch a short response no longer catches one. Both are
-  `TranslationDiff::Error`, so a rescue of the base class is unaffected.
+  `TranslationDiff::ResponseError`, not the error that used to live on
+  `Request`; a `rescue` written to catch a short response that way no longer
+  catches one. Both are `TranslationDiff::Error`, so a rescue of the base
+  class is unaffected.
 - A provider returning a well-formed response that carries no translation for
   one input -- Azure answers 200 for a batch where a single string failed --
   also raises `TranslationDiff::ResponseError`, naming the position. It
-  previously reached `Spacing.restore` and died there as `NoMethodError`.
+  previously reached the spacing step and died there as `NoMethodError`.
+- **The translation pipeline is new code.** `TranslationDiff::Linearizer`,
+  `Spacing`, `Chunker`, `Tokenizer`, `Cache` and `Request` are gone as public
+  constants. What replaces them: `Document` and `Leaves` (walking the
+  caller's structure), `Passage`, `Fragment` and `Segment` (markup and prose,
+  cut into sentences), `Markup` (entity references and a `<` that opens no
+  tag), `Batch` (packing sentences into provider requests), `SentenceCache`
+  (the cache key, read and write) and `Translator` (the coordinator
+  `TranslationDiff.translate` and `Context#translate` now build). See
+  [How it works](docs/how-it-works.md). If you referenced any of the six by
+  name, that reference is now a `NameError`.
+- `TranslationDiff::Request::Error` is now `TranslationDiff::Translator::Error`
+  and `TranslationDiff::Cache::Error` is now
+  `TranslationDiff::SentenceCache::Error`. There is no alias for either: this
+  gem has never been published under the name `translation_diff` with those
+  constants in it. `TranslationDiff::Chunker::Error` is gone with no
+  replacement -- a single sentence too large to send now raises
+  `TranslationDiff::Error` from `Batch`. All three remain
+  `TranslationDiff::Error`, so a rescue of the base class is unaffected.
+- **`TranslationDiff.translate` and `Context#translate` raise `ArgumentError`
+  when `to:` is missing or `nil`.** The keyword still defaults to `nil` in the
+  signature, and the message names it. Previously a `nil` target compared
+  equal to a `nil` source, the call short-circuited as "same language" and
+  your values came back untranslated, silently. If you have a caller reading
+  `to:` out of a configuration that can be blank, it has been a no-op and will
+  now raise.
+- **The `cache` instrumentation event fires once per `translate` call, not
+  once per chunk.** The cache is now consulted for every sentence in one
+  `read_multi` before anything is batched. `hits` and `misses` still sum to
+  the same totals over a call, so a counter that adds them up is unaffected;
+  a counter of *events*, or a histogram of per-chunk hit ratios, will see the
+  cardinality drop. `request` and `rate_limit` still fire once per batch sent.
+- **Two more cache keys move, beyond the entity and `<` fixes below.** A
+  sentence padded with Unicode whitespace -- a non-breaking space, say -- now
+  keys as the bare sentence: the pipeline uses one Unicode-aware definition
+  of padding everywhere, where the key used to be built with ASCII `strip`,
+  which leaves a `U+00A0` in place. And the whole document key format is
+  otherwise unmoved: it is pinned by test against recorded values, and every
+  other input in the corpus this rewrite was judged against produces the same
+  key it did before.
 
 ### Removed
 
@@ -297,6 +335,29 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
 - DeepL's batch limit was declared as 300 sentences per request; DeepL
   documents 50. The request-size limit (1,700 escaped characters) was
   already correct and is unchanged.
+- **An entity reference no longer reaches the provider raw.** `Salt &amp;
+  pepper.` was sent to the provider as the six characters `&amp;`, so the
+  provider translated the entity's spelling as if it were words -- and was
+  billed for it. It is now sent as `Salt & pepper.`, the text the document
+  actually says, and re-encoded on the way out. Named entities, `&#38;` and
+  `&#x26;` alike are decoded; anything neither decoder knows is left as it
+  arrived.
+- **A bare `<` no longer swallows the rest of the sentence.** `if a < b then
+  stop. Fine.` was parsed by `ox` as prose followed by an unclosed tag, so
+  only `if a` was ever sent for translation and everything after the `<` came
+  back untranslated. A `<` that no element name, closing name, declaration or
+  instruction follows is now escaped before parsing and restored after, so the
+  whole sentence is translated. `5 < 6 and 7 > 6. True.` was sent as three
+  fragments and is now sent as two sentences.
+- **These two fixes move the cache key for the documents they affect.** A
+  document containing an entity reference, or a `<` that opens no tag, will
+  miss the cache once and be re-translated. That is the point: what was cached
+  for it was translated from the wrong text.
+- **A known remaining limit: `&lt;` still reaches a provider undecoded**, and
+  `a <b then stop. Fine.` still loses everything after the `<`. Both fall out
+  of escaping a bare `<` as `&lt;` to work around `ox` rather than replacing
+  it with a lexer of this gem's own, which is out of scope here. `<b` cannot
+  be told apart from a tag without one. Every other entity is decoded.
 
 ## [2.2.0] - 2026-09-07
 

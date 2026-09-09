@@ -146,7 +146,7 @@ subtag is its own. A provider of your own gets the same rule from
 `TranslationDiff::Provider#language`; declare `def self.language_case =
 :upcase` if your vendor wants upper case.
 
-"Request size" is what `Chunker` measures: the URL-escaped form of each
+"Request size" is what `TranslationDiff::Batch` measures: the URL-escaped form of each
 string (`CGI.escape(text).size`), which is never smaller than its UTF-8 byte
 count. "HTML support" names the provider option that turns HTML handling on
 -- every vendor spells it differently, which is exactly what

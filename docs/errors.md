@@ -23,13 +23,11 @@ TranslationDiff::Error
 │                                                # that returned no translation for an input
 ├── TranslationDiff::InvalidProviderError       # a class registered without inheriting
 │                                                # TranslationDiff::Provider
-├── TranslationDiff::Request::Error             # from: missing and the provider cannot
+├── TranslationDiff::Translator::Error          # from: missing and the provider cannot
 │                                                # detect, cache_key missing on an
 │                                                # assigned provider object
-├── TranslationDiff::Cache::Error               # provider options have no stable
+├── TranslationDiff::SentenceCache::Error       # provider options have no stable
 │                                                # serialisation for the cache key
-├── TranslationDiff::Chunker::Error             # a single value is larger than the
-│                                                # provider's declared max_request_size
 ├── TranslationDiff::Segmenters::Pragmatic::Error
 │                                                # Pragmatic computed offsets that
 │                                                # violate its own postcondition --
@@ -45,4 +43,19 @@ service and which response caused the failure without parsing the message.
 `TranslationDiff::Registry` -- which backs the provider, cache store and
 segmenter registries -- also raises `TranslationDiff::Error` directly (not a
 dedicated subclass) for an unknown name, listing what is actually
-registered.
+registered. So does `TranslationDiff::Batch`, when one sentence is larger
+once escaped than the provider's declared `max_request_size` or
+`max_text_size` and so could never be sent even in a batch of its own; the
+message names a short prefix of the offending text and both numbers.
+
+`ArgumentError`, not a `TranslationDiff::Error`, is what
+`TranslationDiff.translate` and `Context#translate` raise when `to:` is
+missing or `nil`. It is a caller's mistake before it is a translation, and
+the message names the keyword.
+
+**Renamed in 3.1.0.** `TranslationDiff::Request::Error` is now
+`TranslationDiff::Translator::Error` and `TranslationDiff::Cache::Error` is
+now `TranslationDiff::SentenceCache::Error`; both classes they hung off are
+gone. `TranslationDiff::Chunker::Error` is gone with no replacement -- the
+condition it named now raises `TranslationDiff::Error` from `Batch`. A
+`rescue TranslationDiff::Error` catches all three exactly as before.

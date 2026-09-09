@@ -39,18 +39,12 @@ require "translation_diff/providers/amazon"
 require "translation_diff/segmenters"
 require "translation_diff/segmenters/simple"
 require "translation_diff/segmenters/pragmatic"
-require "translation_diff/tokenizer"
-require "translation_diff/linearizer"
-require "translation_diff/chunker"
-require "translation_diff/spacing"
-require "translation_diff/cache"
 require "translation_diff/stores"
 require "translation_diff/memory_cache_store"
 require "translation_diff/redis_cache_store"
 require "translation_diff/redis_rate_limiter"
 require "translation_diff/instrumentation"
 require "translation_diff/translator"
-require "translation_diff/request"
 require "translation_diff/context"
 
 module TranslationDiff
@@ -67,7 +61,7 @@ module TranslationDiff
 
     # `provider:` and `config:` are reserved; every other keyword is forwarded to the provider.
     def translate(values, from: nil, to: nil, provider: nil, **)
-      Request.new(values, from: from, to: to, provider: provider, config: config, **).call
+      Translator.new(values, from: from, to: to, provider: provider, config: config, **).call
     end
   end
 end

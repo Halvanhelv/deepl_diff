@@ -25,7 +25,7 @@ class TranslationResponseTest < Minitest::Test
     assert_match(/2/, error.message)
   end
 
-  # A nil translation used to reach Spacing.restore and die there as NoMethodError, naming nothing.
+  # A nil translation used to reach the old pipeline's spacing step and die there as NoMethodError, naming nothing.
   def test_build_raises_when_a_translation_is_not_a_string
     error = assert_raises(TranslationDiff::ResponseError) do
       TranslationDiff::Translation::Response.build(request: request, texts: ["один", nil])
