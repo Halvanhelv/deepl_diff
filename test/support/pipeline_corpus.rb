@@ -35,13 +35,7 @@ module PipelineCorpus
     "bare less-than and greater" => "5 < 6 and 7 > 6. True."
   }.freeze
 
-  # Written BEFORE the rewrite, on purpose. A list assembled after seeing the
-  # new output would be a report of what happened, not a prediction that can
-  # fail. Everything not named here must come out byte-identical.
-  #
-  # Both entries change because the rewrite fixes them: today the entity
-  # reaches the provider raw, and everything after a bare "<" is treated as
-  # markup and never translated at all.
+  # Written before the rewrite, on purpose, so it can fail -- unlike a list assembled after seeing what changed.
   EXPECTED_TO_CHANGE = [
     "entity ampersand",
     "entity nbsp",
