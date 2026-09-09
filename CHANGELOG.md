@@ -125,6 +125,12 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
 
 ### Added
 
+- Five more providers, all on the same base class and the same transport:
+  `:google` (Cloud Translation v2), `:azure` (Azure AI Translator v3.0),
+  `:modernmt`, `:libretranslate` and `:amazon` (Amazon Translate). Each
+  declares its own options, its own limits, and what it can actually do --
+  see the provider table in the README, which is written from the same
+  capabilities the library reads at runtime.
 - A Google provider: `config.provider = :google` translates through Cloud
   Translation v2 (Basic) over HTTP directly, with no Google gem installed. It
   declares `google_api_key`, `google_project_id` and `google_api_base`; an API
