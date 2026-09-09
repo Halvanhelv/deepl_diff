@@ -130,7 +130,7 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
   gem has never been published under the name `translation_diff` with those
   constants in it. `TranslationDiff::Chunker::Error` is gone with no
   replacement -- a single sentence too large to send now raises
-  `TranslationDiff::Error` from `Batch`. All three remain
+  `TranslationDiff::Batch::Error`. All three remain
   `TranslationDiff::Error`, so a rescue of the base class is unaffected.
 - **`TranslationDiff.translate` and `Context#translate` raise `ArgumentError`
   when `to:` is missing or `nil`.** The keyword still defaults to `nil` in the

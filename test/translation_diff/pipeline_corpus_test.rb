@@ -41,31 +41,38 @@ class PipelineCorpusTest < ConfiguredTest
     end
   end
 
-  # The names in EXPECTED_TO_CHANGE, written out: the texts a provider is sent, and both of Passage's renders --
-  # byte-exact untranslated, equivalent markup once every sentence is back.
+  # The names in EXPECTED_TO_CHANGE, written out: the texts a provider is sent, what TranslationDiff.translate
+  # returns end to end, and Passage's render round trip -- byte-exact untranslated, equivalent markup once every
+  # sentence is back. document: and echoed: are independent literals, kept apart even where they agree, so a
+  # regression in either translate or render is caught by its own assertion rather than by one value checked twice.
   # The pipeline this replaced sent ["Salt &amp; pepper.", "Fine."] for the first, ["Hard&nbsp;space here.", "Fine."]
   # for the second, ["if a"] for the third, ["5", "6.", "True."] for the fourth and ["a"] for the fifth.
   CHANGED = {
     "entity ampersand" => {
       texts: ["Salt & pepper.", "Fine."],
+      document: "Salt &amp; pepper. Fine.",
       echoed: "Salt &amp; pepper. Fine."
     },
     "entity nbsp" => {
       texts: ["Hard\u00A0space here.", "Fine."],
       # The entity is spelled as the character it means, which is the same document to a browser and not the same bytes.
+      document: "Hard\u00A0space here. Fine.",
       echoed: "Hard\u00A0space here. Fine."
     },
     "bare less-than" => {
       texts: ["if a < b then stop.", "Fine."],
+      document: "if a < b then stop. Fine.",
       echoed: "if a < b then stop. Fine."
     },
     "bare less-than and greater" => {
       texts: ["5 < 6 and 7 > 6.", "True."],
+      document: "5 < 6 and 7 > 6. True.",
       echoed: "5 < 6 and 7 > 6. True."
     },
     # The recorded limit: `<b` is read as a tag, so the sentence after it is markup and never reaches a provider.
     "bare less-than before a letter" => {
       texts: ["a"],
+      document: "a <b then stop. Fine.",
       echoed: "a <b then stop. Fine."
     }
   }.freeze
@@ -73,7 +80,7 @@ class PipelineCorpusTest < ConfiguredTest
   CHANGED.each do |name, expected|
     define_method(method_name_for(name)) do
       assert_equal expected[:texts], provider_texts(name)
-      assert_equal expected[:echoed].inspect, translated(name)
+      assert_equal expected[:document].inspect, translated(name)
       assert_equal PipelineCorpus::INPUTS.fetch(name), untranslated_render(name)
       assert_equal expected[:echoed], echoed_render(name)
     end

@@ -1,5 +1,8 @@
 # Segments grouped to one provider request; a reply lands back on them through #apply, never by position after the fact.
 class TranslationDiff::Batch
+  # Its own class, so rescuing a sentence too long to send cannot also swallow a registry miss.
+  class Error < TranslationDiff::Error; end
+
   attr_reader :segments
 
   def initialize(segments)
@@ -67,7 +70,7 @@ class TranslationDiff::Batch
       limit = [@capabilities.max_request_size, @capabilities.max_text_size].compact.min
       return if size <= limit
 
-      raise TranslationDiff::Error,
+      raise TranslationDiff::Batch::Error,
             "#{preview(segment.core)} is #{size} characters once escaped, over this provider's limit of #{limit}"
     end
 

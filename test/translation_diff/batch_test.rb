@@ -47,8 +47,9 @@ class BatchTest < Minitest::Test
     assert_equal 2, batches.size, "each Cyrillic word is 36 escaped characters"
   end
 
+  # A caller who wants to catch "too long for this provider" must not also catch an unrelated registry miss.
   def test_a_text_larger_than_the_request_limit_raises_naming_the_limit
-    error = assert_raises(TranslationDiff::Error) { pack(["x" * 50], request_size: 10) }
+    error = assert_raises(TranslationDiff::Batch::Error) { pack(["x" * 50], request_size: 10) }
 
     assert_match(/10/, error.message)
     assert_match(/50/, error.message)
@@ -58,7 +59,7 @@ class BatchTest < Minitest::Test
   # is the customer's content and this message may be logged.
   def test_the_too_long_error_does_not_carry_the_whole_sentence
     sentence = "Secret #{'y' * 200}"
-    error = assert_raises(TranslationDiff::Error) { pack([sentence], request_size: 10) }
+    error = assert_raises(TranslationDiff::Batch::Error) { pack([sentence], request_size: 10) }
 
     refute_includes error.message, "y" * 200
   end
