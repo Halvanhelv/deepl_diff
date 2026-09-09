@@ -25,6 +25,48 @@ class TranslationResponseTest < Minitest::Test
     assert_match(/2/, error.message)
   end
 
+  # A nil translation used to reach Spacing.restore and die there as NoMethodError, naming nothing.
+  def test_build_raises_when_a_translation_is_not_a_string
+    error = assert_raises(TranslationDiff::ResponseError) do
+      TranslationDiff::Translation::Response.build(request: request, texts: ["один", nil])
+    end
+
+    assert_match(/position 1/, error.message)
+    assert_match(/NilClass/, error.message)
+  end
+
+  # Azure returns 200 for a batch where one element carries `error` instead of `translations`.
+  def test_build_raises_for_a_nil_in_the_middle_of_a_batch
+    batch = request(%w[one two three])
+
+    error = assert_raises(TranslationDiff::ResponseError) do
+      TranslationDiff::Translation::Response.build(request: batch, texts: ["один", nil, "три"])
+    end
+
+    assert_match(/position 1/, error.message)
+  end
+
+  def test_build_names_only_the_first_offending_position
+    batch = request(%w[one two three])
+
+    error = assert_raises(TranslationDiff::ResponseError) do
+      TranslationDiff::Translation::Response.build(request: batch, texts: [nil, nil, 42])
+    end
+
+    assert_match(/position 0/, error.message)
+    refute_match(/position 2/, error.message)
+  end
+
+  # The offending value is the customer's text or a provider's error object; neither belongs in a message.
+  def test_build_names_the_class_but_never_the_offending_value
+    error = assert_raises(TranslationDiff::ResponseError) do
+      TranslationDiff::Translation::Response.build(request: request, texts: ["один", { "error" => "s3cret" }])
+    end
+
+    refute_match(/s3cret/, error.message)
+    assert_match(/Hash/, error.message)
+  end
+
   def test_detected_source_and_usage_default_to_nil
     response = TranslationDiff::Translation::Response.build(request: request, texts: %w[один два])
 

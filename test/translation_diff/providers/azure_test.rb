@@ -133,6 +133,21 @@ class AzureProviderTest < Minitest::Test
     assert_equal "en", detector.detect("something")
   end
 
+  # Azure answers 200 for a batch where one string failed, carrying `error` in place of `translations`.
+  def test_a_per_string_failure_in_the_middle_of_a_batch_raises_rather_than_caching_nil
+    body = [
+      { "translations" => [{ "text" => "один", "to" => "ru" }] },
+      { "error" => { "code" => 400_050, "message" => "The input is too long." } },
+      { "translations" => [{ "text" => "три", "to" => "ru" }] }
+    ]
+
+    error = assert_raises(TranslationDiff::ResponseError) do
+      provider(body: body).translate(translation_request(%w[one two three]))
+    end
+
+    assert_match(/position 1/, error.message)
+  end
+
   def test_its_limits_are_azures_documented_ones
     capabilities = TranslationDiff::Providers::Azure.capabilities
 
