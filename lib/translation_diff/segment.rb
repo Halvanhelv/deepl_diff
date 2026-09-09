@@ -4,10 +4,11 @@ class TranslationDiff::Segment
   attr_accessor :translation
 
   def initialize(source)
-    @source = source
-    @leading, @core, @trailing = source.partition(/\S.*\S|\S/m)
+    @source = source.dup
+    @leading, @core, @trailing = @source.partition(/[^[:space:]].*[^[:space:]]|[^[:space:]]/m)
   end
 
+  # Reflects whether a translation is set right now, not history -- clearing it to nil flips this back to false.
   def translated? = !translation.nil?
 
   def empty? = core.empty?

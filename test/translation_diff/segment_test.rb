@@ -52,4 +52,31 @@ class SegmentTest < Minitest::Test
   def test_an_empty_source_is_empty
     assert_predicate TranslationDiff::Segment.new(""), :empty?
   end
+
+  # String literals are mutable in this project -- the magic comment was
+  # removed everywhere -- so a segment must not alias the string it was given.
+  def test_mutating_the_source_afterwards_does_not_change_the_segment
+    source = +"  One.  "
+    segment = TranslationDiff::Segment.new(source)
+    source << "trailing junk"
+
+    assert_equal "  One.  ", segment.source
+    assert_equal "One.", segment.core
+    assert_equal "  One.  ", segment.render
+  end
+
+  def test_a_segment_of_only_a_non_breaking_space_is_empty
+    segment = TranslationDiff::Segment.new(" ")
+
+    assert_predicate segment, :empty?
+    assert_equal " ", segment.render
+  end
+
+  def test_a_non_breaking_space_around_a_sentence_is_padding
+    segment = TranslationDiff::Segment.new(" One. ")
+    segment.translation = "Один."
+
+    assert_equal "One.", segment.core
+    assert_equal " Один. ", segment.render
+  end
 end
