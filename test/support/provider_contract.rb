@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
-# The executable form of the provider contract. Every provider's test
-# includes this and defines #provider; anything that passes can be registered
-# and reached through TranslationDiff.translate.
+# The executable form of the provider contract; anything that passes can be registered and reached via translate.
 module ProviderContract
   def translation_request(texts, from: :en, to: :ru, **options)
     TranslationDiff::Translation::Request.new(texts: texts, from: from, to: to, options: options)
@@ -35,9 +33,7 @@ module ProviderContract
     assert_includes [true, false], capabilities.notranslate?
   end
 
-  # A provider that claims to honour notranslate must have an HTML mode to
-  # honour it in. Google and DeepL both shipped with this broken, in
-  # different ways, before the capability existed to state it.
+  # Google and DeepL both shipped with this broken, in different ways, before the capability existed.
   def test_notranslate_is_only_claimed_with_an_html_mode
     capabilities = provider.class.capabilities
 

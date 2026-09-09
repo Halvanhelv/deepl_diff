@@ -3,10 +3,7 @@
 require "test_helper"
 
 class RequestTest < ConfiguredTest
-  # A minimal provider. Records what it was asked to translate so the call
-  # can be asserted on, and answers with a canned response. Detects a
-  # language when told to, so it can stand in for both a detecting and a
-  # non-detecting provider depending on which test needs which.
+  # Records what it was asked to translate, and answers with a canned response.
   class FakeApi < TranslationDiff::Provider
     CAPABILITIES = TranslationDiff::Capabilities.new(
       max_request_size: 1_000_000, max_batch_size: 1_000_000, max_text_size: nil,
@@ -39,9 +36,7 @@ class RequestTest < ConfiguredTest
     def cache_key = "fake"
   end
 
-  # Proves the generalisation took effect: a provider whose declared
-  # capabilities cap the batch at one text per request must change the
-  # chunking, not merely be asked to.
+  # Proves the generalisation took effect: capabilities capping the batch at one must change the chunking.
   class NarrowBatchApi < FakeApi
     def self.capabilities
       TranslationDiff::Capabilities.new(
@@ -51,9 +46,7 @@ class RequestTest < ConfiguredTest
     end
   end
 
-  # Registered under :echo so
-  # test_the_provider_keyword_overrides_the_configured_provider_for_one_call
-  # can exercise resolving a provider by name through the registry.
+  # Registered under :echo to exercise resolving a provider by name through the registry.
   class EchoProvider < TranslationDiff::Provider
     def self.capabilities
       TranslationDiff::Capabilities.new(
@@ -85,24 +78,17 @@ class RequestTest < ConfiguredTest
     end
   end
 
-  # A provider object assigned straight to `config.provider` never passed
-  # through the registry, so nothing stamped it with a name. This one defines
-  # its own #cache_key and returns an empty segment from it.
+  # An object assigned straight to `config.provider` never passed through the registry's stamping.
   class NamelessApi < FakeApi
     def cache_key = ""
   end
 
-  # A whitespace-only key is just as blank as an empty one -- it must not
-  # slip past the guard and cache translations under a segment that looks
-  # empty to anyone reading the store.
+  # A whitespace-only key is just as blank as an empty one; it must not slip past the guard.
   class WhitespaceNamedApi < FakeApi
     def cache_key = "   "
   end
 
-  # Already has every key cached, regardless of what it is asked for. Proves
-  # the all-cached short circuit in Request#chunks_translated: the gem's
-  # headline behaviour is serving a translation from cache without calling
-  # the adapter at all.
+  # Proves the all-cached short circuit: serving a translation from cache without calling the adapter at all.
   class AllCachedStore
     def initialize(responses)
       @responses = responses
@@ -163,10 +149,7 @@ class RequestTest < ConfiguredTest
     assert_equal [[%w[One Black So Red that], :en, :ru, {}]], api.calls
   end
 
-  # True of the public interface, but not new: 2.1.0 already protected the
-  # caller's hash from mutation by dup-ing it in the initializer. Keyword
-  # arguments keep that guarantee for a different reason (a fresh hash per
-  # call), but this test alone cannot tell the two implementations apart.
+  # True of the public interface, but not new: 2.1.0 already protected the caller's hash by dup-ing it.
   def test_repeated_calls_leave_the_callers_options_hash_alone
     options = { from: :en, to: :ru }
 
@@ -178,18 +161,14 @@ class RequestTest < ConfiguredTest
     assert_equal({ from: :en, to: :ru }, options)
   end
 
-  # This is what actually changed: the initializer declares one positional
-  # parameter now, so a single positional options hash -- which is what every
-  # pre-task caller passed -- is no longer accepted.
+  # The initializer now declares one positional parameter, so a positional options hash is no longer accepted.
   def test_the_positional_options_hash_is_no_longer_accepted
     assert_raises(ArgumentError) do
       TranslationDiff::Request.new("text", { from: :en, to: :ru })
     end
   end
 
-  # A detected language comes back as a String while :to is usually a Symbol,
-  # so the source == target short circuit never fired and the text was paid
-  # for and translated into its own language.
+  # A detected language is a String while :to is usually a Symbol -- without casecmp? this never short-circuits.
   def test_skips_the_translation_when_the_detected_language_is_the_target
     api = FakeApi.new([], detected: "RU")
     configure_with(api)
@@ -200,9 +179,7 @@ class RequestTest < ConfiguredTest
     assert_equal [[:detect, "привет"]], api.calls
   end
 
-  # Chunker's limits used to come from two provider methods. They now come
-  # from the declared capabilities, which is the only place a new provider
-  # states them.
+  # Chunker's limits used to come from two provider methods; they now come from the declared capabilities.
   # rubocop:disable-next Metrics/AbcSize, Metrics/MethodLength
   def test_chunking_uses_the_providers_declared_capabilities
     narrow = Class.new(TranslationDiff::Provider) do
@@ -235,8 +212,7 @@ class RequestTest < ConfiguredTest
            "expected one text per request, got #{provider.batches.inspect}")
   end
 
-  # The old check was `respond_to?(:detect)`, which a provider could satisfy
-  # by inheriting the base class's raising stub.
+  # The old check was `respond_to?(:detect)`, satisfied by inheriting the base class's raising stub.
   def test_a_provider_that_cannot_detect_says_so_before_it_is_called
     error = assert_raises(TranslationDiff::Request::Error) do
       TranslationDiff.translate("Some text.", to: "ru", provider: :null)
@@ -246,10 +222,7 @@ class RequestTest < ConfiguredTest
     assert_match(/null/, error.message)
   end
 
-  # The count check used to live in Request#call_api. It now lives in
-  # Translation::Response.build, which is why the error is a ResponseError
-  # rather than a Request::Error: it holds for every provider, including one
-  # that overrides #translate outright instead of using the HTTP seams.
+  # The count check now lives in Translation::Response.build, so it holds for every provider, hence ResponseError.
   def test_raises_when_the_api_returns_fewer_translations_than_asked_for
     configure_with(FakeApi.new(%w[Один]))
 
@@ -281,8 +254,7 @@ class RequestTest < ConfiguredTest
     assert_empty api.calls
   end
 
-  # Scalars nested in a structure are passed through too, while nil keeps
-  # collapsing to "" the way it always has.
+  # Scalars nested in a structure are passed through too, while nil keeps collapsing to "".
   def test_passes_nested_scalars_through_and_still_blanks_out_nils
     configure_with(FakeApi.new(%w[Один]))
 
@@ -291,8 +263,7 @@ class RequestTest < ConfiguredTest
     assert_equal({ a: "Один", n: 42, skip: "" }, result)
   end
 
-  # Proves the generalisation took effect rather than merely being
-  # described: a provider declaring tiny limits must change the batching.
+  # Proves the generalisation took effect: a provider declaring tiny limits must change the batching.
   def test_batches_according_to_the_limits_the_adapter_declares
     api = NarrowBatchApi.new(%w[Один Два])
     configure_with(api)
@@ -302,9 +273,7 @@ class RequestTest < ConfiguredTest
     assert_equal 2, api.calls.size, "one call per text at a batch size of 1"
   end
 
-  # Every fake cache store elsewhere in this file always misses, so this is
-  # the only Request-level test exercising a cache hit: a translation served
-  # from the store without ever reaching the adapter.
+  # The only Request-level test exercising a cache hit; every other fake store in this file always misses.
   def test_serves_a_translation_from_cache_without_calling_the_adapter
     api = FakeApi.new([])
     configure_with(api, AllCachedStore.new(["Какая-то строка"]))
@@ -315,9 +284,7 @@ class RequestTest < ConfiguredTest
     assert_empty api.calls
   end
 
-  # `provider:` picks the provider for one call. A name is built through the
-  # registry against this call's configuration; the configured provider is
-  # left untouched and unused.
+  # `provider:` picks the provider for one call; the configured provider is left untouched and unused.
   def test_the_provider_keyword_overrides_the_configured_provider_for_one_call
     api = FakeApi.new(%w[Один])
     configure_with(api)
@@ -328,9 +295,7 @@ class RequestTest < ConfiguredTest
     assert_empty api.calls
   end
 
-  # An empty cache-key segment would put this provider's translations in the
-  # same namespace as every other provider's, and a caller would be served
-  # another service's answer. Refusing is the only safe response.
+  # An empty cache-key segment would put this provider's translations in every other provider's namespace.
   def test_a_provider_whose_cache_key_is_empty_is_refused_rather_than_sharing_a_namespace
     configure_with(NamelessApi.new(%w[Один]))
 
@@ -353,7 +318,6 @@ class RequestTest < ConfiguredTest
 
   private
 
-  # Translates `values` from :en to :ru against fakes.
   # Returns the translation and the API fake, so the call can be asserted on.
   def translate(values, response)
     api = FakeApi.new(response)
@@ -362,9 +326,7 @@ class RequestTest < ConfiguredTest
     [TranslationDiff::Request.new(values, from: :en, to: :ru).call, api]
   end
 
-  # The two collaborators every test here needs, assigned as configuration
-  # options. An object assigned to `provider` or `cache` is used as-is, so a
-  # fake goes in exactly where a registered name would.
+  # An object assigned to `provider` or `cache` is used as-is, so a fake goes in exactly where a name would.
   def configure_with(api, store = FakeCacheStore.new)
     TranslationDiff.configure do |config|
       config.provider = api

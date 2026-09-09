@@ -1,27 +1,17 @@
 # frozen_string_literal: true
 
-# Talks to DeepL's REST API directly. This used to wrap deepl-rb; owning the
-# request removed a dependency and, more to the point, removed a layer whose
-# defaults were not ours -- deepl-rb logs the auth key and the payload at
-# DEBUG, and its tag handling default silently disabled notranslate.
+# Talks to DeepL's REST API directly, not deepl-rb: it logged the auth key at DEBUG and defaulted notranslate off.
 class TranslationDiff::Providers::DeepL < TranslationDiff::HTTPProvider
   PAID_HOST = "https://api.deepl.com"
   FREE_HOST = "https://api-free.deepl.com"
 
-  # A key ending in :fx is a free-plan key, and the free plan lives on its
-  # own host. DeepL's own libraries do this; so do we, now.
+  # A key ending in :fx is a free-plan key, and the free plan lives on its own host.
   FREE_KEY_SUFFIX = ":fx"
 
-  # What arrives here is not plain text: the tokenizer hands over a
-  # notranslate span with its tags. DeepL honours class="notranslate" only
-  # under HTML tag handling; without it, in DeepL's words, "tags are treated
-  # as regular text", and the protected content is translated while the tags
-  # survive -- a failure nothing about the output reveals.
+  # DeepL honours class="notranslate" only under HTML tag handling -- otherwise content translates, tags survive.
   DEFAULT_OPTIONS = { tag_handling: :html, tag_handling_version: "v2" }.freeze
 
-  # 50 texts and a 128 KiB body are DeepL's documented per-request limits.
-  # The request size stays at the 1700 escaped characters this library has
-  # always used; the batch count is the number that was wrong (it said 300).
+  # 50 texts / 128 KiB are DeepL's documented per-request limits; max_batch_size was wrong before (it said 300).
   def self.capabilities
     TranslationDiff::Capabilities.new(
       max_request_size: 1_700, max_batch_size: 50, max_text_size: nil,
@@ -32,8 +22,7 @@ class TranslationDiff::Providers::DeepL < TranslationDiff::HTTPProvider
   def self.configuration_options = %i[deepl_api_key deepl_api_base]
   def self.configuration_requirements = %i[deepl_api_key]
 
-  # DeepL requires a target language even when only the detection is wanted,
-  # so the provider picks one rather than making the caller do it.
+  # DeepL requires a target language even when only detection is wanted, so the provider picks one.
   DETECTION_TARGET = "EN"
 
   def api_base
@@ -62,8 +51,7 @@ class TranslationDiff::Providers::DeepL < TranslationDiff::HTTPProvider
     )
   end
 
-  # DeepL has no detection endpoint. Translating a sample and reading what it
-  # says the source was is the only way, and is what this has always done.
+  # DeepL has no detection endpoint; translating a sample and reading the source it reports is the only way.
   def detect(text)
     request = TranslationDiff::Translation::Request.new(texts: [text], from: nil,
                                                         to: DETECTION_TARGET)

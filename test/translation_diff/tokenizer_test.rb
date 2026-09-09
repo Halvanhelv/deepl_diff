@@ -56,10 +56,7 @@ class TokenizerTest < Minitest::Test
     "text_split_into_sentences" => [
       "! Киловольт. <span>Смеркалось.    Ворчало. Кричало.</span>",
       [
-        # Pragmatic does not treat a lone terminator with no preceding
-        # content as a sentence of its own, so "!" stays merged with
-        # "Киловольт." -- a missed boundary, which only makes the cache
-        # unit bigger, not a false one.
+        # A lone terminator with no preceding content stays merged: a missed boundary, not a false one.
         ["! Киловольт. ", :text],
         ["<span>", :markup],
         ["Смеркалось.    ", :text],
@@ -106,9 +103,7 @@ class TokenizerTest < Minitest::Test
         ["<?xml:namespace ns=\"urn:office\" ?>", :markup]
       ]
     ],
-    # Ox reports a comment, a doctype and a CDATA section as their own SAX
-    # events. Each one needs a handler: without it the bytes it covers are
-    # attributed to no token at all and vanish from the rebuilt string.
+    # Without a handler, the bytes a comment/doctype/CDATA event covers vanish from the rebuilt string.
     "an_html_comment" => [
       "<!-- note --> Visible text.",
       [
@@ -158,8 +153,6 @@ class TokenizerTest < Minitest::Test
 
   private
 
-  # The segmenter these expectations were written against, and the one the
-  # configuration still defaults to. Passed explicitly now that the tokenizer
-  # takes its segmenter as a collaborator rather than reaching for a global.
+  # Passed explicitly now that the tokenizer takes its segmenter as a collaborator, not a global.
   def segmenter = TranslationDiff::Segmenters::Pragmatic.new
 end

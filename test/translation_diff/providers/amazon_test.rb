@@ -21,11 +21,7 @@ class AmazonProviderTest < Minitest::Test
     @requests = []
   end
 
-  # There is no AWS key available for this task, so unlike DeepL's and
-  # Google's fixtures -- both captured from a live call -- this response
-  # body is shaped from Amazon's own Translate API reference documentation
-  # ("TranslateText", read 2026-09-09), not from an observed response.
-  # Nobody should mistake it for one.
+  # No AWS key was available: shaped from Amazon's "TranslateText" reference (read 2026-09-09), not observed.
   def provider(texts: nil)
     built = TranslationDiff::Providers::Amazon.new(config)
     built.name = :amazon
@@ -43,10 +39,7 @@ class AmazonProviderTest < Minitest::Test
   end
 
   def respond_to_translate(env, texts, recorder)
-    # Faraday's test adapter reuses this env for the response, mutating its
-    # body in place once the block returns -- capture a copy now or every
-    # read after #translate returns sees the reply, not the request (see
-    # test/support/stubbed_provider.rb).
+    # Faraday's test adapter mutates this env's body in place for the response -- dup it now, or lose the request.
     recorder << env.dup
     body = JSON.parse(env.body)
     translated = texts&.shift || "#{body['Text']}-ru"
@@ -77,9 +70,7 @@ class AmazonProviderTest < Minitest::Test
                  requests.first.request_headers["X-Amz-Target"]
   end
 
-  # This runs against the real aws-sigv4 library rather than a stand-in, so
-  # it is real evidence that this provider signs correctly -- not just that
-  # some string ended up in the Authorization header.
+  # Runs against the real aws-sigv4 library, not a stand-in, so this is real evidence signing works.
   def test_it_signs_the_request
     provider.translate(translation_request(%w[one]))
     authorization = requests.first.request_headers["Authorization"]
@@ -115,9 +106,7 @@ class AmazonProviderTest < Minitest::Test
     assert_equal "en", response.detected_source
   end
 
-  # The capability is the warning. Amazon has no HTML mode at all, so a
-  # notranslate span sent to it WILL be translated, and the only honest thing
-  # to do is say so where the rest of the library can read it.
+  # The capability is the warning: Amazon has no HTML mode, so a notranslate span sent to it WILL be translated.
   def test_it_claims_neither_html_nor_notranslate
     capabilities = TranslationDiff::Providers::Amazon.capabilities
 

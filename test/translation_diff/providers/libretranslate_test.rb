@@ -21,18 +21,13 @@ class LibreTranslateProviderTest < Minitest::Test
 
   def provider_class = TranslationDiff::Providers::LibreTranslate
 
-  # When `body:` is left nil, the stub echoes back whatever texts were
-  # actually sent, so the shared ProviderContract tests -- which call
-  # `provider` with no knowledge of how many texts they are about to send --
-  # get a response the same size as their request instead of tripping
-  # Response.build's count check.
+  # Left nil, `body:` echoes back whatever texts were sent, so ProviderContract's count check never trips.
   def provider(body: nil, status: 200, headers: {})
     stub_provider(route: "/translate", body: body || method(:echo_translations),
                   status: status, headers: headers, name: :libretranslate)
   end
 
-  # Everyone self-hosts this one, so the base URL is the requirement and the
-  # key is the option -- the reverse of every other provider here.
+  # Everyone self-hosts this one, so base URL is the requirement and key is the option -- the reverse of the rest.
   def test_the_api_base_is_required_and_the_key_is_not
     config.libretranslate_api_base = nil
 

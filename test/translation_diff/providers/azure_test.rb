@@ -12,11 +12,7 @@ class AzureProviderTest < Minitest::Test
   include HTTPProviderContract
   include StubbedProvider
 
-  # There is no Azure key available for this task, so unlike DeepL's and
-  # Google's fixtures -- both captured from a live call -- this body is
-  # shaped from Microsoft's own Azure AI Translator v3 "Translate" reference
-  # documentation (read 2026-09-09), not from an observed response. Nobody
-  # should mistake it for one.
+  # No Azure key was available: shaped from Microsoft's v3 "Translate" reference (read 2026-09-09), not observed.
   BODY = [
     { "detectedLanguage" => { "language" => "en", "score" => 1.0 },
       "translations" => [{ "text" => "один", "to" => "ru" }] },
@@ -34,11 +30,7 @@ class AzureProviderTest < Minitest::Test
 
   def provider_class = TranslationDiff::Providers::Azure
 
-  # When `body:` is left nil, the stub echoes back whatever texts were
-  # actually sent (rather than a fixed pair), so the shared ProviderContract
-  # tests -- which call `provider` with no knowledge of how many texts they
-  # are about to send -- get a response the same size as their request
-  # instead of tripping Response.build's count check.
+  # Left nil, `body:` echoes back whatever texts were sent, so ProviderContract's count check never trips.
   def provider(body: nil, status: 200, headers: {})
     stub_provider(route: "/translate", body: body || method(:echo_translations),
                   status: status, headers: headers, name: :azure)
@@ -60,8 +52,7 @@ class AzureProviderTest < Minitest::Test
                  TranslationDiff::Providers::Azure.new(config).headers["Ocp-Apim-Subscription-Key"]
   end
 
-  # A single-service key needs no region and a multi-service one does, so the
-  # header appears only when the option is set.
+  # A single-service key needs no region and a multi-service one does.
   def test_the_region_header_appears_only_when_configured
     refute TranslationDiff::Providers::Azure.new(config).headers.key?("Ocp-Apim-Subscription-Region")
 
@@ -122,8 +113,7 @@ class AzureProviderTest < Minitest::Test
     assert_equal 6, response.usage.billed_characters
   end
 
-  # Absent, the header must yield nil rather than 0 -- 0 is a false claim
-  # about billing, not "unknown".
+  # Absent, the header must yield nil rather than 0 -- 0 is a false claim about billing, not "unknown".
   def test_billed_characters_is_nil_when_the_header_is_absent
     response = provider(body: BODY).translate(translation_request(%w[one two]))
 

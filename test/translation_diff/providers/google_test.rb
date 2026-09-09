@@ -12,9 +12,7 @@ class GoogleProviderTest < Minitest::Test
   include HTTPProviderContract
   include StubbedProvider
 
-  # A real response envelope, shaped from the Cloud Translation v2 REST
-  # reference read 2026-09-09: translations live under a nested "data" key,
-  # not at the top level the way DeepL's do.
+  # Shaped from the Cloud Translation v2 REST reference read 2026-09-09: translations nest under "data".
   TRANSLATE_BODY = {
     "data" => { "translations" => [
       { "translatedText" => "один", "detectedSourceLanguage" => "en" },
@@ -32,12 +30,7 @@ class GoogleProviderTest < Minitest::Test
 
   def provider_class = TranslationDiff::Providers::Google
 
-  # When `body:` is left nil, the stub echoes back whatever texts were
-  # actually sent (rather than a fixed pair), so the shared ProviderContract
-  # tests -- which call `provider` with no knowledge of how many texts they
-  # are about to send -- get a response the same size as their request
-  # instead of tripping Response.build's count check. The content type
-  # matches what Cloud Translation v2 actually sends.
+  # Left nil, `body:` echoes back whatever texts were sent, so ProviderContract's count check never trips.
   def provider(body: nil, status: 200, headers: { "Content-Type" => "application/json; charset=UTF-8" })
     stub_provider(route: "/language/translate/v2", body: body || method(:echo_translations),
                   status: status, headers: headers, name: :google)
@@ -69,8 +62,7 @@ class GoogleProviderTest < Minitest::Test
     assert_equal "text", sent["format"]
   end
 
-  # Google's codes are lower case and a config written for DeepL says "EN";
-  # but "zh-Hans" and "pt-BR" carry subtags whose casing is their own.
+  # Google's codes are lower case, but "zh-Hans" carries a subtag whose casing is its own.
   def test_it_downcases_bare_codes_and_leaves_subtagged_ones_alone
     provider.translate(translation_request(%w[one], from: "EN", to: "zh-Hans"))
 

@@ -1,15 +1,6 @@
 # frozen_string_literal: true
 
-# The default cache: a bounded LRU in the current process, so the library
-# works the moment it is required and without Redis running.
-#
-# Ruby hashes keep insertion order, so "least recently used" is delete and
-# reinsert on every touch, and eviction is a shift of the first pair.
-#
-# NOT thread-safe, and deliberately so -- a lock here would be a tax on the
-# single-threaded case to make the multi-threaded one merely less wrong. A
-# process that needs a cache shared between threads or machines sets
-# `redis_url` and gets TranslationDiff::RedisCacheStore instead.
+# The default cache, a bounded in-process LRU. NOT thread-safe, deliberately -- set `redis_url` for that.
 class TranslationDiff::MemoryCacheStore
   def self.build(config) = new(max_size: config.cache_max_size)
 

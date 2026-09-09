@@ -2,21 +2,7 @@
 
 require "test_helper"
 
-# Eleven exemplars from the "Golden Rules", the de-facto benchmark for
-# sentence segmentation, adapted from the `context "Golden Rules" do` block
-# of each per-language spec file under spec/pragmatic_segmenter/languages/
-# on https://github.com/diasks2/pragmatic_segmenter (MIT licence, Copyright
-# (c) 2015 Kevin S. Dias). The full corpus (80 exemplars across 10
-# languages) lives outside this repo; this sample exists so a future change
-# to the default segmenter cannot quietly regress segmentation quality
-# without a test noticing here first.
-#
-# It deliberately weights the languages that have no letter case -- Arabic
-# (two exemplars), Greek, Hindi -- and includes one Japanese exemplar,
-# because those are exactly the languages TranslationDiff::Segmenters::Simple
-# cannot reason about (its central rule, "does the next letter look
-# lowercase", has no meaning for them) and where Pragmatic earns its place
-# as the default.
+# Adapted from diasks2/pragmatic_segmenter's Golden Rules (MIT, Copyright (c) 2015 Kevin S. Dias).
 class GoldenRulesTest < Minitest::Test
   EXEMPLARS = [
     { language: "en", text: "Hello World. My name is Jonas.",
@@ -43,9 +29,7 @@ class GoldenRulesTest < Minitest::Test
         "يقول معارضو الرئيس الإيراني إن الطريقة التي اعلنت بها النتائج كانت مثيرة للاستغراب."
       ] },
     { language: "ar",
-      # Contains U+202A/U+202C (left-to-right embedding) around the
-      # abbreviation's period -- a real bidi-formatting shape, and a good
-      # stress test for offset recovery finding a sentence verbatim.
+      # Contains U+202A/U+202C (left-to-right embedding) around the abbreviation's period, a real bidi shape.
       text: "وقال د‪.‬ ديفيد ريدي و الأطباء الذين كانوا يعالجونها في مستشفى برمنجهام إنها كانت " \
             "تعاني من أمراض أخرى. وليس معروفا ما اذا كانت قد توفيت بسبب اصابتها بأنفلونزا الخنازير.",
       expected: [
@@ -81,10 +65,7 @@ class GoldenRulesTest < Minitest::Test
     end
   end
 
-  # Simple is not held to the Golden Rules' exact boundaries -- it cannot be,
-  # for languages without letter case -- but it must never corrupt the
-  # document while trying. This is the structural guarantee that still has
-  # to hold when a caller opts into the zero-dependency segmenter.
+  # Simple isn't held to exact boundaries, but must never corrupt the document while trying.
   def test_simple_still_reconstructs_every_exemplar_even_where_it_under_or_over_splits
     segmenter = TranslationDiff::Segmenters::Simple.new
 

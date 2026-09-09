@@ -4,8 +4,7 @@ require "test_helper"
 require "faraday"
 
 class HTTPProviderTest < Minitest::Test
-  # A provider that exists only to exercise the base class. Its seams are the
-  # smallest thing that can round-trip.
+  # A provider that exists only to exercise the base class.
   class Echo < TranslationDiff::HTTPProvider
     def api_base = "https://echo.test"
     def headers = { "X-Echo" => "1" }
@@ -25,10 +24,7 @@ class HTTPProviderTest < Minitest::Test
     TranslationDiff::Translation::Request.new(texts: texts, from: "en", to: "ru")
   end
 
-  # Builds an Echo whose connection uses Faraday's test adapter. Minitest 6
-  # dropped minitest/mock, and stubbing HTTP is exactly what the test adapter
-  # is for -- no webmock, no network, and the same middleware stack the real
-  # connection has.
+  # Faraday's test adapter: no webmock, no network, same middleware stack the real connection has.
   def provider_for(status:, body:, headers: {})
     stubs = Faraday::Adapter::Test::Stubs.new do |stub|
       stub.post("/v1/translate") { [status, headers, body] }
@@ -75,8 +71,7 @@ class HTTPProviderTest < Minitest::Test
     assert_raises(TranslationDiff::ServiceError) { provider.translate(request) }
   end
 
-  # 429 survives the retries only when they are exhausted, so the test turns
-  # them off; what is asserted here is the mapping, not the retrying.
+  # Retries are turned off; what is asserted here is the mapping, not the retrying.
   def test_a_429_becomes_a_rate_limit_error_carrying_retry_after
     @config.max_retries = 0
     provider = provider_for(status: 429, body: "slow down", headers: { "Retry-After" => "17" })
@@ -99,9 +94,7 @@ class HTTPProviderTest < Minitest::Test
     assert_raises(TranslationDiff::TransportError) { provider.translate(request) }
   end
 
-  # The guarantee that no line this library writes carries source text or a
-  # credential now has a mechanism: we own the connection, and nothing
-  # installs a logging middleware on it.
+  # No line this library writes may carry source text or a credential.
   def test_no_logging_middleware_is_installed_even_when_a_logger_is_configured
     @config.logger = Logger.new(StringIO.new)
     handlers = Echo.new(@config).connection.builder.handlers

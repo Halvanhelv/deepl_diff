@@ -1,16 +1,6 @@
 # frozen_string_literal: true
 
-# One hierarchy for everything that can go wrong, so a caller handles a rate
-# limit the same way whichever provider raised it.
-#
-# The three branches answer three different questions. ConfigurationError
-# means the caller set something up wrong and no request was made.
-# ProviderError means the service answered and said no. TransportError means
-# nobody answered. ResponseError means the answer was well-formed HTTP but
-# broke this library's contract.
-#
-# No error carries the text being translated. Errors are logged, and this
-# library handles other people's content.
+# No error carries the text being translated -- errors are logged, and this library handles other people's content.
 module TranslationDiff
   class ConfigurationError < Error; end
 
@@ -30,10 +20,7 @@ module TranslationDiff
   class ServiceError < ProviderError; end
 
   class RateLimitError < ProviderError
-    # Seconds the provider asked us to wait, when it said so at all. Faraday's
-    # retry middleware honours the header itself; this is for a caller who
-    # rescues the error after the retries are exhausted and wants to schedule
-    # its own attempt.
+    # Faraday's retry middleware already honours this header; it's here for a caller scheduling its own retry.
     attr_reader :retry_after
 
     def initialize(message, provider: nil, status: nil, retry_after: nil)
@@ -45,9 +32,6 @@ module TranslationDiff
   class TransportError < Error; end
   class ResponseError < Error; end
 
-  # Raised when a class is offered to a registry that requires a particular
-  # ancestor. Its own class, rather than the generic Error, so that a caller
-  # rescuing "this class is the wrong shape" cannot also swallow an unrelated
-  # failure such as an option-name collision.
+  # Its own class, not the generic Error, so rescuing "wrong shape" can't also swallow an option-name collision.
   class InvalidProviderError < Error; end
 end

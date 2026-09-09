@@ -14,8 +14,7 @@ class SimpleSegmenterTest < Minitest::Test
     "Смеркалось. Ворчало. Кричало.",
     "Набор «Солнечная механика» от 4М — это 6 экспериментов.\n\n" \
     "Юному изобретателю предстоит воочию посмотреть на чудеса.",
-    # Multiple blank lines: more than one blank line in a single gap, and
-    # more than one such gap in the same text.
+    # More than one blank line in a single gap, and more than one such gap in the same text.
     "First paragraph.\n\n\nSecond paragraph.\n\n\n\nThird paragraph.",
     "見て。すごい！",
     "3.14 is pi. 1.2.3 is a version.",
@@ -55,9 +54,7 @@ class SimpleSegmenterTest < Minitest::Test
     assert_equal [0, "Hello there. ".length], @segmenter.split_offsets(text)
   end
 
-  # Simple's rules are language-neutral (case, digits, punctuation), so
-  # language: is part of the shared segmenter contract but has no effect
-  # here -- unlike Pragmatic, which picks a rule set by it.
+  # Simple's rules are language-neutral, unlike Pragmatic's, which picks a rule set by this keyword.
   def test_the_language_keyword_is_accepted_and_changes_nothing
     text = "Hello there. Goodbye now."
     offsets = @segmenter.split_offsets(text)

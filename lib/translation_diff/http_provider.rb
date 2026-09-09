@@ -4,19 +4,7 @@ require "faraday"
 require "faraday/retry"
 require "json"
 
-# Every provider reached over HTTP inherits this. It owns one Faraday
-# connection and turns HTTP status codes into this library's errors, so a
-# caller handles a rate limit the same way whichever service produced it.
-#
-# A subclass supplies where to talk (#api_base, #headers) and three seams per
-# operation: the URL, how to render a request, how to parse a reply. The
-# seams are a convenience of this class, not a requirement of Provider --
-# Amazon signs its requests instead and overrides #translate outright.
-#
-# No logging middleware is installed, ever, and no logger is passed to
-# Faraday. This library's log lines carry no source text, no translation and
-# no credential; a request logger would carry all three, and it would do so
-# at exactly the moment someone turns DEBUG on to diagnose a problem.
+# Every HTTP provider inherits this; no logging middleware, ever -- lines must carry no source text or credential.
 class TranslationDiff::HTTPProvider < TranslationDiff::Provider
   RETRY_STATUSES = [429, 500, 502, 503, 504].freeze
 
@@ -45,10 +33,7 @@ class TranslationDiff::HTTPProvider < TranslationDiff::Provider
 
   private
 
-  # What #post hands back: a decoded body next to the headers it arrived
-  # with, so #raise_for_status! and a subclass's #parse_translate_response
-  # both see the same shape a Faraday::Response would have given them had
-  # its own JSON middleware still been in the stack.
+  # Mirrors the shape a Faraday::Response would give if its own JSON middleware were still in the stack.
   Decoded = Data.define(:status, :headers, :body)
   private_constant :Decoded
 
@@ -58,15 +43,11 @@ class TranslationDiff::HTTPProvider < TranslationDiff::Provider
     raise_for_status!(response)
     response
   rescue *TRANSPORT_FAILURES => e
-    # The message is the transport's, never the payload's: the payload is the
-    # customer's text.
+    # The message is the transport's, never the payload's: the payload is the customer's text.
     raise TranslationDiff::TransportError, "#{self.class}: #{e.class}: #{e.message}"
   end
 
-  # Faraday's response-JSON middleware passes parser options positionally,
-  # which json 3 removed -- and json 3 is the default gem on Ruby 4.x, so
-  # relying on that middleware would break this library for most modern
-  # applications. Decoding here costs one call and depends on nothing.
+  # Faraday's JSON middleware passes parser options positionally, which json 3 (default on Ruby 4.x) removed.
   def decode(response)
     body = response.body
     return body unless body.is_a?(String)
@@ -81,9 +62,7 @@ class TranslationDiff::HTTPProvider < TranslationDiff::Provider
 
   def json?(response) = response.headers["content-type"].to_s.match?(/\bjson\b/)
 
-  # The block is how a test swaps in Faraday's test adapter. Amazon overrides
-  # this with the same signature, because its signature covers the body
-  # exactly as sent and a JSON request middleware would re-encode it.
+  # The block is how a test swaps in Faraday's test adapter; Amazon overrides it too, to sign the body as sent.
   def build_connection(&block)
     Faraday.new(url: api_base, headers: headers) do |faraday|
       faraday.request :json
@@ -102,9 +81,7 @@ class TranslationDiff::HTTPProvider < TranslationDiff::Provider
     faraday.options.timeout = config.timeout
   end
 
-  # faraday-retry reads Retry-After itself, which is why a 429 usually never
-  # reaches #raise_for_status!. What is left when it does is a service that
-  # kept saying no for every attempt.
+  # faraday-retry reads Retry-After itself, which is why a 429 usually never reaches #raise_for_status!.
   def retry_options
     { max: config.max_retries, interval: 0.5, backoff_factor: 2, interval_randomness: 0.5,
       retry_statuses: RETRY_STATUSES, methods: %i[post get],
@@ -135,8 +112,7 @@ class TranslationDiff::HTTPProvider < TranslationDiff::Provider
     options.merge(retry_after: response.headers["Retry-After"]&.to_i)
   end
 
-  # The service's own words, truncated. A provider's error body is a
-  # diagnostic, and an untruncated one can be a whole HTML error page.
+  # Truncated: an untruncated provider error body can be a whole HTML error page.
   def error_message(response)
     body = response.body
     text = body.is_a?(Hash) ? (body["message"] || body["error"] || body.to_s) : body.to_s

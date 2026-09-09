@@ -20,9 +20,7 @@ class CacheTest < Minitest::Test
     end
   end
 
-  # A store that answers with fixed, caller-chosen results regardless of the
-  # keys it is asked about, to pin the positional contract between the keys
-  # sent and the results read back.
+  # Answers with fixed results regardless of keys asked, to pin the positional contract.
   class PositionalStore
     def initialize(responses)
       @responses = responses
@@ -37,8 +35,7 @@ class CacheTest < Minitest::Test
     @store = RecordingStore.new
   end
 
-  # Two providers writing to one store used to collide: switching DeepL for
-  # another provider silently returned DeepL's translations.
+  # Two providers writing to one store used to collide, silently returning DeepL's translations for another.
   def test_the_provider_is_part_of_the_key
     key_for(provider: "deepl")
     key_for(provider: "google")
@@ -46,8 +43,7 @@ class CacheTest < Minitest::Test
     refute_equal @store.keys[0], @store.keys[1]
   end
 
-  # formality: :less used to share a key with the default, so whichever
-  # translated first won.
+  # formality: :less used to share a key with the default, so whichever translated first won.
   def test_the_provider_options_are_part_of_the_key
     key_for(options: {})
     key_for(options: { formality: :less })
@@ -62,8 +58,7 @@ class CacheTest < Minitest::Test
     assert_equal @store.keys[0], @store.keys[1]
   end
 
-  # "EN" and :en are the same language and used to produce two entries for
-  # identical work.
+  # "EN" and :en are the same language and used to produce two entries for identical work.
   def test_the_language_codes_are_normalised
     key_for(from: "EN", to: "RU")
     key_for(from: :en, to: :ru)
@@ -78,8 +73,7 @@ class CacheTest < Minitest::Test
     assert_equal @store.keys[0], @store.keys[1]
   end
 
-  # nil and "" are different values; #to_s would collide them, so the digest
-  # must be built from a serialisation that keeps them apart.
+  # nil and "" are different values; #to_s would collide them.
   def test_nil_and_empty_string_option_values_produce_different_keys
     key_for(options: { a: nil })
     key_for(options: { a: "" })
@@ -87,8 +81,7 @@ class CacheTest < Minitest::Test
     refute_equal @store.keys[0], @store.keys[1]
   end
 
-  # An Array-valued option (e.g. glossary_ids: %w[a b]) exercises the Array
-  # branch of #canonical, which no other test in this file reaches.
+  # Exercises the Array branch of #canonical, which no other test in this file reaches.
   def test_an_array_option_value_is_part_of_the_digest
     key_for(options: { glossary_ids: %w[a b] })
     key_for(options: { glossary_ids: %w[a c] })
@@ -96,16 +89,12 @@ class CacheTest < Minitest::Test
     refute_equal @store.keys[0], @store.keys[1]
   end
 
-  # An option value with no stable serialisation (no #inspect of its own,
-  # or one that embeds a memory address) must not be allowed to silently
-  # produce an unreproducible cache key.
+  # An option value with no stable serialisation must not silently produce an unreproducible cache key.
   def test_an_unsupported_option_value_raises
     assert_raises(TranslationDiff::Cache::Error) { key_for(options: { a: Object.new }) }
   end
 
-  # cached_and_missing pairs the store's response with the requested values
-  # by position, trusting the store to return results in key order. A
-  # database-backed store answering `WHERE key IN (...)` will not.
+  # Trusts the store to return results in key order; a `WHERE key IN (...)` store will not.
   def test_cached_and_missing_pairs_results_positionally
     store = PositionalStore.new(["cached one", nil, "cached three"])
 

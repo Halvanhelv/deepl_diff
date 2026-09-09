@@ -1,22 +1,13 @@
 # frozen_string_literal: true
 
-# Talks to Cloud Translation v2 (Basic) directly. This used to wrap
-# google-cloud-translate-v2, which pulled googleauth, signet, os,
-# google-protobuf and grpc in order to send one POST with a key in the query
-# string.
+# Talks to Cloud Translation v2 directly, not google-cloud-translate-v2, which pulled in grpc for one POST.
 class TranslationDiff::Providers::Google < TranslationDiff::HTTPProvider
   HOST = "https://translation.googleapis.com"
 
-  # Google's own default, and what the tokenizer's output requires: a
-  # notranslate span arrives with its tags, and entities such as &amp; stay
-  # in the text. Asking for `text` makes Google translate the protected span
-  # and drop its markup -- verified against the live API.
+  # Verified against the live API: `text` format translates the protected span and drops its markup.
   DEFAULT_FORMAT = :html
 
-  # Google's documented limits: 128 strings per request, and a recommended
-  # 5,000 characters (the hard ceiling is 100 KB). Chunker measures the
-  # URL-escaped form, never smaller than the UTF-8 byte count, so a chunk
-  # inside 5,000 escaped characters is inside it in bytes too.
+  # Google's documented limits: 128 strings/request, 5,000 chars recommended (hard ceiling 100 KB).
   def self.capabilities
     TranslationDiff::Capabilities.new(
       max_request_size: 5_000, max_batch_size: 128, max_text_size: nil,
@@ -27,10 +18,7 @@ class TranslationDiff::Providers::Google < TranslationDiff::HTTPProvider
   def self.configuration_options = %i[google_api_key google_project_id google_api_base]
   def self.configuration_requirements = %i[google_api_key]
 
-  # A bare alphabetic code is downcased, so a configuration written for DeepL
-  # ("EN") keeps working. Anything carrying a subtag ("zh-Hans", "pt-BR") is
-  # passed through untouched: the casing of a script or region subtag is its
-  # own, and a blanket downcase would corrupt it.
+  # A bare code is downcased for DeepL-style configs ("EN"); a subtag ("zh-Hans") is passed through untouched.
   BARE_LANGUAGE_CODE = /\A[A-Za-z]{2,3}\z/
 
   def api_base = config.google_api_base || HOST

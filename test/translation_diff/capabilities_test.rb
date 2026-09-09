@@ -9,9 +9,7 @@ class CapabilitiesTest < Minitest::Test
                                       reports_billing: false, **overrides)
   end
 
-  # Every reader asks a yes-or-no question, and Data.define generates plain
-  # readers. Declaring the predicates once stops the codebase from asking
-  # `detects_language` in one place and `detects_language?` in another.
+  # Declaring the predicates once stops the codebase asking `detects_language` in one place, `?` in another.
   def test_it_answers_in_predicates
     assert_predicate capabilities, :html?
     assert_predicate capabilities, :notranslate?
@@ -19,8 +17,7 @@ class CapabilitiesTest < Minitest::Test
     refute_predicate capabilities, :reports_billing?
   end
 
-  # `html` holds the name of the provider option that turns HTML on, which is
-  # different for every vendor, so :none is the only way to say "cannot".
+  # `html` holds the option name that turns HTML on, different per vendor, so :none says "cannot".
   def test_html_is_false_only_when_the_provider_has_no_html_mode
     refute_predicate capabilities(html: :none), :html?
     assert_predicate capabilities(html: :tag_handling), :html?

@@ -17,10 +17,7 @@ class TranslationResponseTest < Minitest::Test
     assert_equal %w[один два], response.texts
   end
 
-  # A short response means nils get shifted into the results and surface much
-  # later as a NoMethodError far from the cause. The check lives in the
-  # constructor rather than in a base-class method so that it still holds for
-  # a provider that overrides #translate outright.
+  # A short response would shift nils into the results, surfacing much later as a distant NoMethodError.
   def test_build_raises_when_the_provider_returned_the_wrong_number_of_texts
     error = assert_raises(TranslationDiff::ResponseError) do
       TranslationDiff::Translation::Response.build(request: request, texts: %w[один])

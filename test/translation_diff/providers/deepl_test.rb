@@ -29,11 +29,7 @@ class DeepLProviderTest < Minitest::Test
 
   def provider_class = TranslationDiff::Providers::DeepL
 
-  # When `body:` is left nil, the stub echoes back whatever texts were
-  # actually sent (rather than a fixed pair), so the shared ProviderContract
-  # tests -- which call `provider` with no knowledge of how many texts they
-  # are about to send -- get a response the same size as their request
-  # instead of tripping Response.build's count check.
+  # Left nil, `body:` echoes back whatever texts were sent, so ProviderContract's count check never trips.
   def provider(body: nil, status: 200, headers: {})
     stub_provider(route: "/v2/translate", body: body || method(:echo_translations),
                   status: status, headers: headers, name: :deepl)
@@ -92,10 +88,7 @@ class DeepLProviderTest < Minitest::Test
     refute sent.key?("source_lang")
   end
 
-  # Regression: notranslate spans reach the provider with their tags, and
-  # DeepL honours class="notranslate" only under HTML tag handling. Without
-  # this the protected content is translated while the tags survive, which is
-  # invisible in review.
+  # DeepL honours class="notranslate" only under HTML tag handling; otherwise content translates, tags survive.
   def test_it_asks_for_html_tag_handling
     provider.translate(translation_request(%w[one two]))
 
@@ -131,10 +124,7 @@ class DeepLProviderTest < Minitest::Test
     end
   end
 
-  # DeepL has no detection endpoint, so it detects by translating a sample
-  # and reading what it says the source was. #detect sends exactly one
-  # text, and the stub echoes it back, so the count matches without an
-  # override.
+  # DeepL has no detection endpoint; it detects by translating a sample and reading the reported source.
   def test_detect_returns_the_language_deepl_reports
     assert_equal "en", provider.detect("something")
   end

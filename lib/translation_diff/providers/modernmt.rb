@@ -1,22 +1,16 @@
 # frozen_string_literal: true
 
-# ModernMT. Adaptive translation with translation memories, which is
-# thematically the closest of these services to what this library does.
+# ModernMT: adaptive translation with translation memories.
 class TranslationDiff::Providers::ModernMT < TranslationDiff::HTTPProvider
   HOST = "https://api.modernmt.com"
 
   # ModernMT spells its formats as MIME types.
   DEFAULT_FORMAT = "text/html"
 
-  # Unverified. ModernMT documents an HTML format but says nothing about
-  # class="notranslate", and no key was available to probe it. Declaring
-  # false is the safe direction: a capability that under-promises costs a
-  # warning, one that over-promises costs a customer's protected content.
+  # Unverified, not observed: no key was available to probe it; false is the safe assumption either way.
   MODERNMT_HONOURS_NOTRANSLATE = false
 
-  # 128 texts is documented. The per-request character limit is not, so the
-  # conservative 5,000 Google recommends is used rather than a number nobody
-  # published.
+  # 128 texts is documented; the character limit is not, so Google's 5,000 recommendation is borrowed.
   def self.capabilities
     TranslationDiff::Capabilities.new(
       max_request_size: 5_000, max_batch_size: 128, max_text_size: nil,
@@ -39,8 +33,7 @@ class TranslationDiff::Providers::ModernMT < TranslationDiff::HTTPProvider
       .tap { |payload| payload[:source] = request.from.to_s unless request.from.nil? }
   end
 
-  # One text comes back as an object rather than a one-element array, so the
-  # envelope is always coerced to a list before it is mapped.
+  # One text comes back as an object rather than a one-element array, so the envelope is always coerced.
   def parse_translate_response(body, _headers, request)
     results = results_from(body)
 

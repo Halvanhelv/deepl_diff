@@ -52,20 +52,13 @@ module TranslationDiff
 
     def configure = yield(config)
 
-    # Tests need this, and without it one test's configuration leaks into
-    # every test that runs after it.
+    # Without this, one test's configuration leaks into every test that runs after it.
     def reset! = @config = nil
 
-    # An isolated copy of the configuration with the same entry point, for
-    # per-tenant or per-request settings. The global configuration is left
-    # alone.
-    #
-    #   tenant = TranslationDiff.context { |c| c.deepl_api_key = key }
-    #   tenant.translate("Hello.", from: "en", to: "ru")
+    # An isolated copy of the configuration with the same entry point, for per-tenant settings.
     def context(&) = Context.new(config.copy.tap(&))
 
-    # `provider:` and `config:` are reserved; every other keyword is
-    # forwarded to the provider untouched.
+    # `provider:` and `config:` are reserved; every other keyword is forwarded to the provider.
     def translate(values, from: nil, to: nil, provider: nil, **)
       Request.new(values, from: from, to: to, provider: provider, config: config, **).call
     end

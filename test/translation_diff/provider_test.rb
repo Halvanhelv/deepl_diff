@@ -22,9 +22,7 @@ class ProviderTest < Minitest::Test
     assert_instance_of Bare, Bare.new(@config)
   end
 
-  # The old behaviour was a DeepL:: error raised from inside a vendor SDK, or
-  # `ArgumentError, "project_id is missing"` from another. Neither named the
-  # option a caller of THIS library has to set.
+  # The old behaviour raised a vendor SDK's own error, which never named the option this library needs set.
   def test_it_names_every_missing_option_at_once
     error = assert_raises(TranslationDiff::ConfigurationError) { Demanding.new(@config) }
 
@@ -51,9 +49,7 @@ class ProviderTest < Minitest::Test
     assert_raises(NotImplementedError) { Bare.new(@config).detect("etwas") }
   end
 
-  # cache_key is a segment of every cache key this provider reads or writes.
-  # A quietly empty one would let two providers share a namespace and serve
-  # one service's translations for another.
+  # A quietly empty cache_key would let two providers share a namespace and serve the wrong translations.
   def test_cache_key_is_the_registered_name
     provider = Bare.new(@config)
     provider.name = :bare

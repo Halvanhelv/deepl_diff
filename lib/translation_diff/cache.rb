@@ -3,14 +3,10 @@
 class TranslationDiff::Cache
   class Error < TranslationDiff::Error; end
 
-  # An application uses a handful of distinct option sets, so 32 bits of
-  # digest is ample to keep them apart; the full 128-bit MD5 would just
-  # bloat every key in a cache that may hold millions of them.
+  # 32 bits of digest is ample to keep option sets apart without bloating every key in the cache.
   DIGEST_LENGTH = 8
 
-  # `store` is the cache store this instance reads and writes through. It has
-  # no reader: #store is already the public method that writes a chunk of
-  # translations back, and an attr_reader would silently replace it.
+  # No attr_reader for `store`: #store is already the public method that writes translations back.
   def initialize(from, to, provider:, store:, options: {})
     @from = from
     @to = to
@@ -48,26 +44,19 @@ class TranslationDiff::Cache
     [provider, language(from), language(to), options_digest, hash].compact.join(":")
   end
 
-  # "EN" and :en are the same language; without this they are two entries
-  # for identical work. The collision argument for #key depends on none of
-  # its segments containing a colon: from/to are caller-supplied, so this
-  # normalisation must not introduce one.
+  # "EN" and :en are the same language; also must never introduce a colon, the key-join separator.
   def language(code)
     code.to_s.downcase
   end
 
-  # Two calls differing only in formality or glossary are two different
-  # translations and must not share a key.
+  # Two calls differing only in formality or glossary must not share a key.
   def options_digest
     return @options_digest if defined?(@options_digest)
 
     @options_digest = options.empty? ? nil : Digest::MD5.hexdigest(canonical(options))[0, DIGEST_LENGTH]
   end
 
-  # Object#inspect is not a stable serialisation: Ruby 3.4 changed how
-  # symbol-keyed hashes render, and an object without its own #inspect embeds
-  # a memory address. Either would silently change every cache key and make
-  # the application pay for every translation a second time.
+  # Object#inspect isn't stable: Ruby 3.4 changed hash rendering, and default #inspect embeds an address.
   def canonical(value)
     case value
     when Hash then value.sort_by { |key, _| key.to_s }.map { |key, item| "#{key}=#{canonical(item)}" }.join(",")

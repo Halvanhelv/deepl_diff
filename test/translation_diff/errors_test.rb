@@ -14,8 +14,7 @@ class ErrorsTest < Minitest::Test
     end
   end
 
-  # Rescuing "the provider said no" must not also catch a local
-  # configuration mistake or a socket timeout.
+  # Rescuing "the provider said no" must not also catch a config mistake or a socket timeout.
   def test_provider_errors_are_a_family_of_their_own
     [TranslationDiff::AuthenticationError, TranslationDiff::RateLimitError,
      TranslationDiff::QuotaExceededError, TranslationDiff::InvalidRequestError,

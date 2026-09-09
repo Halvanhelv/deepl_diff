@@ -1,15 +1,11 @@
 # frozen_string_literal: true
 
-# Azure AI Translator, REST v3.0. The cheapest of the paid services per
-# character and the most generous per request: a thousand strings and fifty
-# thousand characters at a time.
+# Azure AI Translator, REST v3.0: cheapest per character, most generous per request (1,000 strings/50,000 chars).
 class TranslationDiff::Providers::Azure < TranslationDiff::HTTPProvider
   HOST = "https://api.cognitive.microsofttranslator.com"
   API_VERSION = "3.0"
 
-  # Azure spells HTML handling `textType`, and under it honours
-  # `class=notranslate` -- the same marker the tokenizer emits and the same
-  # one Google and DeepL honour under their own spellings.
+  # Azure spells HTML handling `textType`, and under it honours `class=notranslate` like DeepL and Google do.
   DEFAULT_TEXT_TYPE = "html"
 
   def self.capabilities
@@ -24,16 +20,13 @@ class TranslationDiff::Providers::Azure < TranslationDiff::HTTPProvider
 
   def api_base = config.azure_api_base || HOST
 
-  # A multi-service resource needs the region header and a single-service one
-  # rejects nothing without it, so it is sent only when configured.
+  # A multi-service resource needs the region header; a single-service one rejects nothing without it.
   def headers
     { "Ocp-Apim-Subscription-Key" => config.azure_api_key.to_s }
       .tap { |h| h["Ocp-Apim-Subscription-Region"] = config.azure_region if config.azure_region }
   end
 
-  # Azure takes the language pair in the query string and the texts in the
-  # body, which is why this provider builds its URL per request rather than
-  # answering a constant.
+  # Azure takes the language pair in the query string, so the URL is built per request, not a constant.
   def translate_url = "translate"
 
   def translate(request)

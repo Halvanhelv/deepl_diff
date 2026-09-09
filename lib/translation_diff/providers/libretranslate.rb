@@ -1,31 +1,16 @@
 # frozen_string_literal: true
 
-# LibreTranslate: open source, self-hosted, and the only provider here that
-# can be run against for free, which is why it is worth supporting even
-# though its translations are not the best of this set.
-#
-# It inverts the usual configuration: the base URL is required, because
-# everyone runs their own instance, and the API key is optional, because most
-# instances do not ask for one.
+# The only free, self-hosted provider here; base URL is required (everyone runs their own), API key is optional.
 class TranslationDiff::Providers::LibreTranslate < TranslationDiff::HTTPProvider
   DEFAULT_FORMAT = "html"
 
-  # The API's own way of asking for detection: `source` is required and
-  # "auto" is the value that means "work it out".
+  # The API's own way of asking for detection: `source` is required, and "auto" means "work it out".
   AUTO = "auto"
 
-  # Observed, not assumed: probed 2026-09-09 against `docker run
-  # libretranslate/libretranslate --load-only en,ru` (the argos-translate
-  # en->ru model). `<span class="notranslate">Bold Mountain</span> is a good
-  # place.` came back with the span tag intact but its content translated
-  # anyway -- "Bold Mountain" became "Смелая гора". LibreTranslate's HTML
-  # format preserves markup; it does not honour the notranslate marker.
+  # Observed 2026-09-09 via Docker: LibreTranslate's HTML format preserves markup but translates content anyway.
   LIBRETRANSLATE_HONOURS_NOTRANSLATE = false
 
-  # LibreTranslate publishes no per-request limits -- it is whatever the
-  # instance operator configured. These are this library's own conservative
-  # numbers, not the vendor's, and a self-hoster with a bigger instance can
-  # raise them by subclassing.
+  # LibreTranslate publishes no per-request limits; these are this library's own conservative numbers.
   def self.capabilities
     TranslationDiff::Capabilities.new(
       max_request_size: 5_000, max_batch_size: 50, max_text_size: nil,

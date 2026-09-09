@@ -1,23 +1,9 @@
 # frozen_string_literal: true
 
-# Translation providers, by name. This is the one registry that does more
-# than look a class up: registering a provider also declares that provider's
-# configuration options, which is what keeps names like `deepl_api_key` out
-# of TranslationDiff::Configuration and out of this library's core.
-#
-#   TranslationDiff::Providers.register(:acme, AcmeProvider)
-#
-#   TranslationDiff.configure do |config|
-#     config.provider = :acme
-#     config.acme_api_key = ENV["ACME_API_KEY"]
-#   end
-#
-# Nothing in lib/ changes to make that work.
+# Translation providers, by name; registering one also declares its configuration options.
 module TranslationDiff::Providers
   class << self
-    # Options are declared before the registry entry is written, so a
-    # provider whose option names collide with another's raises without
-    # having replaced anything under `name`.
+    # Options are declared before the registry entry is written, so a name collision raises without replacing.
     def register(name, klass)
       unless klass < TranslationDiff::Provider
         raise TranslationDiff::InvalidProviderError,

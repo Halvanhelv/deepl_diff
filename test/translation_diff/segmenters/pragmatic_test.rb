@@ -11,16 +11,13 @@ class PragmaticSegmenterTest < Minitest::Test
     ["Смеркалось. Ворчало. Кричало.", "ru"],
     ["Набор «Солнечная механика» от 4М — это 6 экспериментов.\n\n" \
      "Юному изобретателю предстоит воочию посмотреть на чудеса.", "ru"],
-    # Multiple blank lines: more than one blank line in a single gap, and
-    # more than one such gap in the same text. Untouched by shadowing --
-    # SINGLE_NEWLINE only matches a "\n" with no adjoining "\n".
+    # Multiple blank lines, untouched by shadowing: SINGLE_NEWLINE only matches "\n" with no adjoining "\n".
     ["First paragraph.\n\n\nSecond paragraph.\n\n\n\nThird paragraph.", "en"],
     ["見て。すごい！次はどうなる？", "ja"],
     ["Проф. Иванов пришёл домой. Было поздно.", "ru"],
     ["سؤال وجواب: ماذا حدث؟ طرح الكثير من التساؤلات.", "ar"],
     ["Ի՞նչ ես մտածում: Ոչինչ:", "hy"],
-    # Single newlines (shadowed) and a blank-line paragraph break (not
-    # shadowed), together, so the invariant is exercised against both paths.
+    # Single newlines (shadowed) and a blank-line paragraph break (not), together, exercising both paths.
     ["The cat sat on the mat\nand looked at the moon. It was content.\n\n" \
      "A new paragraph starts here.", "en"],
     ["これは父の\n家です。それはペンです。", "ja"]
@@ -60,9 +57,7 @@ class PragmaticSegmenterTest < Minitest::Test
     assert_equal [0, "見て。".length], @segmenter.split_offsets(text)
   end
 
-  # This is the trap the brief calls out by name: without a language,
-  # pragmatic_segmenter falls back to English rules, and English rules read
-  # "Проф." as a complete sentence on its own.
+  # Without a language, pragmatic_segmenter falls back to English rules, which read "Проф." as a full sentence.
   def test_without_a_language_russian_abbreviations_are_mis_segmented
     text = "Проф. Иванов пришёл домой. Было поздно."
     offsets = @segmenter.split_offsets(text)
@@ -70,9 +65,7 @@ class PragmaticSegmenterTest < Minitest::Test
     assert_equal [0, "Проф. ".length, "Проф. Иванов пришёл домой. ".length], offsets
   end
 
-  # The same text, with the language supplied, segments correctly -- proving
-  # the language argument is actually threaded through to pragmatic_segmenter
-  # rather than merely accepted and ignored.
+  # Proves the language argument is actually threaded through to pragmatic_segmenter, not merely accepted.
   def test_with_the_language_russian_abbreviations_are_respected
     text = "Проф. Иванов пришёл домой. Было поздно."
     offsets = @segmenter.split_offsets(text, language: "ru")
@@ -88,15 +81,7 @@ class PragmaticSegmenterTest < Minitest::Test
     assert_equal [0, "Набор «Солнечная механика» от 4М — это 6 экспериментов.\n\n".length], offsets
   end
 
-  # pragmatic_segmenter treats essentially any single newline as a sentence
-  # boundary candidate, independent of punctuation -- confirmed on ordinary,
-  # punctuation-free, line-wrapped prose, including with whitespace on both
-  # sides of the newline (not just a newline glued to non-whitespace). A
-  # false split is the harmful kind of error this whole gem exists to avoid,
-  # and it is common: HTML text nodes routinely carry incidental newlines
-  # from source formatting. Shadowing single newlines before segmenting
-  # fixes this while leaving the original text -- newline included -- in
-  # the output.
+  # pragmatic_segmenter treats any single newline as a sentence boundary, confirmed false on wrapped prose.
   def test_a_single_newline_with_no_punctuation_does_not_split_the_sentence
     text = "Some text \n continues here without any punctuation at the break"
     assert_equal [0], @segmenter.split_offsets(text)
@@ -109,10 +94,7 @@ class PragmaticSegmenterTest < Minitest::Test
     assert_equal [0, "This is a sentence\ncut off by a line wrap. ".length], offsets
   end
 
-  # A blank-line run is a real paragraph break, not incidental formatting,
-  # and shadowing deliberately leaves it alone -- pragmatic_segmenter already
-  # handles it correctly (also covered by the reconstruction invariant above,
-  # and by TokenizerTest's own blank-line case).
+  # A blank-line run is a real paragraph break; shadowing deliberately leaves it alone.
   def test_a_blank_line_paragraph_break_still_splits
     text = "Первое предложение.\n\nВторое предложение."
     offsets = @segmenter.split_offsets(text, language: "ru")
@@ -120,9 +102,7 @@ class PragmaticSegmenterTest < Minitest::Test
     assert_equal [0, "Первое предложение.\n\n".length], offsets
   end
 
-  # Shadowing fixes the real trigger reported in the previous round: this no
-  # longer raises, and the newline survives in the output exactly as it
-  # appeared in the source.
+  # Shadowing fixes the real trigger reported in the previous round: this no longer raises.
   def test_the_japanese_newline_after_a_common_particle_now_segments_instead_of_raising
     text = "これは父の\n家です。それはペンです。"
     offsets = @segmenter.split_offsets(text, language: "ja")
@@ -130,15 +110,7 @@ class PragmaticSegmenterTest < Minitest::Test
     assert_equal [0, "これは父の\n家です。".length], offsets
   end
 
-  # H1 (fix round 2): pragmatic_segmenter's cleaner rewrites the sentence it
-  # hands back in ways shadowing does not touch -- collapsing runs of three
-  # or more spaces, respacing "Ph.D." into "Ph. D.", deleting a formatting
-  # artefact outright. None of these are rare (an English sentence naming a
-  # degree, or HTML indented with more than two spaces, hits one of them
-  # routinely), and none of them may abort translation any more: recovery
-  # stops at the first sentence it cannot verify and the remainder of the
-  # text stands as one final unit -- a coarsening, not a failure. Each case
-  # below is a real, reproduced trigger, not a hypothetical.
+  # H1 (fix round 2): pragmatic_segmenter's cleaner respaces "Ph.D." into "Ph. D.", a real reproduced trigger.
   def test_ph_d_no_longer_aborts_and_the_original_text_is_untouched
     text = "He has a Ph.D. in physics. It took years."
     assert_equal [0], @segmenter.split_offsets(text, language: "en")
@@ -159,22 +131,13 @@ class PragmaticSegmenterTest < Minitest::Test
     assert_equal [0], @segmenter.split_offsets(text, language: "en")
   end
 
-  # The inline-formatting artefact pragmatic_segmenter deletes outright
-  # (lib/pragmatic_segmenter/cleaner/rules.rb, InlineFormattingRule) is what
-  # the previous round used to prove the (now-removed) raise fired on real
-  # behaviour. It now proves the opposite: recovery still stops cleanly
-  # instead of guessing, and the whole node survives as one unit.
+  # pragmatic_segmenter's InlineFormattingRule deletes this artefact outright; recovery now stops cleanly instead.
   def test_a_deleted_formatting_artefact_no_longer_aborts
     text = "This is a sentence{b^>3<b^} with markup noise. Second sentence follows now."
     assert_equal [0], @segmenter.split_offsets(text, language: "en")
   end
 
-  # N3 (fix round 4): coarsening must not throw away a boundary it has
-  # already proved. "First is fine." is located verbatim; "Hello world mid."
-  # is not, because the cleaner collapses the triple space -- but the end of
-  # "First is fine." is not a guess, it was matched character for character,
-  # so it is still emitted. Only the genuinely unverifiable remainder (from
-  # there to the end of the text) is coarsened into one unit.
+  # N3 (fix round 4): coarsening must not throw away a boundary already proved verbatim character for character.
   def test_a_verified_boundary_before_an_unrecoverable_sentence_is_not_discarded
     text = "First is fine. Hello   world mid. Third one here."
     offsets = @segmenter.split_offsets(text, language: "en")
@@ -183,12 +146,7 @@ class PragmaticSegmenterTest < Minitest::Test
     assert_equal text, reconstruct(text, offsets)
   end
 
-  # L2 (fix round 2): an empty sentence from upstream must not emit a
-  # duplicate, non-increasing offset (it would otherwise resolve to the
-  # cursor's current position without advancing it). Exercised directly
-  # against #recover_offsets, since no real pragmatic_segmenter input found
-  # to reproduce an empty sentence -- this documents the guarantee the
-  # method makes about its own input, not a specific upstream trigger.
+  # L2 (fix round 2): exercised directly against #recover_offsets; no real input was found to reproduce this.
   def test_an_empty_sentence_from_upstream_does_not_produce_a_duplicate_offset
     shadow = "Sentence one. Sentence two."
     sentences = ["Sentence one.", "", "Sentence two."]
@@ -199,11 +157,7 @@ class PragmaticSegmenterTest < Minitest::Test
     assert_equal [0, "Sentence one. ".length], offsets
   end
 
-  # M1 (fix round 2): DeepL, this gem's own flagship adapter, sends uppercase
-  # and region-tagged codes ("RU", "EN-GB"). pragmatic_segmenter's own lookup
-  # is case-sensitive and region-blind, so without normalising first, these
-  # would silently fall through to Common rather than to the documented
-  # English fallback, or (worse) simply fail to find Russian rules at all.
+  # M1 (fix round 2): DeepL sends codes like "EN-GB"; the lookup is case-sensitive and region-blind.
   def test_language_codes_are_normalised_before_reaching_pragmatic_segmenter
     text = "Проф. Иванов пришёл домой. Было поздно."
     expected = [0, "Проф. Иванов пришёл домой. ".length]
@@ -214,16 +168,7 @@ class PragmaticSegmenterTest < Minitest::Test
     end
   end
 
-  # An unrecognised code, once normalised, lands on the documented English
-  # fallback (DEFAULT_LANGUAGE) rather than silently on
-  # PragmaticSegmenter::Languages::Common. The Russian fixture used above
-  # cannot prove this: English and Common mis-segment it identically, so a
-  # test built on it would pass whether normalize_language worked or not.
-  # "Dr.Smith" does distinguish them -- English's cleaner disables its
-  # no-space-between-sentences abbreviation guard (it overrides
-  # PragmaticSegmenter::Languages::English::Cleaner#abbreviations to an
-  # empty list), so it inserts the missing space and splits; Common's does
-  # not, and keeps the run-on text as one sentence.
+  # "Dr.Smith" distinguishes English from Common fallback where the Russian fixture above cannot.
   def test_an_unrecognised_language_code_falls_back_to_english_rules
     text = "This ends here.Next sentence starts."
     offsets = @segmenter.split_offsets(text, language: "zz-nonsense")

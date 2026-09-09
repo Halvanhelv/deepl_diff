@@ -1,26 +1,13 @@
 # frozen_string_literal: true
 
-# Emits events to whatever the application configured as its instrumenter --
-# ActiveSupport::Notifications satisfies the interface as-is. When nothing is
-# configured, #instrument yields (if given a block) and returns, so call
-# sites never branch on whether instrumentation is on.
-#
-# Payloads carry counts, language codes and provider names. They never carry
-# the text being translated, its translation, or a credential: this library
-# handles other people's content, and an instrumenter usually writes
-# somewhere that content must not go.
+# Payloads carry counts, language codes and provider names -- never the text, its translation, or a credential.
 module TranslationDiff::Instrumentation
   SUFFIX = ".translation_diff"
 
-  # Both methods are private: they are internal plumbing for the class that
-  # includes this module, not part of its public surface. `include` ignores
-  # the includer's own `private` keyword, so the visibility has to be
-  # declared here.
+  # `include` ignores the includer's own `private` keyword, so visibility has to be declared here.
   private
 
-  # A point event (no block) reports a fact that already happened -- a cache
-  # hit/miss tally, say -- rather than wrapping work, so it only yields when
-  # a block was actually given.
+  # A point event (no block) reports a fact that already happened, e.g. a cache hit/miss tally.
   def instrument(name, payload = {})
     instrumenter = config.instrumenter
     return yield if instrumenter.nil? && block_given?

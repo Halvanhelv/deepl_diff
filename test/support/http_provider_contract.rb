@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
-# What every HTTP-backed provider must do, beyond the plain provider
-# contract. Including this requires the test to define #provider (built
-# against a Faraday test stub) and #config.
+# What every HTTP-backed provider must do; including this requires the test to define #provider and #config.
 module HTTPProviderContract
   def test_it_declares_an_api_base_that_is_a_url
     assert_match(%r{\Ahttps?://}, provider.api_base)

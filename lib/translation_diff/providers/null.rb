@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
-# Hands back what it was given. For tests, and for wiring a pipeline up
-# before a real provider is available.
+# Hands back what it was given -- for tests, and for wiring a pipeline up before a real provider is available.
 class TranslationDiff::Providers::Null < TranslationDiff::Provider
-  # Deliberately not detecting: detection is optional in the contract, and
-  # this is the provider that proves the optional branch works.
+  # Deliberately not detecting: this is the provider that proves the optional branch works.
   def self.capabilities
     TranslationDiff::Capabilities.new(
       max_request_size: 1_000_000, max_batch_size: 1_000_000, max_text_size: nil,

@@ -5,9 +5,7 @@ class TranslationDiff::Chunker
 
   Chunk = Struct.new(:texts, :escaped_size)
 
-  # No defaults. With one provider a default looks meaningful; with two it
-  # silently lies about the second, which is the class of bug this file
-  # already had once.
+  # No defaults: a default silently lies about the second provider, a bug this file already had once.
   def initialize(values, limit:, count_limit:)
     @values = values
     @limit = limit
@@ -43,9 +41,7 @@ class TranslationDiff::Chunker
       tail.texts.size >= count_limit
   end
 
-  # What the limit is about is the size of the request that goes over the
-  # wire, so every measurement here is of the escaped form. Mixing it with
-  # String#size lets a chunk of non-ASCII text run several times over.
+  # The limit is on wire size, so measure the escaped form -- String#size lets non-ASCII text run over.
   def escaped_size(text)
     CGI.escape(text).size
   end

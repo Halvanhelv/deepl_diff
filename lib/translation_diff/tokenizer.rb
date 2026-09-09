@@ -30,15 +30,7 @@ class TranslationDiff::Tokenizer < Ox::Sax
     start_markup(name)
   end
 
-  # Ox reports a comment, a doctype and a CDATA section as events of their
-  # own, each with its own byte position, and each needs a handler here.
-  # Without one the bytes it covers belong to no token: a leading comment
-  # disappears from the rebuilt string outright, and one in the middle of a
-  # sentence leaks its "<!" into the surrounding text token and hands the
-  # comment's own contents to the translation provider as prose.
-  #
-  # None of the three has a closing event, so none may be pushed onto
-  # @context the way #start_markup pushes an element.
+  # Without a handler here, a mid-sentence comment leaks "<!" and hands its own contents to the provider as prose.
   def comment(_value) = mark_markup
   def doctype(_value) = mark_markup
   def cdata(_value) = mark_markup
@@ -133,9 +125,7 @@ class TranslationDiff::Tokenizer < Ox::Sax
     value.encode("UTF-8", undef: :replace, invalid: :replace, replace: " ")
   end
 
-  # A node that opens and closes in one event. Inside a notranslate region
-  # it becomes :text for the same reason element markup does there: the
-  # whole region is handed to the provider as one unit.
+  # Inside a notranslate region this becomes :text: the whole region is handed to the provider as one unit.
   def mark_markup
     @sequence << (notranslate? ? :text : :markup)
     @indicies << (@pos - 1)

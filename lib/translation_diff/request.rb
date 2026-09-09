@@ -30,8 +30,7 @@ class TranslationDiff::Request
 
   attr_reader :values, :options, :to, :config
 
-  # The provider for this call: the `provider:` keyword when the caller gave
-  # one, otherwise whatever the configuration resolves to.
+  # The `provider:` keyword when the caller gave one, otherwise whatever the configuration resolves to.
   def api
     @api ||= (@provider.nil? ? config.provider_instance : resolve_provider(@provider))
              .tap { |provider| log("provider #{provider.class}") }
@@ -47,15 +46,12 @@ class TranslationDiff::Request
     @from ||= detect_language
   end
 
-  # A detected language arrives as a String while :to is usually a Symbol, so
-  # the two have to be compared on equal footing or the short circuit never
-  # fires and the text gets translated into its own language.
+  # A detected language is a String while :to is usually a Symbol -- without casecmp? this never short-circuits.
   def same_language?
     !to.nil? && from.to_s.casecmp?(to.to_s)
   end
 
-  # Covers values holding no translatable text at all: "", nil, an empty
-  # collection, or a scalar the tokenizer has nothing to say about.
+  # Covers "", nil, an empty collection, or a scalar the tokenizer has nothing to say about.
   def nothing_to_translate?
     text_tokens_texts.all?(&:empty?)
   end
@@ -70,34 +66,21 @@ class TranslationDiff::Request
     api.detect(text_tokens_texts.join(" ")[0..100])
   end
 
-  # Extracts flat text array
-  # => "Name", "<b>Good</b> boy"
-  #
-  # #values might be something like { name: "Name", bio: "<b>Good</b> boy" }
   def texts
     @texts ||= linearize(values)
   end
 
-  # Converts each array item to token list
-  # => [..., [["<b>", :markup], ["Good", :text], ...]]
   def tokens
     @tokens ||= texts.map do |value|
       TranslationDiff::Tokenizer.tokenize(value, segmenter: config.segmenter_instance, language: source_language)
     end
   end
 
-  # The segmenter's language, not the resolved one: `from` triggers
-  # auto-detection the first time it is called, and detection builds its
-  # sample from the segmented text, so asking `from` here would be circular.
-  # Only a language the caller actually passed is usable at this point --
-  # everything else genuinely doesn't know yet, and nil is the honest
-  # answer.
+  # Not the resolved `from`: detection builds its sample from the segmented text, so asking `from` here is circular.
   def source_language
     @from&.to_s
   end
 
-  # Extracts text tokens from token list
-  # => { ..., "1_1" => "Good", 1_3 => "Boy", ... }
   def text_tokens
     @text_tokens ||= extract_text_tokens.to_h
   end
@@ -110,15 +93,10 @@ class TranslationDiff::Request
     end
   end
 
-  # Extracts values from text tokens
-  # => [ ..., "Good", "Boy", ... ]
   def text_tokens_texts
     @text_tokens_texts ||= linearize(text_tokens).map(&:to_s).map(&:strip)
   end
 
-  # Splits things requires translations to per-request chunks
-  # (groups less 2k sym)
-  # => [[ ..., "Good", "Boy", ... ]]
   def chunks
     @chunks ||= TranslationDiff::Chunker.new(
       text_tokens_texts,
@@ -127,8 +105,6 @@ class TranslationDiff::Request
     ).call
   end
 
-  # Translates/loads from cache values from each chunk
-  # => [[ ..., "Horoshiy", "Malchik", ... ]]
   def chunks_translated
     @chunks_translated ||= chunks.map do |chunk|
       cached, missing = cache.cached_and_missing(chunk)
@@ -141,15 +117,11 @@ class TranslationDiff::Request
     end
   end
 
-  # Restores indexes for translated tokens
-  # => { ..., "1_1" => "Horoshiy", 1_3 => "Malchik", ... }
   def text_tokens_translated
     @text_tokens_translated ||=
       restore(text_tokens, chunks_translated.flatten)
   end
 
-  # Restores tokens translated + adds same spacing as in source token
-  # => [[..., [ "Horoshiy", :text ], ...]]
   # rubocop:disable-next Metrics/AbcSize
   def tokens_translated
     @tokens_translated ||= tokens.dup.tap do |tokens|
@@ -165,13 +137,10 @@ class TranslationDiff::Request
     TranslationDiff::Spacing.restore(source_value, value)
   end
 
-  # Restores texts from tokens
-  # [..., "<b>Horoshiy</b> Malchik", ...]
   def texts_translated
     @texts_translated ||= tokens_translated.map.with_index do |group, index|
       source = texts[index]
-      # Only strings are rebuilt from tokens. Anything else has no tokens to
-      # rebuild from; nil keeps collapsing to "" the way it always has.
+      # Only strings are rebuilt from tokens; nil keeps collapsing to "" the way it always has.
       next source unless source.nil? || source.is_a?(String)
 
       group.map { |value, type| type == :text ? value : fix_ascii(value) }.join
@@ -192,11 +161,7 @@ class TranslationDiff::Request
                                      characters: values.sum(&:size)) do
       api.translate(request)
     end
-    # Dup'd because Cache#store consumes this array destructively (#shift).
-    # A provider is free to hand back the very array it was given -- Null
-    # does with a fresh one, but nothing requires that -- and without the
-    # dup here, a provider or caller holding onto that reference would watch
-    # it drain to empty out from under them.
+    # Dup'd: Cache#store consumes this array destructively (#shift), and a provider may hand back its own array.
     response.texts.dup
   end
 
@@ -206,11 +171,7 @@ class TranslationDiff::Request
     )
   end
 
-  # A provider built through the registry is stamped with its name. An object
-  # assigned straight to `config.provider` never passed through the registry,
-  # so it has to supply this itself -- without it two providers' translations
-  # would share cache entries and a caller would be served the wrong service's
-  # answer.
+  # An object assigned straight to `config.provider` never passed through the registry's stamping.
   def provider_cache_key
     key = api.cache_key if api.respond_to?(:cache_key)
     return key unless key.nil? || key.to_s.strip.empty?
