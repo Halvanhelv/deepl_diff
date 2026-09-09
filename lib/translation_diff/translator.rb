@@ -25,6 +25,7 @@ class TranslationDiff::Translator
     passages = document.strings.map { |string| passage(string) }
     segments = passages.flat_map(&:segments).reject(&:empty?)
     return @values if segments.empty?
+    return @values if same_language?(@from)
 
     provider = resolve_provider
     from = source_language(provider, segments)
@@ -96,6 +97,7 @@ class TranslationDiff::Translator
   end
 
   # A detected language arrives as a String while `to:` is usually a Symbol, so neither type nor case can be assumed.
+  # A `from:` the caller gave settles this before a provider is resolved; a nil one cannot, and never matches.
   def same_language?(from) = from.to_s.casecmp?(@to.to_s)
 
   # The cache answers for what it has, the provider for the rest, and only what came back is written home.

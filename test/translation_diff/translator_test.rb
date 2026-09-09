@@ -304,6 +304,21 @@ class TranslatorTest < ConfiguredTest
     assert_equal 42, TranslationDiff::Translator.new(42, from: "en", to: "ru", provider: Object.new).call
   end
 
+  # A call that hands the caller's value straight back should not need a provider to do it: an app that has
+  # configured none at all still gets its value. Configured with something that is not a provider rather than
+  # left unset, so resolving one raises whatever the developer has in their environment.
+  def test_the_same_language_does_not_even_resolve_a_provider
+    TranslationDiff.configure { |c| c.provider = Object.new }
+
+    assert_equal "Hello", TranslationDiff::Translator.new("Hello", from: :ru, to: :ru).call
+  end
+
+  def test_a_value_with_nothing_to_translate_does_not_resolve_the_configured_provider_either
+    TranslationDiff.configure { |c| c.provider = Object.new }
+
+    assert_equal 42, TranslationDiff::Translator.new(42, from: "en", to: "ru").call
+  end
+
   def test_the_provider_is_logged_once_and_only_when_it_is_resolved
     logger = FakeLogger.new
     TranslationDiff.configure { |c| c.logger = logger }
