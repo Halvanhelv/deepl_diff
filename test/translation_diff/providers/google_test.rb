@@ -3,12 +3,14 @@
 require "test_helper"
 require "support/provider_contract"
 require "support/http_provider_contract"
+require "support/stubbed_provider"
 require "faraday"
 require "cgi"
 
 class GoogleProviderTest < Minitest::Test
   include ProviderContract
   include HTTPProviderContract
+  include StubbedProvider
 
   # A real response envelope, shaped from the Cloud Translation v2 REST
   # reference read 2026-09-09: translations live under a nested "data" key,
@@ -20,36 +22,26 @@ class GoogleProviderTest < Minitest::Test
     ] }
   }.freeze
 
-  attr_reader :config, :requests
+  attr_reader :config
 
   def setup
     TranslationDiff.reset!
     @config = TranslationDiff::Configuration.new
     @config.google_api_key = "test-key"
-    @requests = []
   end
 
-  # Builds a provider whose connection answers from a stub and records what
-  # was sent, so a test can assert on the payload as well as the parse.
-  #
-  # When neither `body:` nor `texts:` is given, the stub echoes back
-  # whatever texts were actually sent (rather than a fixed pair), so the
-  # shared ProviderContract tests -- which call `provider` with no
-  # knowledge of how many texts they are about to send -- get a response
-  # the same size as their request instead of tripping Response.build's
-  # count check.
-  def provider(body: nil, status: 200, texts: nil)
-    stubs = stub_translate(body: body, status: status, texts: texts)
-    built = TranslationDiff::Providers::Google.new(config)
-    built.name = :google
-    built.instance_variable_set(:@connection, built.send(:build_connection) do |faraday|
-      faraday.adapter :test, stubs
-    end)
-    built
-  end
+  def provider_class = TranslationDiff::Providers::Google
 
-  def sent = JSON.parse(requests.first.body)
-  def query = CGI.parse(requests.first.url.query.to_s)
+  # When `body:` is left nil, the stub echoes back whatever texts were
+  # actually sent (rather than a fixed pair), so the shared ProviderContract
+  # tests -- which call `provider` with no knowledge of how many texts they
+  # are about to send -- get a response the same size as their request
+  # instead of tripping Response.build's count check. The content type
+  # matches what Cloud Translation v2 actually sends.
+  def provider(body: nil, status: 200, headers: { "Content-Type" => "application/json; charset=UTF-8" })
+    stub_provider(route: "/language/translate/v2", body: body || method(:echo_translations),
+                  status: status, headers: headers, name: :google)
+  end
 
   def test_the_key_travels_in_the_query_string
     provider.translate(translation_request(%w[one]))
@@ -150,26 +142,9 @@ class GoogleProviderTest < Minitest::Test
 
   private
 
-  def stub_translate(body:, status:, texts:)
-    recorder = @requests
-    Faraday::Adapter::Test::Stubs.new do |stub|
-      stub.post("/language/translate/v2") do |env|
-        # Faraday's test adapter reuses this env for the response, mutating
-        # its body in place once the block returns -- capture a copy now or
-        # every read after #translate returns sees the reply, not the
-        # request.
-        recorder << env.dup
-        [status, { "Content-Type" => "application/json; charset=UTF-8" },
-         translate_response(body, texts, env).to_json]
-      end
-    end
-  end
-
-  def translate_response(body, texts, env)
-    return body if body
-
-    response_texts = texts || JSON.parse(env.body)["q"]
-    translations = response_texts.map { |t| { "translatedText" => t, "detectedSourceLanguage" => "en" } }
+  def echo_translations(env)
+    texts = JSON.parse(env.body)["q"]
+    translations = texts.map { |t| { "translatedText" => t, "detectedSourceLanguage" => "en" } }
     { "data" => { "translations" => translations } }
   end
 end

@@ -3,11 +3,13 @@
 require "test_helper"
 require "support/provider_contract"
 require "support/http_provider_contract"
+require "support/stubbed_provider"
 require "faraday"
 
 class DeepLProviderTest < Minitest::Test
   include ProviderContract
   include HTTPProviderContract
+  include StubbedProvider
 
   # A real response body, captured from api-free.deepl.com on 2026-09-09.
   TRANSLATE_BODY = {
@@ -17,35 +19,25 @@ class DeepLProviderTest < Minitest::Test
     ]
   }.freeze
 
-  attr_reader :config, :requests
+  attr_reader :config
 
   def setup
     TranslationDiff.reset!
     @config = TranslationDiff::Configuration.new
     @config.deepl_api_key = "test-key:fx"
-    @requests = []
   end
 
-  # Builds a provider whose connection answers from a stub and records what
-  # was sent, so a test can assert on the payload as well as the parse.
-  #
-  # When neither `body:` nor `texts:` is given, the stub echoes back
-  # whatever texts were actually sent (rather than a fixed pair), so the
-  # shared ProviderContract tests -- which call `provider` with no
-  # knowledge of how many texts they are about to send -- get a response
-  # the same size as their request instead of tripping Response.build's
-  # count check.
-  def provider(body: nil, status: 200, texts: nil)
-    stubs = stub_translate(body: body, status: status, texts: texts)
-    built = TranslationDiff::Providers::DeepL.new(config)
-    built.name = :deepl
-    built.instance_variable_set(:@connection, built.send(:build_connection) do |faraday|
-      faraday.adapter :test, stubs
-    end)
-    built
-  end
+  def provider_class = TranslationDiff::Providers::DeepL
 
-  def sent = JSON.parse(requests.first.body)
+  # When `body:` is left nil, the stub echoes back whatever texts were
+  # actually sent (rather than a fixed pair), so the shared ProviderContract
+  # tests -- which call `provider` with no knowledge of how many texts they
+  # are about to send -- get a response the same size as their request
+  # instead of tripping Response.build's count check.
+  def provider(body: nil, status: 200, headers: {})
+    stub_provider(route: "/v2/translate", body: body || method(:echo_translations),
+                  status: status, headers: headers, name: :deepl)
+  end
 
   def test_a_free_key_selects_the_free_host
     assert_equal "https://api-free.deepl.com", TranslationDiff::Providers::DeepL.new(config).api_base
@@ -141,9 +133,10 @@ class DeepLProviderTest < Minitest::Test
 
   # DeepL has no detection endpoint, so it detects by translating a sample
   # and reading what it says the source was. #detect sends exactly one
-  # text, so the stub is given exactly one text to echo back.
+  # text, and the stub echoes it back, so the count matches without an
+  # override.
   def test_detect_returns_the_language_deepl_reports
-    assert_equal "en", provider(texts: %w[x]).detect("something")
+    assert_equal "en", provider.detect("something")
   end
 
   def test_its_batch_limit_is_deepls_documented_fifty
@@ -161,24 +154,8 @@ class DeepLProviderTest < Minitest::Test
 
   private
 
-  def stub_translate(body:, status:, texts:)
-    recorder = @requests
-    Faraday::Adapter::Test::Stubs.new do |stub|
-      stub.post("/v2/translate") do |env|
-        # Faraday's test adapter reuses this env for the response, mutating
-        # its body in place once the block returns -- capture a copy now or
-        # every read after #translate returns sees the reply, not the
-        # request.
-        recorder << env.dup
-        [status, { "Content-Type" => "application/json" }, translate_response(body, texts, env).to_json]
-      end
-    end
-  end
-
-  def translate_response(body, texts, env)
-    return body if body
-
-    response_texts = texts || JSON.parse(env.body)["text"]
-    { "translations" => response_texts.map { |t| { "text" => t, "detected_source_language" => "EN" } } }
+  def echo_translations(env)
+    texts = JSON.parse(env.body)["text"]
+    { "translations" => texts.map { |t| { "text" => t, "detected_source_language" => "EN" } } }
   end
 end
