@@ -123,4 +123,21 @@ class HTTPProviderTest < Minitest::Test
 
     assert_equal "1", connection.headers["X-Echo"]
   end
+
+  def test_it_decodes_a_json_body_without_faradays_middleware
+    provider = provider_for(status: 200, body: { "translations" => %w[один] }.to_json,
+                            headers: { "Content-Type" => "application/json" })
+
+    assert_equal %w[один], provider.translate(request).texts
+  end
+
+  # An error page from a proxy is HTML, and the error path must survive it.
+  def test_a_non_json_error_body_still_produces_the_mapped_error
+    provider = provider_for(status: 500, body: "<html>gateway</html>",
+                            headers: { "Content-Type" => "text/html" })
+
+    error = assert_raises(TranslationDiff::ServiceError) { provider.translate(request) }
+
+    assert_match(/gateway/, error.message)
+  end
 end

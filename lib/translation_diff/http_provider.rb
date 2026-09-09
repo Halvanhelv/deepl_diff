@@ -2,6 +2,7 @@
 
 require "faraday"
 require "faraday/retry"
+require "json"
 
 # Every provider reached over HTTP inherits this. It owns one Faraday
 # connection and turns HTTP status codes into this library's errors, so a
@@ -44,8 +45,16 @@ class TranslationDiff::HTTPProvider < TranslationDiff::Provider
 
   private
 
+  # What #post hands back: a decoded body next to the headers it arrived
+  # with, so #raise_for_status! and a subclass's #parse_translate_response
+  # both see the same shape a Faraday::Response would have given them had
+  # its own JSON middleware still been in the stack.
+  Decoded = Data.define(:status, :headers, :body)
+  private_constant :Decoded
+
   def post(url, payload)
-    response = connection.post(url, payload)
+    raw = connection.post(url, payload)
+    response = Decoded.new(status: raw.status, headers: raw.headers, body: decode(raw))
     raise_for_status!(response)
     response
   rescue *TRANSPORT_FAILURES => e
@@ -54,6 +63,24 @@ class TranslationDiff::HTTPProvider < TranslationDiff::Provider
     raise TranslationDiff::TransportError, "#{self.class}: #{e.class}: #{e.message}"
   end
 
+  # Faraday's response-JSON middleware passes parser options positionally,
+  # which json 3 removed -- and json 3 is the default gem on Ruby 4.x, so
+  # relying on that middleware would break this library for most modern
+  # applications. Decoding here costs one call and depends on nothing.
+  def decode(response)
+    body = response.body
+    return body unless body.is_a?(String)
+    return body if body.strip.empty?
+    return body unless json?(response)
+
+    JSON.parse(body)
+  rescue JSON::ParserError => e
+    raise TranslationDiff::ResponseError,
+          "#{self.class} returned a body that is not JSON: #{e.message[0, 200]}"
+  end
+
+  def json?(response) = response.headers["content-type"].to_s.match?(/\bjson\b/)
+
   # The block is how a test swaps in Faraday's test adapter. Amazon overrides
   # this with the same signature, because its signature covers the body
   # exactly as sent and a JSON request middleware would re-encode it.
@@ -61,7 +88,6 @@ class TranslationDiff::HTTPProvider < TranslationDiff::Provider
     Faraday.new(url: api_base, headers: headers) do |faraday|
       faraday.request :json
       faraday.request :retry, retry_options
-      faraday.response :json, content_type: /\bjson$/
       adapt(faraday, &block)
       apply_timeouts(faraday)
     end
