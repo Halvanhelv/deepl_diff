@@ -60,8 +60,12 @@ class TranslationDiff::Request
     text_tokens_texts.all?(&:empty?)
   end
 
+  def capabilities = api.class.capabilities
+
   def detect_language
-    raise Error, "Pass from: -- #{api.class} cannot detect the source language" unless api.respond_to?(:detect)
+    unless capabilities.detects_language?
+      raise Error, "Pass from: -- provider #{provider_cache_key} cannot detect the source language"
+    end
 
     api.detect(text_tokens_texts.join(" ")[0..100])
   end
@@ -118,8 +122,8 @@ class TranslationDiff::Request
   def chunks
     @chunks ||= TranslationDiff::Chunker.new(
       text_tokens_texts,
-      limit: api.max_request_size,
-      count_limit: api.max_batch_size
+      limit: capabilities.max_request_size,
+      count_limit: capabilities.max_batch_size
     ).call
   end
 
@@ -181,17 +185,19 @@ class TranslationDiff::Request
 
   def call_api(values)
     check_rate_limit(values)
-    translations = instrument("request", provider: provider_cache_key,
-                                         batch: values.size,
-                                         characters: values.sum(&:size)) do
-      api.translate(values, from: from, to: to, **options)
+    request = TranslationDiff::Translation::Request.new(
+      texts: values, from: from, to: to, options: options
+    )
+    response = instrument("request", provider: provider_cache_key, batch: values.size,
+                                     characters: values.sum(&:size)) do
+      api.translate(request)
     end
-    return translations if translations.size == values.size
-
-    # Letting a short response through means shifting nils into the results,
-    # which surfaces much later as a NoMethodError far from the cause.
-    raise Error,
-          "Provider returned #{translations.size} translations for #{values.size} values"
+    # Dup'd because Cache#store consumes this array destructively (#shift).
+    # A provider is free to hand back the very array it was given -- Null
+    # does with a fresh one, but nothing requires that -- and without the
+    # dup here, a provider or caller holding onto that reference would watch
+    # it drain to empty out from under them.
+    response.texts.dup
   end
 
   def cache

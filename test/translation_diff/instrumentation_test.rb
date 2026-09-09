@@ -23,25 +23,11 @@ class InstrumentationTest < ConfiguredTest
     def check(_size) = nil
   end
 
-  # TranslationDiff::Providers::Null now speaks Translation::Request/Response
-  # (provider-transport work); request.rb still calls a provider the old way
-  # and is migrated onto the new contract in a later task. This double keeps
-  # that old shape -- and the "null" cache key the assertions below check --
-  # so this file can keep exercising the instrumentation pipeline without
-  # touching request.rb.
-  class NullDouble
-    # rubocop:disable-next Lint/UnusedMethodArgument
-    def translate(texts, from:, to:, **_options) = texts
-    def max_request_size = 1_000_000
-    def max_batch_size = 1_000_000
-    def cache_key = "null"
-  end
-
   def setup
     super
     @recorder = Recorder.new
     TranslationDiff.configure do |c|
-      c.provider = NullDouble.new
+      c.provider = :null
       # Pinned so a developer with REDIS_URL set does not have these tests
       # resolve the Redis store and open a real socket -- the same reason
       # context_test.rb pins it. It weakens no assertion here.

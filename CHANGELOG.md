@@ -75,6 +75,22 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
   configured above 600 seconds is enforced over 600 seconds instead -- up to
   six times more eager than the configuration reads. Keep `rate_interval`
   within that range, or expect a tighter effective window than configured.
+- Providers must inherit `TranslationDiff::Provider`. A duck-typed object is
+  no longer accepted: the base class supplies the transport, the
+  configuration check and the capability defaults, and a provider without
+  them is a provider that fails in the ways this library has already been
+  bitten by twice.
+- `provider.translate(texts, from:, to:, **options)` is now
+  `provider.translate(request)`, taking a `Translation::Request` and
+  returning a `Translation::Response`. The response carries the detected
+  source language and, where the provider reports it, the characters billed.
+- `max_request_size` and `max_batch_size` move from provider methods to
+  `Capabilities`.
+- `TranslationDiff::Providers::Naming` is gone; the registry stamps
+  `cache_key` and `Provider` implements it.
+- `deepl-rb` and `google-cloud-translate-v2` are no longer used at all.
+  `faraday` and `faraday-retry` become runtime dependencies; `aws-sigv4` is
+  required lazily by the Amazon provider only.
 
 ### Removed
 
@@ -181,6 +197,22 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
   told apart by an argument's value. A provider with no `detect` makes
   `from:` required and raises a clear error when it is missing, instead of
   `NoMethodError`.
+- Four new providers: `TranslationDiff::Providers::Azure` (`:azure`),
+  `TranslationDiff::Providers::ModernMT` (`:modernmt`),
+  `TranslationDiff::Providers::LibreTranslate` (`:libretranslate`), and
+  `TranslationDiff::Providers::Amazon` (`:amazon`), Amazon Translate, signed
+  with `aws-sigv4` rather than headed. Every provider's limits, HTML
+  support, `notranslate` handling, detection and billing reporting are
+  declared through `Capabilities` and measured against the vendor rather
+  than assumed -- see the provider table in the README.
+- An error hierarchy for everything a provider's transport can do wrong:
+  `TranslationDiff::ConfigurationError`, `TranslationDiff::ProviderError`
+  (and its `AuthenticationError`, `QuotaExceededError`,
+  `InvalidRequestError`, `ServiceError` and `RateLimitError` subclasses),
+  `TranslationDiff::TransportError`, `TranslationDiff::ResponseError` and
+  `TranslationDiff::InvalidProviderError`, all under `TranslationDiff::Error`.
+- `config.open_timeout`, `config.timeout` and `config.max_retries`, read by
+  every HTTP provider's connection and retry policy.
 
 ### Changed
 
@@ -218,6 +250,9 @@ described below. Everything here is relative to `deepl_diff` 2.2.0.
   first check, and raises `TranslationDiff::Error` naming the gem to add
   when it is missing. Previously the bare constant surfaced a raw
   `NameError` instead of the message the Redis path already raises.
+- DeepL's batch limit was declared as 300 sentences per request; DeepL
+  documents 50. The request-size limit (1,700 escaped characters) was
+  already correct and is unchanged.
 
 ## [2.2.0] - 2026-09-07
 

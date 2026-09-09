@@ -3,22 +3,32 @@
 require "test_helper"
 
 class RequestTest < ConfiguredTest
-  # A minimal adapter. Records what it was asked to translate so the call
-  # can be asserted on, and answers with a canned response.
-  class FakeApi
-    attr_reader :calls, :max_request_size, :max_batch_size
+  # A minimal provider. Records what it was asked to translate so the call
+  # can be asserted on, and answers with a canned response. Detects a
+  # language when told to, so it can stand in for both a detecting and a
+  # non-detecting provider depending on which test needs which.
+  class FakeApi < TranslationDiff::Provider
+    CAPABILITIES = TranslationDiff::Capabilities.new(
+      max_request_size: 1_000_000, max_batch_size: 1_000_000, max_text_size: nil,
+      html: :none, notranslate: false, detects_language: true, reports_billing: false
+    ).freeze
 
-    def initialize(response, detected: nil, max_request_size: 1_000_000, max_batch_size: 1_000_000)
+    def self.capabilities = CAPABILITIES
+
+    attr_reader :calls
+
+    def initialize(response, detected: nil)
+      super(TranslationDiff::Configuration.new)
       @response = response
       @detected = detected
-      @max_request_size = max_request_size
-      @max_batch_size = max_batch_size
       @calls = []
     end
 
-    def translate(texts, from:, to:, **options)
-      @calls << [texts, from, to, options]
-      @response.shift(texts.size)
+    def translate(request)
+      @calls << [request.texts, request.from, request.to, request.options]
+      TranslationDiff::Translation::Response.build(
+        request: request, texts: @response.shift(request.texts.size)
+      )
     end
 
     def detect(text)
@@ -29,34 +39,31 @@ class RequestTest < ConfiguredTest
     def cache_key = "fake"
   end
 
-  # request.rb still asks `respond_to?(:detect)` to learn whether a provider
-  # can detect a source language -- the capability this library now expresses
-  # through Capabilities#detects_language? for anything built as a
-  # TranslationDiff::Provider. TranslationDiff::Providers::Null moved onto
-  # that base class (provider-transport work) and, like every Provider,
-  # always defines #detect (raising NotImplementedError), so it no longer
-  # answers `respond_to?(:detect)` honestly for this still-old pipeline. This
-  # double keeps the pre-migration shape -- no #detect at all -- so this file
-  # can keep testing request.rb's own "cannot detect" guard without touching
-  # request.rb itself.
-  class NonDetectingApi
-    # rubocop:disable-next Lint/UnusedMethodArgument
-    def translate(texts, from:, to:, **_options) = texts
-    def max_request_size = 1_000_000
-    def max_batch_size = 1_000_000
-    def cache_key = "null"
+  # Proves the generalisation took effect: a provider whose declared
+  # capabilities cap the batch at one text per request must change the
+  # chunking, not merely be asked to.
+  class NarrowBatchApi < FakeApi
+    def self.capabilities
+      TranslationDiff::Capabilities.new(
+        max_request_size: 1_000_000, max_batch_size: 1, max_text_size: nil,
+        html: :none, notranslate: false, detects_language: true, reports_billing: false
+      )
+    end
   end
 
-  # Same rationale as NonDetectingApi: a Provider built through the registry
-  # now speaks Translation::Request/Response, which request.rb does not call
-  # yet. This double is registered under :echo so
+  # Registered under :echo so
   # test_the_provider_keyword_overrides_the_configured_provider_for_one_call
-  # can still exercise resolving a provider by name through the registry.
+  # can exercise resolving a provider by name through the registry.
   class EchoProvider < TranslationDiff::Provider
-    # rubocop:disable-next Lint/UnusedMethodArgument
-    def translate(texts, from:, to:, **_options) = texts
-    def max_request_size = 1_000_000
-    def max_batch_size = 1_000_000
+    def self.capabilities
+      TranslationDiff::Capabilities.new(
+        max_request_size: 1_000_000, max_batch_size: 1_000_000, max_text_size: nil,
+        html: :none, notranslate: false, detects_language: false, reports_billing: false
+      )
+    end
+
+    def translate(request) = TranslationDiff::Translation::Response.build(request: request, texts: request.texts)
+
     def cache_key = "echo"
   end
   TranslationDiff::Providers.register(:echo, EchoProvider) unless TranslationDiff::Providers.registered?(:echo)
@@ -80,8 +87,7 @@ class RequestTest < ConfiguredTest
 
   # A provider object assigned straight to `config.provider` never passed
   # through the registry, so nothing stamped it with a name. This one defines
-  # its own #cache_key and returns an empty segment from it, which is the case
-  # TranslationDiff::Providers::Naming cannot catch.
+  # its own #cache_key and returns an empty segment from it.
   class NamelessApi < FakeApi
     def cache_key = ""
   end
@@ -194,20 +200,60 @@ class RequestTest < ConfiguredTest
     assert_equal [[:detect, "привет"]], api.calls
   end
 
-  def test_raises_when_from_is_missing_and_the_adapter_cannot_detect
-    configure_with(NonDetectingApi.new)
+  # Chunker's limits used to come from two provider methods. They now come
+  # from the declared capabilities, which is the only place a new provider
+  # states them.
+  # rubocop:disable-next Metrics/AbcSize, Metrics/MethodLength
+  def test_chunking_uses_the_providers_declared_capabilities
+    narrow = Class.new(TranslationDiff::Provider) do
+      def self.capabilities
+        TranslationDiff::Capabilities.new(
+          max_request_size: 20, max_batch_size: 1, max_text_size: nil,
+          html: :none, notranslate: false, detects_language: false, reports_billing: false
+        )
+      end
 
+      attr_reader :batches
+
+      def initialize(config)
+        super
+        @batches = []
+      end
+
+      def translate(request)
+        @batches << request.texts
+        TranslationDiff::Translation::Response.build(request: request, texts: request.texts)
+      end
+
+      def cache_key = "narrow"
+    end
+
+    provider = narrow.new(TranslationDiff::Configuration.new)
+    TranslationDiff.translate("One. Two. Three.", from: "en", to: "ru", provider: provider)
+
+    assert(provider.batches.all? { |batch| batch.size == 1 },
+           "expected one text per request, got #{provider.batches.inspect}")
+  end
+
+  # The old check was `respond_to?(:detect)`, which a provider could satisfy
+  # by inheriting the base class's raising stub.
+  def test_a_provider_that_cannot_detect_says_so_before_it_is_called
     error = assert_raises(TranslationDiff::Request::Error) do
-      TranslationDiff::Request.new("text", to: :ru).call
+      TranslationDiff.translate("Some text.", to: "ru", provider: :null)
     end
 
     assert_match(/cannot detect/, error.message)
+    assert_match(/null/, error.message)
   end
 
+  # The count check used to live in Request#call_api. It now lives in
+  # Translation::Response.build, which is why the error is a ResponseError
+  # rather than a Request::Error: it holds for every provider, including one
+  # that overrides #translate outright instead of using the HTTP seams.
   def test_raises_when_the_api_returns_fewer_translations_than_asked_for
     configure_with(FakeApi.new(%w[Один]))
 
-    error = assert_raises(TranslationDiff::Request::Error) do
+    error = assert_raises(TranslationDiff::ResponseError) do
       TranslationDiff::Request.new({ a: "One", b: "Two" }, from: :en, to: :ru).call
     end
 
@@ -246,9 +292,9 @@ class RequestTest < ConfiguredTest
   end
 
   # Proves the generalisation took effect rather than merely being
-  # described: an adapter declaring tiny limits must change the batching.
+  # described: a provider declaring tiny limits must change the batching.
   def test_batches_according_to_the_limits_the_adapter_declares
-    api = FakeApi.new(%w[Один Два], max_batch_size: 1)
+    api = NarrowBatchApi.new(%w[Один Два])
     configure_with(api)
 
     TranslationDiff::Request.new({ a: "One", b: "Two" }, from: :en, to: :ru).call
