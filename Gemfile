@@ -1,14 +1,6 @@
-# frozen_string_literal: true
-
 source "https://rubygems.org"
 
 gemspec
-
-# Not a runtime dependency of the gem (see the gemspec) -- the DeepL
-# provider requires it lazily at build time. It is only here so the test
-# suite, which exercises that provider against the real deepl-rb objects,
-# has it available.
-gem "deepl-rb", "~> 3.9", require: false
 
 # Not runtime dependencies of the gem (see the gemspec) -- Configuration#
 # redis_pool requires them lazily, and RedisCacheStore/RedisRateLimiter
@@ -26,9 +18,16 @@ gem "redis-namespace", "~> 1.11", require: false
 # stand-in, has it available.
 gem "ratelimit", "~> 1.1", require: false
 
-# Not a runtime dependency of the gem (see the gemspec) -- the Google
-# provider requires it lazily at build time, so an application using DeepL
-# never needs it installed. It is only here so the test suite, which
-# exercises that provider's build path against the real
-# Google::Cloud::Translate::V2 objects, has it available.
-gem "google-cloud-translate-v2", "~> 1.2", require: false
+# Not a runtime dependency of the gem (see the gemspec) -- lib/ only ever
+# needs CGI.escape, which cgi/escape (in Ruby's default load path) still
+# provides. This is here because the Google provider's test decodes the
+# query string it sent, and Ruby 4.0 removed CGI.parse from the default
+# load path; "install cgi gem" is Ruby's own suggested fix.
+gem "cgi", "~> 0.5", require: false
+
+# Not a runtime dependency of the gem (see the gemspec) -- the Amazon
+# provider requires it lazily when it signs its first request, so an
+# application using another provider never needs it installed. It is here so
+# the test suite, which signs against the real library rather than a
+# stand-in, has it available.
+gem "aws-sigv4", "~> 1.12", require: false

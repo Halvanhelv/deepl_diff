@@ -1,16 +1,12 @@
-# frozen_string_literal: true
-
 class TranslationDiff::RedisRateLimiter
   class RateLimitExceeded < TranslationDiff::Error; end
 
   DEFAULT_THRESHOLD = 8000
   DEFAULT_INTERVAL = 60
-  DEFAULT_NAMESPACE = "translation-diff"
+  DEFAULT_NAMESPACE = "translation-diff".freeze
 
-  # Ratelimit counts per subject. This library limits the provider as a
-  # whole rather than per caller, so there is exactly one subject and it
-  # only has to be stable.
-  SUBJECT = "call"
+  # This library limits the provider as a whole rather than per caller, so there is exactly one subject.
+  SUBJECT = "call".freeze
 
   def self.build(config)
     new(config.redis_pool,
@@ -19,8 +15,7 @@ class TranslationDiff::RedisRateLimiter
         namespace: config.cache_namespace)
   end
 
-  # `connection_pool` is anything answering to #with, and what it yields is
-  # anything Ratelimit accepts. Neither gem is a dependency of this one.
+  # `connection_pool` is duck-typed to #with; neither connection_pool nor ratelimit is a hard dependency.
   def initialize(connection_pool,
                  threshold: DEFAULT_THRESHOLD,
                  interval: DEFAULT_INTERVAL,
@@ -46,11 +41,7 @@ class TranslationDiff::RedisRateLimiter
 
   attr_reader :connection_pool, :threshold, :interval, :namespace
 
-  # `ratelimit` is not a dependency of this gem, so it is required here, at
-  # the first check, rather than at load time -- an application that
-  # configures no `rate_limit` never needs it installed. Naming the bare
-  # constant instead surfaced its absence as a raw NameError; this raises the
-  # same "add this gem" TranslationDiff::Error the Redis path already does.
+  # Required at first check, not load time; naming the bare constant instead would raise a raw NameError.
   def ratelimit_class
     require "ratelimit"
     ::Ratelimit

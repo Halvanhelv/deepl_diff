@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "test_helper"
 
 class ContextTest < Minitest::Test
@@ -7,8 +5,7 @@ class ContextTest < Minitest::Test
     TranslationDiff.reset!
     TranslationDiff.configure do |c|
       c.provider = :null
-      # Pinned rather than left to the default so a developer with REDIS_URL
-      # set in their environment does not have these tests reach for a socket.
+      # Pinned so a developer with REDIS_URL set doesn't have these tests reach for a socket.
       c.cache = :memory
     end
   end
@@ -42,7 +39,9 @@ class ContextTest < Minitest::Test
   end
 
   def test_a_context_translates_through_its_own_configuration
-    context = TranslationDiff.context { |c| c.provider = :null }
+    context = TranslationDiff.context do |c|
+      c.provider = TranslationDiff::Providers::Null.new(TranslationDiff::Configuration.new)
+    end
 
     assert_equal "Hello.", context.translate("Hello.", from: "en", to: "ru")
   end

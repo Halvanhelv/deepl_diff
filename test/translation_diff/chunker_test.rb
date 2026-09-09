@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "test_helper"
 
 class ChunkerTest < Minitest::Test
@@ -8,7 +6,7 @@ class ChunkerTest < Minitest::Test
 
   LONG = "a" * 10
   MEDIUM = "a" * 7
-  SHORT = "x"
+  SHORT = "x".freeze
   OVERSIZED = "a" * 30
 
   CASES = {
@@ -42,14 +40,11 @@ class ChunkerTest < Minitest::Test
     assert_match(/Too long part/, error.message)
   end
 
-  # The limit is about the size of the request that goes over the wire, and
-  # CGI.escape inflates Cyrillic sixfold. Measuring the raw String#size
-  # anywhere here let chunks of non-ASCII text run several times over.
+  # CGI.escape inflates Cyrillic sixfold; measuring raw String#size let chunks of non-ASCII text run over.
   def test_measures_non_ascii_values_by_their_escaped_size
     value = "я" * 3
 
-    # Three characters raw, eighteen escaped. Measured raw, both values fit
-    # in one chunk of 20; measured as sent, they cannot.
+    # Measured raw, both values fit in one chunk of 20; measured as sent, they cannot.
     assert_equal 3, value.size
     assert_equal 18, CGI.escape(value).size
     assert_equal [[value], [value]], chunk([value, value])

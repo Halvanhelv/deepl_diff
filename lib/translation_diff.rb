@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "cgi/escape"
 require "digest/md5"
 require "forwardable"
@@ -9,14 +7,27 @@ require "ox"
 
 require "translation_diff/version"
 require "translation_diff/error"
+require "translation_diff/errors"
+require "translation_diff/capabilities"
+require "translation_diff/translation/usage"
+require "translation_diff/translation/request"
+require "translation_diff/translation/response"
 require "translation_diff/registry"
 require "translation_diff/configuration"
 require "translation_diff/configuration/provider_option_owners"
 
+require "translation_diff/provider"
+require "translation_diff/http_provider"
 require "translation_diff/providers"
 require "translation_diff/providers/null"
+
 require "translation_diff/providers/deepl"
 require "translation_diff/providers/google"
+require "translation_diff/providers/azure"
+require "translation_diff/providers/modernmt"
+require "translation_diff/providers/libretranslate"
+require "translation_diff/providers/amazon"
+
 require "translation_diff/segmenters"
 require "translation_diff/segmenters/simple"
 require "translation_diff/segmenters/pragmatic"
@@ -39,20 +50,13 @@ module TranslationDiff
 
     def configure = yield(config)
 
-    # Tests need this, and without it one test's configuration leaks into
-    # every test that runs after it.
+    # Without this, one test's configuration leaks into every test that runs after it.
     def reset! = @config = nil
 
-    # An isolated copy of the configuration with the same entry point, for
-    # per-tenant or per-request settings. The global configuration is left
-    # alone.
-    #
-    #   tenant = TranslationDiff.context { |c| c.deepl_api_key = key }
-    #   tenant.translate("Hello.", from: "en", to: "ru")
+    # An isolated copy of the configuration with the same entry point, for per-tenant settings.
     def context(&) = Context.new(config.copy.tap(&))
 
-    # `provider:` and `config:` are reserved; every other keyword is
-    # forwarded to the provider untouched.
+    # `provider:` and `config:` are reserved; every other keyword is forwarded to the provider.
     def translate(values, from: nil, to: nil, provider: nil, **)
       Request.new(values, from: from, to: to, provider: provider, config: config, **).call
     end

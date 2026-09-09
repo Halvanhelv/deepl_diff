@@ -1,100 +1,52 @@
-# frozen_string_literal: true
+# Talks to Cloud Translation v2 directly, not google-cloud-translate-v2, which pulled in grpc for one POST.
+class TranslationDiff::Providers::Google < TranslationDiff::HTTPProvider
+  HOST = "https://translation.googleapis.com".freeze
 
-# Talks to Google Cloud Translation v2 (Basic) through the API object the
-# google-cloud-translate-v2 gem builds, rather than its module-level
-# shortcuts, so this library never mutates another gem's global state. Two
-# behaviours come for free by using their constructor: it reads TRANSLATE_KEY
-# and GOOGLE_CLOUD_KEY when no key is given, and it falls back to application
-# default credentials when there is no key at all.
-#
-# google-cloud-translate-v2 is not a dependency of this gem. It is required
-# at build time, so an application using a different provider never needs it
-# installed.
-class TranslationDiff::Providers::Google
-  # Google's own numbers. The batch limit is a hard one -- "the maximum
-  # number of strings is 128" -- and a larger request is rejected outright.
-  # The size limit is the documented recommendation of 5K characters per
-  # request, well under the hard 100K-byte ceiling. Chunker measures the
-  # URL-escaped form, which is never smaller than the UTF-8 byte count, so
-  # staying under this in escaped characters keeps every request under it in
-  # bytes too.
-  MAX_REQUEST_SIZE = 5_000
-  MAX_BATCH_SIZE = 128
-
-  # What arrives here is not plain text, despite having been through the
-  # Tokenizer. A notranslate span is handed over whole, tags included --
-  # that is how the tokenizer marks content the provider must leave alone --
-  # and HTML entities such as `&amp;` stay in the text it emits. Asking
-  # Google for `text` makes it translate the protected span and drop the
-  # markup around it entirely:
-  #
-  #   "<span class='notranslate'>Bold Mountain</span> is a good place."
-  #   format: text  -> "Болд Маунтин — хорошее место."
-  #   format: html  -> "<span class='notranslate'>Bold Mountain</span> — хорошее место."
-  #
-  # So `html` it is, which is also what this gem sent for its whole life
-  # before the provider seam existed. The cost is that Google escapes its
-  # own output -- a literal apostrophe returns as "&#39;" -- which is
-  # correct inside the HTML fragment these values usually are, and noise
-  # inside a value that never had markup in it. A caller translating bare
-  # strings can pass `format: :text` per call.
+  # Verified against the live API: `text` format translates the protected span and drops its markup.
   DEFAULT_FORMAT = :html
 
-  # A bare alphabetic code is downcased, so a configuration written for
-  # DeepL ("EN") keeps working against Google, whose codes are lowercase.
-  # Anything else is passed through untouched: "zh-Hans", "zh-CN" and
-  # "pt-BR" carry script and region subtags whose casing is their own, and a
-  # blanket downcase would corrupt them.
-  BARE_LANGUAGE_CODE = /\A[A-Za-z]{2,3}\z/
-
-  def self.configuration_options = %i[google_api_key google_project_id]
-
-  # `config.logger` is deliberately not forwarded: the gem takes no logger,
-  # and this library's own guarantee -- that no line it writes holds source
-  # text, translated text or a credential -- is easiest to keep by never
-  # handing the logger to a gem that has not made the same promise.
-  def self.build(config)
-    require "google/cloud/translate/v2"
-
-    settings = { key: config.google_api_key, project_id: config.google_project_id }.compact
-    new(::Google::Cloud::Translate::V2.new(**settings))
-  rescue LoadError
-    raise TranslationDiff::Error,
-          "provider is :google but the `google-cloud-translate-v2` gem is not available. " \
-          'Add `gem "google-cloud-translate-v2"` to your Gemfile.'
+  # Google's documented limits: 128 strings/request, 5,000 chars recommended (hard ceiling 100 KB).
+  def self.capabilities
+    TranslationDiff::Capabilities.new(
+      max_request_size: 5_000, max_batch_size: 128, max_text_size: nil,
+      html: :format, notranslate: true, detects_language: true, reports_billing: false
+    )
   end
 
-  def initialize(api)
-    @api = api
+  # TRANSLATE_KEY then GOOGLE_CLOUD_KEY, the order google-cloud-translate-v2 read them in.
+  def self.configuration_options
+    [:google_api_base,
+     { google_api_key: -> { ENV.fetch("TRANSLATE_KEY", nil) || ENV.fetch("GOOGLE_CLOUD_KEY", nil) },
+       google_project_id: -> { ENV.fetch("TRANSLATE_PROJECT", nil) } }]
   end
 
-  def translate(texts, from:, to:, **options)
-    settings = { from: language(from), to: language(to), format: DEFAULT_FORMAT }.merge(options)
+  def self.configuration_requirements = %i[google_api_key]
 
-    results = @api.translate(*texts, **settings)
-    # One text yields a bare Translation, not a one-element array. `Array()`
-    # is not usable to even that out: Translation would have to be trusted
-    # never to define #to_a or #to_ary, and if it ever did, `Array()` would
-    # quietly splat one translation into several strings instead of raising.
-    results = [results] unless results.is_a?(Array)
+  def api_base = config.google_api_base || HOST
+  def translate_url = "language/translate/v2?key=#{CGI.escape(config.google_api_key.to_s)}"
+  def detect_url = "language/translate/v2/detect?key=#{CGI.escape(config.google_api_key.to_s)}"
 
-    results.map(&:text)
+  def render_translate_payload(request)
+    { format: DEFAULT_FORMAT }
+      .merge(request.options)
+      .merge(q: request.texts, target: language(request.to))
+      .tap { |payload| payload[:source] = language(request.from) unless request.from.nil? }
+  end
+
+  def parse_translate_response(body, _headers, request)
+    translations = Array(body.dig("data", "translations"))
+
+    TranslationDiff::Translation::Response.build(
+      request: request,
+      texts: translations.map { |t| t["translatedText"] },
+      detected_source: translations.first&.dig("detectedSourceLanguage")&.downcase,
+      usage: TranslationDiff::Translation::Usage.new(characters: request.texts.sum(&:size))
+    )
   end
 
   def detect(text)
-    @api.detect(text).language
-  end
-
-  def max_request_size = MAX_REQUEST_SIZE
-  def max_batch_size = MAX_BATCH_SIZE
-
-  private
-
-  def language(value)
-    code = value.to_s
-    return nil if code.empty?
-
-    code.match?(BARE_LANGUAGE_CODE) ? code.downcase : code
+    response = post(detect_url, { q: [text] })
+    response.body.dig("data", "detections", 0, 0, "language")&.downcase
   end
 end
 

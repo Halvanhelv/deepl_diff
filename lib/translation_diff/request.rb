@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 class TranslationDiff::Request
   extend Forwardable
   include TranslationDiff::Instrumentation
@@ -30,15 +28,16 @@ class TranslationDiff::Request
 
   attr_reader :values, :options, :to, :config
 
-  # The provider for this call: the `provider:` keyword when the caller gave
-  # one, otherwise whatever the configuration resolves to.
+  # The `provider:` keyword when the caller gave one, otherwise whatever the configuration resolves to.
   def api
     @api ||= (@provider.nil? ? config.provider_instance : resolve_provider(@provider))
              .tap { |provider| log("provider #{provider.class}") }
   end
 
   def resolve_provider(value)
-    value.is_a?(Symbol) || value.is_a?(String) ? TranslationDiff::Providers.build(value, config) : value
+    return TranslationDiff::Providers.build(value, config) if value.is_a?(Symbol) || value.is_a?(String)
+
+    TranslationDiff::Providers.ensure_provider!(value)
   end
 
   def rate_limiter = config.rate_limiter_instance
@@ -47,53 +46,41 @@ class TranslationDiff::Request
     @from ||= detect_language
   end
 
-  # A detected language arrives as a String while :to is usually a Symbol, so
-  # the two have to be compared on equal footing or the short circuit never
-  # fires and the text gets translated into its own language.
+  # A detected language is a String while :to is usually a Symbol -- without casecmp? this never short-circuits.
   def same_language?
     !to.nil? && from.to_s.casecmp?(to.to_s)
   end
 
-  # Covers values holding no translatable text at all: "", nil, an empty
-  # collection, or a scalar the tokenizer has nothing to say about.
+  # Covers "", nil, an empty collection, or a scalar the tokenizer has nothing to say about.
   def nothing_to_translate?
     text_tokens_texts.all?(&:empty?)
   end
 
+  def capabilities = api.class.capabilities
+
   def detect_language
-    raise Error, "Pass from: -- #{api.class} cannot detect the source language" unless api.respond_to?(:detect)
+    unless capabilities.detects_language?
+      raise Error, "Pass from: -- provider #{provider_cache_key} cannot detect the source language"
+    end
 
     api.detect(text_tokens_texts.join(" ")[0..100])
   end
 
-  # Extracts flat text array
-  # => "Name", "<b>Good</b> boy"
-  #
-  # #values might be something like { name: "Name", bio: "<b>Good</b> boy" }
   def texts
     @texts ||= linearize(values)
   end
 
-  # Converts each array item to token list
-  # => [..., [["<b>", :markup], ["Good", :text], ...]]
   def tokens
     @tokens ||= texts.map do |value|
       TranslationDiff::Tokenizer.tokenize(value, segmenter: config.segmenter_instance, language: source_language)
     end
   end
 
-  # The segmenter's language, not the resolved one: `from` triggers
-  # auto-detection the first time it is called, and detection builds its
-  # sample from the segmented text, so asking `from` here would be circular.
-  # Only a language the caller actually passed is usable at this point --
-  # everything else genuinely doesn't know yet, and nil is the honest
-  # answer.
+  # Not the resolved `from`: detection builds its sample from the segmented text, so asking `from` here is circular.
   def source_language
     @from&.to_s
   end
 
-  # Extracts text tokens from token list
-  # => { ..., "1_1" => "Good", 1_3 => "Boy", ... }
   def text_tokens
     @text_tokens ||= extract_text_tokens.to_h
   end
@@ -106,25 +93,18 @@ class TranslationDiff::Request
     end
   end
 
-  # Extracts values from text tokens
-  # => [ ..., "Good", "Boy", ... ]
   def text_tokens_texts
     @text_tokens_texts ||= linearize(text_tokens).map(&:to_s).map(&:strip)
   end
 
-  # Splits things requires translations to per-request chunks
-  # (groups less 2k sym)
-  # => [[ ..., "Good", "Boy", ... ]]
   def chunks
     @chunks ||= TranslationDiff::Chunker.new(
       text_tokens_texts,
-      limit: api.max_request_size,
-      count_limit: api.max_batch_size
+      limit: capabilities.max_request_size,
+      count_limit: capabilities.max_batch_size
     ).call
   end
 
-  # Translates/loads from cache values from each chunk
-  # => [[ ..., "Horoshiy", "Malchik", ... ]]
   def chunks_translated
     @chunks_translated ||= chunks.map do |chunk|
       cached, missing = cache.cached_and_missing(chunk)
@@ -137,15 +117,11 @@ class TranslationDiff::Request
     end
   end
 
-  # Restores indexes for translated tokens
-  # => { ..., "1_1" => "Horoshiy", 1_3 => "Malchik", ... }
   def text_tokens_translated
     @text_tokens_translated ||=
       restore(text_tokens, chunks_translated.flatten)
   end
 
-  # Restores tokens translated + adds same spacing as in source token
-  # => [[..., [ "Horoshiy", :text ], ...]]
   # rubocop:disable-next Metrics/AbcSize
   def tokens_translated
     @tokens_translated ||= tokens.dup.tap do |tokens|
@@ -161,13 +137,10 @@ class TranslationDiff::Request
     TranslationDiff::Spacing.restore(source_value, value)
   end
 
-  # Restores texts from tokens
-  # [..., "<b>Horoshiy</b> Malchik", ...]
   def texts_translated
     @texts_translated ||= tokens_translated.map.with_index do |group, index|
       source = texts[index]
-      # Only strings are rebuilt from tokens. Anything else has no tokens to
-      # rebuild from; nil keeps collapsing to "" the way it always has.
+      # Only strings are rebuilt from tokens; nil keeps collapsing to "" the way it always has.
       next source unless source.nil? || source.is_a?(String)
 
       group.map { |value, type| type == :text ? value : fix_ascii(value) }.join
@@ -181,17 +154,15 @@ class TranslationDiff::Request
 
   def call_api(values)
     check_rate_limit(values)
-    translations = instrument("request", provider: provider_cache_key,
-                                         batch: values.size,
-                                         characters: values.sum(&:size)) do
-      api.translate(values, from: from, to: to, **options)
+    request = TranslationDiff::Translation::Request.new(
+      texts: values, from: from, to: to, options: options
+    )
+    response = instrument("request", provider: provider_cache_key, batch: values.size,
+                                     characters: values.sum(&:size)) do
+      api.translate(request)
     end
-    return translations if translations.size == values.size
-
-    # Letting a short response through means shifting nils into the results,
-    # which surfaces much later as a NoMethodError far from the cause.
-    raise Error,
-          "Provider returned #{translations.size} translations for #{values.size} values"
+    # Dup'd: the array is the provider's own, and handing it to a collaborator makes it the collaborator's too.
+    response.texts.dup
   end
 
   def cache
@@ -200,11 +171,7 @@ class TranslationDiff::Request
     )
   end
 
-  # A provider built through the registry is stamped with its name. An object
-  # assigned straight to `config.provider` never passed through the registry,
-  # so it has to supply this itself -- without it two providers' translations
-  # would share cache entries and a caller would be served the wrong service's
-  # answer.
+  # An object assigned straight to `config.provider` never passed through the registry's stamping.
   def provider_cache_key
     key = api.cache_key if api.respond_to?(:cache_key)
     return key unless key.nil? || key.to_s.strip.empty?

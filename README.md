@@ -1,10 +1,10 @@
 # TranslationDiff
 
 A translation cache that helps translate only changes between revisions of
-long texts. It ships with DeepL and Google Cloud Translation providers, but
-any translation service can be plugged in by implementing a small provider
-contract -- this gem has no hard dependency on either of them, or on any
-other provider.
+long texts. It ships with six providers -- DeepL, Google Cloud Translation,
+Azure AI Translator, ModernMT, LibreTranslate and Amazon Translate -- but any
+translation service can be plugged in by subclassing a small base class; see
+[Providers](#providers).
 
 **TranslationDiff** based on [GoogleTranslateDiff](https://github.com/gzigzigzeo/google_translate_diff)
 
@@ -21,21 +21,24 @@ Much better approach is to try to translate every repeated structural element (s
 
 ## Dependencies
 
-This gem loads two: [`ox`](https://github.com/ohler55/ox) to walk the HTML, and
-[`pragmatic_segmenter`](https://github.com/diasks2/pragmatic_segmenter), which backs
-the default sentence segmenter and has zero dependencies of its own. See [Segmenters
-and the segmenter contract](#segmenters-and-the-segmenter-contract) below if you want
-to avoid the second dependency.
+This gem loads four at require time: [`ox`](https://github.com/ohler55/ox) to
+walk the HTML; [`pragmatic_segmenter`](https://github.com/diasks2/pragmatic_segmenter),
+which backs the default sentence segmenter and has zero dependencies of its
+own (see [Segmenters and the segmenter contract](#segmenters-and-the-segmenter-contract)
+below if you want to avoid it); and [`faraday`](https://github.com/lostisland/faraday)
+with [`faraday-retry`](https://github.com/lostisland/faraday-retry), the HTTP
+transport every REST-backed provider (DeepL, Google, Azure, ModernMT,
+LibreTranslate) inherits and owns directly -- none of them wraps a
+vendor-supplied SDK any more.
 
-Everything else is duck typed and supplied by you: `deepl-rb` only if you use
-the DeepL provider (the default) and `google-cloud-translate-v2` only if you
-use the Google one, each required lazily the first time it is needed, with a
-clear error if it is missing. The same is true of `redis` and
-`connection_pool` once you configure `redis_url`, and of `ratelimit` on the
-first check once you configure `rate_limit`. `redis-namespace` (for the Redis
-cache store) goes one step further: this gem never requires it at all, so
-your application must `require` it itself before using the Redis-backed
-store. See [Getting started](#getting-started) below.
+Everything else is duck typed and supplied by you: `aws-sigv4`, required
+lazily the first time the Amazon provider signs a request, with a clear
+error if it is missing. The same is true of `redis` and `connection_pool`
+once you configure `redis_url`, and of `ratelimit` on the first check once
+you configure `rate_limit`. `redis-namespace` (for the Redis cache store)
+goes one step further: this gem never requires it at all, so your
+application must `require` it itself before using the Redis-backed store.
+See [Getting started](#getting-started) below.
 
 ## Installation
 
@@ -64,8 +67,11 @@ end
 TranslationDiff.translate("Привет.", from: "ru", to: "en")
 ```
 
-Both of those have sensible defaults, so with `DEEPL_AUTH_KEY` and `REDIS_URL`
-in the environment there is nothing to configure at all. Without `REDIS_URL`
+`deepl_api_key` is required -- the provider checks for it at build time and
+raises `TranslationDiff::ConfigurationError` naming what is missing, rather
+than failing on the first real request. Leave it unset and `DEEPL_AUTH_KEY`
+is read instead, on use rather than at load, so the variable may be exported
+after this gem is required. `redis_url` is optional: without it
 the cache lives in the process, which means the library runs before any
 infrastructure does.
 
@@ -74,7 +80,7 @@ of your own**:
 
 ```ruby
 TranslationDiff.configure do |config|
-  config.provider = :deepl        # or any object satisfying the provider contract
+  config.provider = :deepl        # or any TranslationDiff::Provider of your own -- see Providers
   config.cache = :redis           # or any object satisfying the cache store contract
   config.segmenter = :pragmatic   # or any object satisfying the segmenter contract
 end
@@ -89,7 +95,7 @@ at all, so an unset environment variable never has to be special-cased.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `provider` | `:deepl` | The translation provider: a registered name or an object satisfying the [provider contract](#the-provider-contract). |
+| `provider` | `:deepl` | The translation provider: a registered name or a `TranslationDiff::Provider` of your own. See [Providers](#providers). |
 | `cache` | `nil` | The cache store: a registered name or an object satisfying the [cache store contract](#the-cache-store-contract). `nil` means "choose for me" -- see below. |
 | `cache_ttl` | `604_800` (one week) | Seconds a Redis cache entry is kept. Only meaningful for `RedisCacheStore`; `MemoryCacheStore` evicts by size instead. |
 | `cache_namespace` | `"translation-diff"` | Prefix applied to every Redis key this gem writes -- both cache entries and the rate limiter's own bookkeeping. |
@@ -103,24 +109,33 @@ at all, so an unset environment variable never has to be special-cased.
 | `segmenter` | `:pragmatic` | The sentence segmenter: a registered name or an object satisfying the [segmenter contract](#segmenters-and-the-segmenter-contract). |
 | `instrumenter` | `nil` | Anything satisfying `ActiveSupport::Notifications`' `#instrument(name, payload) { }` interface. See [Instrumentation and logging](#instrumentation-and-logging). |
 | `logger` | `nil` | A standard `Logger`. Receives one `debug` line per provider resolution, naming the provider class -- never content and never a credential. See [Instrumentation and logging](#instrumentation-and-logging). |
+| `open_timeout` | `5` | Seconds an HTTP-backed provider waits to open a connection before raising `TranslationDiff::TransportError`. |
+| `timeout` | `30` | Seconds an HTTP-backed provider waits for a response before raising `TranslationDiff::TransportError`. |
+| `max_retries` | `3` | Retries `faraday-retry` attempts on a transport failure or a `429`/`500`/`502`/`503`/`504` response, with exponential backoff. `faraday-retry` honours a `Retry-After` header itself, so a `429` usually exhausts its retries before `TranslationDiff::RateLimitError` is ever raised. |
 
-The `:deepl` provider declares two options of its own, registered the moment
+Every provider declares its own configuration options, registered the moment
 `translation_diff` is required:
 
-| Option | Default | Meaning |
+| Provider | Options | Meaning |
 | --- | --- | --- |
-| `deepl_api_key` | `nil` | Forwarded to `deepl-rb` as `auth_key`. Left unset, `deepl-rb` reads `DEEPL_AUTH_KEY` from the environment itself. |
-| `deepl_host` | `nil` | Overrides `deepl-rb`'s automatic free/paid host selection (from the `:fx` suffix on the key). Rarely needed. |
-
-The `:google` provider declares two of its own, on the same terms:
-
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `google_api_key` | `nil` | Forwarded to `google-cloud-translate-v2` as `key`. Left unset, that gem reads `TRANSLATE_KEY` or `GOOGLE_CLOUD_KEY` from the environment itself, and falls back to application default credentials when there is no key at all. |
-| `google_project_id` | `nil` | Only consulted on the credentials path; an API key needs no project. Left unset, the gem reads `TRANSLATE_PROJECT`. |
+| `:deepl` | `deepl_api_key` (required) | Sent as `DeepL-Auth-Key`. Falls back to `ENV["DEEPL_AUTH_KEY"]`. |
+| | `deepl_api_base` | Overrides the automatic free/paid host selection (from the `:fx` suffix on the key). Rarely needed. |
+| `:google` | `google_api_key` (required) | Sent as the `key` query parameter. Falls back to `ENV["TRANSLATE_KEY"]`, then `ENV["GOOGLE_CLOUD_KEY"]`. |
+| | `google_project_id` | Declared for a future credentials path; not currently read -- an API key needs no project. Falls back to `ENV["TRANSLATE_PROJECT"]`. |
+| | `google_api_base` | Overrides the default `https://translation.googleapis.com`. |
+| `:azure` | `azure_api_key` (required) | Sent as `Ocp-Apim-Subscription-Key`. |
+| | `azure_region` | Sent as `Ocp-Apim-Subscription-Region`. Required by a multi-service Azure resource; a single-service resource needs no region. |
+| | `azure_api_base` | Overrides the default `https://api.cognitive.microsofttranslator.com`. |
+| `:modernmt` | `modernmt_api_key` (required) | Sent as `MMT-ApiKey`. |
+| | `modernmt_api_base` | Overrides the default `https://api.modernmt.com`. |
+| `:libretranslate` | `libretranslate_api_base` (required) | Every instance is self-hosted; there is no default to fall back to. |
+| | `libretranslate_api_key` | Sent as `api_key` in the request body. Most instances do not require one. |
+| `:amazon` | `amazon_access_key_id`, `amazon_secret_access_key`, `amazon_region` (all required) | Used to sign each request with `aws-sigv4`. No environment fallback: this library does not implement the AWS credential chain, so `AWS_ACCESS_KEY_ID` and friends are not read. |
+| | `amazon_session_token` | For temporary credentials. |
+| | `amazon_api_base` | Overrides the default `https://translate.<amazon_region>.amazonaws.com`. |
 
 A provider you register yourself can declare its own options the same way --
-see [Registering your own provider](#registering-your-own-provider) below.
+see [Writing a provider](#writing-a-provider) below.
 
 **Configure once, before the first translation.** `provider`, `cache`,
 `segmenter` and `rate_limiter` each resolve to a collaborator on first use
@@ -147,136 +162,149 @@ source and target language codes, a digest of the provider options that call
 passed (`formality:`, a glossary id, ...), and a digest of the sentence
 itself. `RedisCacheStore` prefixes all of that with `cache_namespace`.
 
-**`deepl_host` is deliberately not part of the key.** Two configurations
-pointing `deepl_host` at different endpoints share cache entries. For DeepL's
-own free and paid hosts that is correct -- they return the same translations
--- but a self-hosted or proxied endpoint may not, and it would be served, and
-would serve, the real service's entries. Give such a configuration its own
-`cache_namespace` (or its own Redis database). The key format is left alone
-here on purpose: changing its shape invalidates every entry already cached,
-everywhere, at once.
+**No provider's `*_api_base` option is part of the key.** Two configurations
+pointing `deepl_api_base` (or any other provider's `_api_base`) at different
+endpoints share cache entries. For DeepL's own free and paid hosts that is
+correct -- they return the same translations -- but a self-hosted or proxied
+endpoint may not, and it would be served, and would serve, the real
+service's entries. Give such a configuration its own `cache_namespace` (or
+its own Redis database). The key format is left alone here on purpose:
+changing its shape invalidates every entry already cached, everywhere, at
+once.
 
-### The DeepL provider
+## Providers
 
-`config.provider = :deepl` is the default. It sends `tag_handling: :html`
-and `tag_handling_version: "v2"` with every translation, because what
-reaches a provider is not plain text: a `notranslate` span arrives whole,
-tags included. DeepL honours `class="notranslate"` and `translate="no"`
-only under HTML tag handling -- without it, in DeepL's own words, "tags are
-treated as regular text".
+Every provider declares what it can do through
+`TranslationDiff::Capabilities` -- there is nowhere else these numbers live,
+so this table is generated from the same source the library reads at
+runtime:
 
-That failure was a quiet one, worth knowing about if you translated with an
-older version: DeepL leaves the tags themselves alone either way, so the
-markup looks untouched and only the protected content comes back changed.
+| Provider | `config.provider` | Auth option(s) | Batch size | Request size (escaped chars) | HTML support | `notranslate` | Detects language | Reports billing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Null | `:null` | none | 1,000,000 | 1,000,000 | no | no | no | no |
+| DeepL | `:deepl` (default) | `deepl_api_key` | 50 | 1,700 | yes (`tag_handling`) | yes | yes | yes |
+| Google | `:google` | `google_api_key` | 128 | 5,000 | yes (`format`) | yes | yes | no |
+| Azure | `:azure` | `azure_api_key` | 1,000 | 50,000 | yes (`textType`) | yes | yes | yes |
+| ModernMT | `:modernmt` | `modernmt_api_key` | 128 | 5,000 | yes (`format`) | no | yes | yes |
+| LibreTranslate | `:libretranslate` | `libretranslate_api_base` | 50 | 5,000 | yes (`format`) | no | yes | no |
+| Amazon | `:amazon` | `amazon_access_key_id`, `amazon_secret_access_key`, `amazon_region` | 1 | 10,000 | no | no | yes | no |
 
-```
-"<span class='notranslate'>Bold Mountain</span> is a good place."
-no tag handling ->  "<span class='notranslate'>Болд-Маунтин</span> — отличное место."
-tag_handling    ->  "<span class='notranslate'>Bold Mountain</span> — это хорошее место."
-```
+**Every keyword other than `from:`, `to:`, `provider:` and `config:` is
+forwarded to the provider, and every provider applies them the same way:
+its own defaults first, then your options, then the fields the request cannot
+do without.** So `formality: :less` overrides a default, and a keyword
+colliding with the language pair or the texts themselves is overridden rather
+than obeyed.
 
-Both values are overridable per call, as any provider option is. Under HTML
-tag handling DeepL defaults `split_sentences` to `nonewlines`; this library
-sends one sentence at a time, so that changes nothing.
+**`usage.billed_characters` is `nil` when the provider said nothing about
+billing and a number -- `0` included -- when it said something.** All three
+providers that report billing follow that rule; the other four always answer
+`nil`.
 
-### The Google provider
+**Language codes are normalised per vendor, so switching provider needs no
+other change.** A bare code (`"EN"`, `:ru`) is cased the way the vendor
+documents it -- DeepL takes upper case, every other provider here takes lower
+case -- whichever casing you wrote. A code carrying a script or region subtag
+(`"zh-Hans"`, `"pt-BR"`) is passed through untouched, because the casing of a
+subtag is its own. A provider of your own gets the same rule from
+`TranslationDiff::Provider#language`; declare `def self.language_case =
+:upcase` if your vendor wants upper case.
 
-`config.provider = :google` translates through Cloud Translation v2 (Basic).
-It needs the `google-cloud-translate-v2` gem, which this gem requires lazily
-the first time the provider is built:
+"Request size" is what `Chunker` measures: the URL-escaped form of each
+string (`CGI.escape(text).size`), which is never smaller than its UTF-8 byte
+count. "HTML support" names the provider option that turns HTML handling on
+-- every vendor spells it differently, which is exactly what
+`Capabilities#html` is for. A provider whose "Detects language" column says
+no makes `from:` required; passing it makes every provider's `#detect` call
+unnecessary regardless of whether it has one.
 
-```ruby
-gem "google-cloud-translate-v2", "~> 1.2"
-```
+**Amazon translates one text per call and honours no `notranslate`.** There
+is no batch form of `TranslateText`, so a hundred sentences are a hundred
+requests -- slow, but correct, and `Capabilities#max_batch_size` reflects
+it. Amazon also has no HTML mode: a `notranslate` span reaches it as plain
+text and is translated like everything else, tags and all. Both facts are
+worth weighing before your bill and your brand names arrive, not after.
 
-```ruby
-TranslationDiff.configure do |config|
-  config.provider = :google
-  config.google_api_key = ENV["GOOGLE_TRANSLATE_KEY"]
-end
-```
+**LibreTranslate does not honour `notranslate` either -- measured, not
+assumed.** Its HTML format preserves markup, but probing a real instance
+(`docker run libretranslate/libretranslate --load-only en,ru`) with
+`<span class="notranslate">Bold Mountain</span> is a good place.` came back
+with the span tag intact and its content translated anyway -- "Bold
+Mountain" became "Смелая гора". The tags survive; what they were meant to
+protect does not.
 
-An API key is the whole setup -- no project id, no service account. Leave
-`google_api_key` unset and the gem reads `TRANSLATE_KEY` or
-`GOOGLE_CLOUD_KEY` itself; with no key anywhere it falls back to application
-default credentials, which is the path where `google_project_id` matters.
+ModernMT's `notranslate: false` is the conservative default rather than a
+measurement: it documents an HTML format but says nothing about
+`class="notranslate"`, and no key was available to probe it. A capability
+that under-promises costs a warning; one that over-promises costs a
+customer's protected content reaching a competitor's brand voice.
 
-Two things this provider does on your behalf, both of which would otherwise
-be silent problems:
-
-- **It asks for HTML**, which is Google's own default and what this gem has
-  always sent. What reaches a provider is not plain text: a `notranslate`
-  span arrives whole, tags included -- that is how the tokenizer marks
-  content the provider must leave alone -- and entities such as `&amp;`
-  stay in the text it emits. Asking for `text` makes Google translate the
-  protected span and drop its markup:
-
-  ```
-  "<span class='notranslate'>Bold Mountain</span> is a good place."
-  format: text  ->  "Болд Маунтин — хорошее место."
-  format: html  ->  "<span class='notranslate'>Bold Mountain</span> — хорошее место."
-  ```
-
-  The cost is that Google escapes its own output: a literal apostrophe
-  returns as `&#39;`. Inside the HTML fragment these values usually are,
-  that renders as an apostrophe and is correct. Inside a value that never
-  had any markup in it, it is noise -- pass `format: :text` per call when
-  translating bare strings.
-- **It downcases bare language codes.** Google's codes are lowercase, and a
-  configuration written against DeepL says `"EN"`. Codes carrying a subtag
-  -- `"zh-Hans"`, `"zh-CN"`, `"pt-BR"` -- are passed through untouched,
-  because the casing of a script or region subtag is its own.
-
-Its limits are Google's documented ones: 128 strings per request (a hard
-limit -- a larger batch is rejected), and 5,000 characters per request (the
-documented recommendation, well under the hard 100 KB ceiling). Chunker
-measures the URL-escaped form of each string, which is never smaller than
-its UTF-8 byte count, so a chunk within that bound in escaped characters is
-within it in bytes as well.
-
-`google_project_id` is not part of the cache key, on the same reasoning as
-`deepl_host` above: it selects an account to bill, not a translation.
-
-## Registering your own provider
+### Writing a provider
 
 Any translation service can be a provider -- no change to this gem's own
-code is required. Registering a provider also declares the options it needs,
-so `config.yandex_api_key` below does not exist until `YandexProvider`
-is registered:
+code is required. Subclass `TranslationDiff::HTTPProvider` for a REST
+service; it owns the Faraday connection, retries, timeouts and turns HTTP
+status codes into this library's error hierarchy, and asks only for three
+seams per operation: the URL, how to render a request, how to parse a
+reply. Subclass `TranslationDiff::Provider` directly for anything that
+reaches its service some other way -- signed requests, another gem, an
+LLM client -- and implement `#translate` outright, the way
+`TranslationDiff::Providers::Amazon` does.
+
+Registering a provider also declares the options it needs, so
+`config.yandex_api_key` below does not exist until `YandexProvider` is
+registered:
 
 ```ruby
-class YandexProvider
-  # Declares this provider's own configuration options. TranslationDiff::Providers.register
-  # adds each one to TranslationDiff::Configuration as a side effect.
+class YandexProvider < TranslationDiff::HTTPProvider
+  # Declares this provider's own configuration options.
+  # TranslationDiff::Providers.register adds each one to
+  # TranslationDiff::Configuration as a side effect.
   def self.configuration_options = %i[yandex_api_key]
-  def self.build(config) = new(config.yandex_api_key)
+  def self.configuration_requirements = %i[yandex_api_key]
 
-  def initialize(api_key)
-    @client = SomeYandexClient.new(key: api_key)
+  # What this provider can do, checked once by the pipeline for chunking,
+  # detection and cache-key safety.
+  def self.capabilities
+    TranslationDiff::Capabilities.new(
+      max_request_size: 10_000, max_batch_size: 100, max_text_size: nil,
+      html: :format, notranslate: true, detects_language: true,
+      reports_billing: false
+    )
   end
 
-  # Required: translate an array of strings, return one string per input, in
-  # the same order. Provider-specific options (formality, glossary, ...)
-  # arrive through **options untouched.
-  def translate(texts, from:, to:, **options)
-    texts.map { |text| @client.translate(text, from: from, to: to)[:text] }
+  def api_base = "https://translate.api.cloud.yandex.net"
+  def headers = { "Authorization" => "Api-Key #{config.yandex_api_key}" }
+  def translate_url = "translate/v2/translate"
+
+  # The three seams: build the request body, decode the reply.
+  def render_translate_payload(request)
+    { format: "HTML", texts: request.texts, targetLanguageCode: request.to.to_s }
+      .tap { |body| body[:sourceLanguageCode] = request.from.to_s unless request.from.nil? }
   end
 
-  # Required: this provider's own request- and batch-size limits.
-  def max_request_size = 30_000
-  def max_batch_size = 128
+  def parse_translate_response(body, _headers, request)
+    translations = Array(body["translations"])
 
-  # Optional: omit entirely if the provider has no detection endpoint, or if
-  # callers of this gem always pass `from:` explicitly.
+    TranslationDiff::Translation::Response.build(
+      request: request,
+      texts: translations.map { |t| t["text"] },
+      detected_source: translations.first&.dig("detectedLanguageCode")&.downcase
+    )
+  end
+
+  def detect_url = "translate/v2/detect"
+
   def detect(text)
-    @client.detect(text)[:language]
+    response = post(detect_url, { text: text })
+    response.body["languageCode"]&.downcase
   end
 
-  # cache_key is optional too: TranslationDiff::Providers.register mixes a
-  # module into any provider that does not define its own #cache_key, and
-  # that module stamps every instance built through the registry with its
-  # registered name -- nothing here needs to supply one by hand. See
-  # "Provider objects and cache_key" below for what happens without it.
+  # cache_key is optional: TranslationDiff::Providers.register stamps every
+  # instance built through the registry with its registered name, and
+  # Provider#cache_key falls back to that. Define it yourself only if this
+  # provider will also be instantiated and assigned directly, bypassing the
+  # registry -- see "Provider objects and cache_key" below.
 end
 
 TranslationDiff::Providers.register(:yandex, YandexProvider)
@@ -286,6 +314,12 @@ TranslationDiff.configure do |config|
   config.yandex_api_key = ENV["YANDEX_API_KEY"]
 end
 ```
+
+`translate_url`/`render_translate_payload`/`parse_translate_response` are
+the three seams `HTTPProvider#translate` calls in order; `detect` is
+entirely optional -- omit it (and leave `capabilities.detects_language:
+false`) if the provider has no detection endpoint, or if callers of this
+gem always pass `from:` explicitly.
 
 **Provider names must be unique.** `TranslationDiff::Providers.register`
 overwrites whatever was previously registered under that name, silently --
@@ -304,6 +338,21 @@ the log to say so. Registering over an existing name is not a way to
 substitute a service -- give the replacement its own name, or clear the cache
 (`cache_namespace` is the cheapest way to do that).
 
+**An option can declare a default.** A bare symbol in
+`configuration_options` declares an option with no default. Writing
+`key => default` instead declares one, and a callable default is evaluated on
+every read rather than at load time -- which is what lets an environment
+variable work when the application exports it after requiring this gem:
+
+```ruby
+def self.configuration_options
+  [:yandex_api_base, { yandex_api_key: -> { ENV.fetch("YANDEX_API_KEY", nil) } }]
+end
+```
+
+An explicitly configured value always wins over a default, and a default that
+resolves to a blank string reads as unset -- the same rule assignment follows.
+
 **Option names are unique too, and enforced.** Two providers declaring the
 same `configuration_options` name would share one accessor on
 `TranslationDiff::Configuration`, which would hand one service's credential
@@ -316,64 +365,20 @@ and a Rails reload both re-run registration.
 `TranslationDiff::Providers.names` lists every registered provider;
 `TranslationDiff::Providers.registered?(:yandex)` checks one.
 
-## The provider contract
-
-`config.provider` accepts either a registered name (`:deepl`, `:google`,
-`:null`, or anything you registered yourself) or an object of your own that satisfies
-this contract directly, bypassing the registry entirely:
-
-```ruby
-# Translates an array of strings and returns an array of strings, one per
-# input, in the same order. Provider-specific options (e.g. `formality:`)
-# arrive through **options and are passed straight through to the provider.
-def translate(texts, from:, to:, **options); end
-
-# Detects the source language of a single string and returns it. Optional:
-# omit this method entirely if the provider has no detection endpoint, or if
-# callers of this gem always pass `from:` explicitly. When `detect` is
-# missing and `from:` is not given, TranslationDiff raises rather than
-# guessing.
-def detect(text); end
-
-# The largest single request the provider accepts, in characters of the
-# escaped form -- which is what the chunker measures (CGI.escape(text).size,
-# not String#size). For Cyrillic and other non-Latin text this is 6 to 9
-# times the raw character count. Declaring the provider's raw character
-# limit here will either waste most of the budget (if you under-report) or
-# raise Chunker::Error on text the provider would actually have accepted
-# (if you over-report). Used to split long texts into multiple requests.
-def max_request_size; end
-
-# The largest number of strings the provider accepts in one batched request.
-# Used to split large arrays into multiple requests.
-def max_batch_size; end
-
-# A short, stable, non-empty string identifying this provider. Used to
-# namespace cache keys, so that switching providers does not return one
-# provider's cached translations for another. Not required when a provider
-# is only ever built through TranslationDiff::Providers.register -- see
-# below.
-def cache_key; end
-```
-
-`test/support/provider_contract.rb` is the executable form of this contract:
-include `ProviderContract` in a test class that defines `#provider`, and it
-verifies `translate`, `max_request_size` and `max_batch_size` behave as
-documented above.
-
-Two providers ship with this gem: `TranslationDiff::Providers::DeepL` (the
-default, registered as `:deepl`), wrapping the
-[`deepl-rb`](https://github.com/wikiti/deepl-rb) gem (not a dependency of
-this one -- required at build time); and `TranslationDiff::Providers::Null`
-(`:null`), which hands back exactly what it was given, for tests and for
-wiring up a pipeline before a real provider is available.
+`test/support/provider_contract.rb` and `test/support/http_provider_contract.rb`
+are the executable form of the provider contract: include `ProviderContract`
+(and, for an `HTTPProvider` subclass, `HTTPProviderContract`) in a test class
+that defines `#provider`, and they verify a provider inherits
+`TranslationDiff::Provider`, that `#translate` preserves order and returns
+one string per input, and that its declared capabilities are internally
+consistent (a provider claiming `notranslate` must also claim an HTML mode).
 
 ### Provider objects and cache_key
 
 A provider built through `TranslationDiff::Providers.build` (which is what
 happens when `config.provider` is a symbol) is stamped with its registered
-name automatically, and never needs to define `cache_key` itself -- the
-registry mixes in a module that supplies it.
+name automatically, and never needs to define `cache_key` itself --
+`Provider#cache_key` falls back to that stamped name.
 
 A provider object assigned straight to `config.provider` never passes
 through the registry, so it gets no name and **must define `cache_key`
@@ -638,31 +643,17 @@ same guarantee applies to it as to instrumentation payloads: no log line this
 library writes carries the text being translated, its translation, or a
 credential.
 
-**deepl-rb has request logging of its own, and this library deliberately
-does not enable it.** `config.logger` is never passed to `deepl-rb`. Given a
-logger, `deepl-rb` writes a `Request details:` line at DEBUG holding the full
-`Authorization: DeepL-Auth-Key ...` header and the request payload -- your API
-key and the text being translated. Forwarding this gem's logger into it would
-break the guarantee above at the exact moment someone raises the log level to
-diagnose a problem, which is why the provider does not.
-
-If you want that log anyway, ask for it explicitly: build the `DeepL::API`
-yourself, wrap it in the provider, and assign the object.
-
-```ruby
-api = DeepL::API.new(
-  DeepL::Configuration.new(auth_key: ENV["DEEPL_AUTH_KEY"], logger: verbose_logger)
-)
-
-provider = TranslationDiff::Providers::DeepL.new(api)
-provider.name = :deepl # the cache key a registry-built provider gets for free
-
-TranslationDiff.configure { |config| config.provider = provider }
-```
-
-Everything `verbose_logger` then receives -- source text, translations, and
-the auth key -- goes wherever it writes. Point it somewhere disposable, not at
-the application log, and do not leave it on.
+**No HTTP-backed provider ever receives `config.logger`, and there is no way
+to opt one in.** `TranslationDiff::HTTPProvider` installs no logging
+middleware on its Faraday connection and never passes a logger to it -- this
+is enforced by `test/support/http_provider_contract.rb`, not merely
+documented. Earlier versions wrapped `deepl-rb`, which logged a
+`Request details:` line at DEBUG holding the full
+`Authorization: DeepL-Auth-Key ...` header and the request payload -- your
+API key and the text being translated -- if you gave it a logger of its own.
+Owning the transport directly closed that door rather than working around
+it: nothing this library builds writes source text, a translation, or a
+credential anywhere, and no configuration option reopens that.
 
 ## Errors
 
@@ -671,21 +662,42 @@ so rescuing the gem's failures in one clause is a single `rescue TranslationDiff
 
 ```
 TranslationDiff::Error
-├── TranslationDiff::Request::Error            # e.g. provider returned the wrong number of
-│                                               # translations, from: missing and the
-│                                               # provider cannot detect, cache_key
-│                                               # missing on an assigned provider object
-├── TranslationDiff::Cache::Error              # provider options have no stable
-│                                               # serialisation for the cache key
-├── TranslationDiff::Chunker::Error            # a single value is larger than the
-│                                               # provider's max_request_size
+├── TranslationDiff::ConfigurationError         # a provider is missing a required option
+├── TranslationDiff::ProviderError              # the service answered and said no
+│   ├── AuthenticationError                     # 401/403
+│   ├── RateLimitError                          # 429, once faraday-retry's own retries
+│   │                                            # are exhausted -- carries #retry_after
+│   │                                            # when the service sent one
+│   ├── QuotaExceededError                      # 456
+│   ├── InvalidRequestError                     # any other 4xx
+│   └── ServiceError                            # 5xx, or anything else
+├── TranslationDiff::TransportError             # nobody answered: connection failed,
+│                                                # timed out, or TLS failed
+├── TranslationDiff::ResponseError              # the answer was well-formed HTTP but broke
+│                                                # this library's contract -- a body that
+│                                                # is not JSON, a provider that returned
+│                                                # the wrong number of translations, or one
+│                                                # that returned no translation for an input
+├── TranslationDiff::InvalidProviderError       # a class registered without inheriting
+│                                                # TranslationDiff::Provider
+├── TranslationDiff::Request::Error             # from: missing and the provider cannot
+│                                                # detect, cache_key missing on an
+│                                                # assigned provider object
+├── TranslationDiff::Cache::Error               # provider options have no stable
+│                                                # serialisation for the cache key
+├── TranslationDiff::Chunker::Error             # a single value is larger than the
+│                                                # provider's declared max_request_size
 ├── TranslationDiff::Segmenters::Pragmatic::Error
-│                                               # Pragmatic computed offsets that
-│                                               # violate its own postcondition --
-│                                               # not raised by ordinary use
+│                                                # Pragmatic computed offsets that
+│                                                # violate its own postcondition --
+│                                                # not raised by ordinary use
 └── TranslationDiff::RedisRateLimiter::RateLimitExceeded
-                                                # the configured rate_limit was exceeded
+                                                 # the configured rate_limit was exceeded
 ```
+
+`ProviderError` and its subclasses carry `#provider` (the registered name)
+and `#status` (the HTTP status code), so a caller can log or branch on which
+service and which response caused the failure without parsing the message.
 
 `TranslationDiff::Registry` -- which backs the provider, cache store and
 segmenter registries -- also raises `TranslationDiff::Error` directly (not a
@@ -728,11 +740,13 @@ TranslationDiff.translate("<b>Black</b>", from: "en", to: "es")
 
 ## Very long texts
 
-Every provider limits how large a single request or a single batch can be.
-Providers state their own limits through `#max_request_size` and
-`#max_batch_size`; if your text is longer than that, TranslationDiff splits it
-into multiple requests automatically. The DeepL provider, for example, caps
-requests at 1700 characters and batches at 300 sentences.
+Every provider limits how large a single request or a single batch can be,
+declared through `TranslationDiff::Capabilities#max_request_size` and
+`#max_batch_size`; if your text is longer than that, TranslationDiff splits
+it into multiple requests automatically. See the [provider
+table](#providers) for each built-in provider's actual numbers -- DeepL, for
+example, caps requests at 1,700 escaped characters and batches at 50
+sentences.
 
 ## Former name and upgrading
 
@@ -751,6 +765,15 @@ configured, also read the upgrading note in
 [The rate limiter contract](#the-rate-limiter-contract): the limiter was
 never actually enforcing your threshold before 3.1.0, and it starts doing so
 now. See [CHANGELOG.md](CHANGELOG.md) for the full list of breaking changes.
+
+**If you registered a custom provider,** it must now subclass
+`TranslationDiff::Provider` (or `TranslationDiff::HTTPProvider`), declare
+`self.capabilities`, and implement `#translate(request)` taking a
+`TranslationDiff::Translation::Request` and returning a
+`TranslationDiff::Translation::Response` -- the duck-typed
+`#translate(texts, from:, to:, **options)` plus `#max_request_size` and
+`#max_batch_size` methods are no longer read at all. See [Writing a
+provider](#writing-a-provider).
 
 ## Development
 

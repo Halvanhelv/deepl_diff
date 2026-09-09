@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # Adds same count leading-trailing spaces left has to the right
 class TranslationDiff::Spacing
   class << self

@@ -1,10 +1,25 @@
-# frozen_string_literal: true
-
 require "test_helper"
+require "support/env_stub"
 
 class ConfigurationTest < Minitest::Test
-  # A hand-written double for TranslationDiff::Registry: this project's
-  # Minitest (6.0) dropped minitest/mock, so there is no Minitest::Mock here.
+  include EnvStub
+
+  # A hand-written double for TranslationDiff::Registry: Minitest 6.0 dropped minitest/mock.
+  # Duck-typed collaborators, deliberately inheriting nothing: the provider is the only tightened one.
+  class FakeStore
+    def read_multi(keys) = [nil] * keys.size
+    def write(_key, value) = value
+  end
+
+  class FakeSegmenter
+    def split_offsets(_text, **) = []
+  end
+
+  class FakeRateLimiter
+    # The real limiter raises when the threshold is passed and returns nothing useful otherwise.
+    def check(_size) = nil
+  end
+
   ResolvingRegistry = Struct.new(:answer) do
     attr_reader :asked
 
@@ -46,8 +61,7 @@ class ConfigurationTest < Minitest::Test
   end
 
   def test_assigning_false_is_kept_and_not_treated_as_unset
-    # test_flag is registered here purely to exercise `option`; it is not a
-    # production option and mutating class-level state with it is harmless.
+    # test_flag is registered here purely to exercise `option`; it is not a production option.
     TranslationDiff::Configuration.option(:test_flag, true)
     @config.test_flag = false
 
@@ -64,9 +78,7 @@ class ConfigurationTest < Minitest::Test
     assert_equal 120, copy.cache_ttl
   end
 
-  # Stand-ins for two provider classes. register_provider_options is handed
-  # the class so it can tell "the same provider declaring its options again"
-  # from "another provider claiming a name that is already taken".
+  # Stand-ins for two provider classes, to distinguish redeclaring from a name collision.
   class AcmeOptionOwner
     def self.configuration_options = %i[acme_api_key]
   end
@@ -76,9 +88,7 @@ class ConfigurationTest < Minitest::Test
   end
 
   def test_register_provider_options_adds_readers_and_writers
-    # acme_api_key is registered here purely to exercise
-    # register_provider_options; it is not a production option and mutating
-    # class-level state with it is harmless.
+    # acme_api_key is registered here purely to exercise register_provider_options; not a production option.
     TranslationDiff::Configuration.register_provider_options(%i[acme_api_key], AcmeOptionOwner)
     @config.acme_api_key = "secret"
 
@@ -86,8 +96,7 @@ class ConfigurationTest < Minitest::Test
     assert_includes TranslationDiff::Configuration.options, :acme_api_key
   end
 
-  # A double `require` and a Rails development reload both re-run
-  # registration; neither is a conflict.
+  # A double `require` and a Rails development reload both re-run registration; neither is a conflict.
   def test_the_same_provider_may_redeclare_its_own_options
     TranslationDiff::Configuration.register_provider_options(%i[acme_repeat_key], AcmeOptionOwner)
     TranslationDiff::Configuration.register_provider_options(%i[acme_repeat_key], AcmeOptionOwner)
@@ -95,9 +104,7 @@ class ConfigurationTest < Minitest::Test
     assert_includes TranslationDiff::Configuration.options, :acme_repeat_key
   end
 
-  # Without this, `option` returns early on the already-declared name and the
-  # two providers silently share one accessor -- so the credential set for
-  # one is handed to the other.
+  # Without this, `option` returns early and two providers silently share one accessor.
   def test_a_different_provider_declaring_a_declared_option_raises
     TranslationDiff::Configuration.register_provider_options(%i[contested_key], AcmeOptionOwner)
 
@@ -110,9 +117,7 @@ class ConfigurationTest < Minitest::Test
     assert_match(/RivalOptionOwner/, error.message)
   end
 
-  # A subclass wanting its parent's options is the one case where sharing
-  # the accessor is correct -- subclassing a provider to point it at a
-  # different host or account is an obvious thing to want.
+  # A subclass wanting its parent's options is the one case where sharing the accessor is correct.
   class AcmeSubclassOwner < AcmeOptionOwner; end
 
   def test_a_subclass_of_the_declaring_provider_may_redeclare_its_options
@@ -122,8 +127,7 @@ class ConfigurationTest < Minitest::Test
     assert_includes TranslationDiff::Configuration.options, :acme_subclass_key
   end
 
-  # An unrelated class is still refused, even though a subclass is now
-  # allowed -- the guard only relaxes for an actual inheritance relationship.
+  # The guard only relaxes for an actual inheritance relationship; an unrelated class is still refused.
   def test_an_unrelated_class_claiming_a_subclassable_providers_option_still_raises
     TranslationDiff::Configuration.register_provider_options(%i[acme_unrelated_key], AcmeOptionOwner)
 
@@ -134,16 +138,12 @@ class ConfigurationTest < Minitest::Test
     assert_match(/acme_unrelated_key/, error.message)
   end
 
-  # A provider that conflicts on its *second* option, once its first
-  # (fresh_option) has already been checked.
+  # Conflicts on its *second* option, once its first (fresh_option) has already been checked.
   class IntruderOptionOwner
     def self.configuration_options = %i[fresh_option owned_by_acme]
   end
 
-  # register_provider_options used to declare and record ownership key by
-  # key, so a provider whose *second* option conflicted still left its first
-  # option declared and owned by the class that failed to register. Fixed to
-  # check every key before mutating any of them.
+  # Used to declare ownership key by key, leaving the first option owned by a class that failed to register.
   def test_a_conflict_on_a_later_option_leaves_no_partial_state
     TranslationDiff::Configuration.register_provider_options(%i[owned_by_acme], AcmeOptionOwner)
 
@@ -154,20 +154,113 @@ class ConfigurationTest < Minitest::Test
 
     refute_includes TranslationDiff::Configuration.options, :fresh_option
 
-    # If the failed attempt had already declared or claimed :fresh_option,
-    # this would raise, blaming a provider that was never registered.
+    # If the failed attempt had already claimed :fresh_option, this would raise, blaming the wrong provider.
     TranslationDiff::Configuration.register_provider_options(%i[fresh_option], RivalOptionOwner)
 
     assert_includes TranslationDiff::Configuration.options, :fresh_option
   end
 
+  # A provider needing no default keeps the bare-symbol form; one needing a default declares `key => default`.
+  class DefaultingOptionOwner
+    def self.configuration_options
+      [:defaulting_bare, { defaulting_keyed: -> { ENV.fetch("DEFAULTING_TEST_VAR", nil) } }]
+    end
+  end
+
+  def test_a_provider_declares_bare_symbols_and_defaults_in_one_list
+    TranslationDiff::Configuration.register_provider_options(
+      DefaultingOptionOwner.configuration_options, DefaultingOptionOwner
+    )
+
+    assert_includes TranslationDiff::Configuration.options, :defaulting_bare
+    assert_includes TranslationDiff::Configuration.options, :defaulting_keyed
+    assert_nil TranslationDiff::Configuration.new.defaulting_bare
+  end
+
+  # Evaluated on read, not at load: an application that sets the variable after requiring us still gets it.
+  def test_a_declared_callable_default_is_evaluated_on_every_read
+    TranslationDiff::Configuration.register_provider_options(
+      DefaultingOptionOwner.configuration_options, DefaultingOptionOwner
+    )
+
+    with_env("DEFAULTING_TEST_VAR" => "from-the-environment") do
+      assert_equal "from-the-environment", TranslationDiff::Configuration.new.defaulting_keyed
+    end
+  end
+
+  def test_an_assigned_value_wins_over_a_declared_default
+    TranslationDiff::Configuration.register_provider_options(
+      DefaultingOptionOwner.configuration_options, DefaultingOptionOwner
+    )
+    config = TranslationDiff::Configuration.new
+    config.defaulting_keyed = "assigned"
+
+    with_env("DEFAULTING_TEST_VAR" => "from-the-environment") do
+      assert_equal "assigned", config.defaulting_keyed
+    end
+  end
+
+  # The blank rule the writer already applies: a variable exported empty means unset, not an empty credential.
+  def test_a_blank_default_reads_as_unset
+    TranslationDiff::Configuration.register_provider_options(
+      DefaultingOptionOwner.configuration_options, DefaultingOptionOwner
+    )
+
+    with_env("DEFAULTING_TEST_VAR" => "   ") do
+      assert_nil TranslationDiff::Configuration.new.defaulting_keyed
+    end
+  end
+
+  class KeyedConflictOwner
+    def self.configuration_options = [:keyed_fresh_option, { owned_by_acme: -> { "x" } }]
+  end
+
+  # Ownership is claimed for every key however it was written, so a keyed clash still leaves no partial state.
+  def test_a_conflict_on_a_keyed_option_leaves_no_partial_state
+    TranslationDiff::Configuration.register_provider_options(%i[owned_by_acme], AcmeOptionOwner)
+
+    assert_raises(TranslationDiff::Error) do
+      TranslationDiff::Configuration.register_provider_options(
+        KeyedConflictOwner.configuration_options, KeyedConflictOwner
+      )
+    end
+
+    refute_includes TranslationDiff::Configuration.options, :keyed_fresh_option
+  end
+
   def test_registering_an_option_twice_does_not_clobber_the_first_default
-    # shared_option is not a production option; mutating class-level state
-    # with it is harmless.
+    # shared_option is not a production option; mutating class-level state with it is harmless.
     TranslationDiff::Configuration.option(:shared_option, "first")
     TranslationDiff::Configuration.option(:shared_option, "second")
 
     assert_equal "first", TranslationDiff::Configuration.new.shared_option
+  end
+
+  # Providers.register refuses a class that skips the base class; assigning an object bypassed that entirely.
+  def test_an_assigned_provider_object_that_is_not_a_provider_is_refused
+    @config.provider = Object.new
+
+    error = assert_raises(TranslationDiff::InvalidProviderError) { @config.provider_instance }
+
+    assert_match(/TranslationDiff::Provider/, error.message)
+  end
+
+  def test_an_assigned_provider_object_that_is_a_provider_is_used_as_is
+    provider = TranslationDiff::Providers::Null.new(TranslationDiff::Configuration.new)
+    @config.provider = provider
+
+    assert_same provider, @config.provider_instance
+  end
+
+  # Only the provider gained a base class; these three are still genuinely duck-typed.
+  def test_the_other_extension_points_stay_duck_typed
+    @config.cache = FakeStore.new
+    @config.segmenter = FakeSegmenter.new
+    @config.rate_limiter = FakeRateLimiter.new
+
+    assert_instance_of FakeStore, @config.cache_store
+    assert_instance_of FakeSegmenter, @config.segmenter_instance
+    assert_instance_of FakeRateLimiter, @config.rate_limiter_instance
   end
 
   def test_resolve_builds_from_a_registry_for_a_symbol
@@ -244,14 +337,7 @@ class ConfigurationTest < Minitest::Test
     assert_same @config.rate_limiter_instance, @config.rate_limiter_instance
   end
 
-  # `rate_limiter_instance` follows the same rule as `provider_instance`,
-  # `cache_store` and `segmenter_instance`: a config that never had an
-  # object assigned starts from nothing on `copy` and builds its own
-  # limiter. This is the case that used to be broken -- a copy inherited an
-  # already-built limiter, which would silently rate-limit a tenant against
-  # its parent's namespace. See
-  # `test_a_copy_that_changes_its_namespace_gets_a_rate_limiter_using_that_namespace`
-  # below for the scenario that actually surfaces the bleed.
+  # Used to be broken: a copy inherited an already-built limiter and rate-limited a tenant against its parent's.
   def test_copy_does_not_share_a_built_default_rate_limiter
     @config.rate_limit = 100
     original_limiter = @config.rate_limiter_instance
@@ -259,12 +345,7 @@ class ConfigurationTest < Minitest::Test
     refute_same original_limiter, @config.copy.rate_limiter_instance
   end
 
-  # An explicitly assigned object is different: it is the option's own
-  # value, exactly like an assigned `cache` or `provider`, and `copy`
-  # carries option values over on purpose -- "someone who hands us one
-  # object means one object." Only the *default build* must not survive a
-  # copy; an object the caller supplied is never rebuilt in the first
-  # place, so there is nothing for a copy to get wrong.
+  # An assigned object is an option value, and `copy` carries option values over on purpose.
   def test_copy_shares_an_assigned_rate_limiter_object
     limiter = Object.new
     @config.rate_limiter = limiter
@@ -272,9 +353,7 @@ class ConfigurationTest < Minitest::Test
     assert_same limiter, @config.copy.rate_limiter_instance
   end
 
-  # The regression this whole area was fixed for: a tenant context that
-  # sets its own `cache_namespace` must get a rate limiter scoped to that
-  # namespace, not one built for -- and still carrying -- its parent's.
+  # The regression this whole area was fixed for.
   def test_a_copy_that_changes_its_namespace_gets_a_rate_limiter_using_that_namespace
     @config.rate_limit = 100
     @config.redis_url = "redis://localhost:6379"

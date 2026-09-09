@@ -1,5 +1,5 @@
 AllCops:
-  TargetRubyVersion: 3.2
+  TargetRubyVersion: 3.4
   NewCops: enable
 
 Style/Documentation:
@@ -20,6 +20,11 @@ Layout/LineLength:
 
 Gemspec/DevelopmentDependencies:
   EnforcedStyle: gemspec
+
+# Ruby 3.4 chills string literals in files without this comment, and the
+# supported floor is now 3.4.
+Style/FrozenStringLiteralComment:
+  Enabled: false
 
 # Request takes its collaborators as keyword arguments -- values, from:, to:,
 # provider:, config: and the provider's own options. The confusion this cop

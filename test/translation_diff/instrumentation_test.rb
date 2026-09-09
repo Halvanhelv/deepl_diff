@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "test_helper"
 
 class InstrumentationTest < ConfiguredTest
@@ -14,11 +12,7 @@ class InstrumentationTest < ConfiguredTest
     end
   end
 
-  # Assignable via `config.rate_limiter =`, same as `config.cache =`. Always
-  # lets the call through, so `check_rate_limit` has something to call
-  # without needing a real Redis connection -- and so the `rate_limit` event
-  # fires on every translation in this file, alongside `translate`, `cache`
-  # and `request`.
+  # Always lets the call through, so the `rate_limit` event fires without a real Redis connection.
   class FakeRateLimiter
     def check(_size) = nil
   end
@@ -28,9 +22,7 @@ class InstrumentationTest < ConfiguredTest
     @recorder = Recorder.new
     TranslationDiff.configure do |c|
       c.provider = :null
-      # Pinned so a developer with REDIS_URL set does not have these tests
-      # resolve the Redis store and open a real socket -- the same reason
-      # context_test.rb pins it. It weakens no assertion here.
+      # Pinned so a developer with REDIS_URL set doesn't have these tests open a real socket.
       c.cache = :memory
       c.instrumenter = @recorder
       c.rate_limiter = FakeRateLimiter.new
@@ -80,10 +72,7 @@ class InstrumentationTest < ConfiguredTest
   ALL_EVENT_NAMES = %w[translate.translation_diff cache.translation_diff
                        request.translation_diff rate_limit.translation_diff].sort.freeze
 
-  # A guard that only checked payload content would pass even if an event
-  # quietly stopped firing -- asserting the full set of names first makes
-  # sure every event this library emits is actually present and inspected,
-  # not just whichever ones happened to show up.
+  # A guard that only checked payload content would pass even if an event quietly stopped firing.
   def test_no_payload_ever_contains_the_text_being_translated
     secret = "Zaphod Beeblebrox is president."
     TranslationDiff.translate(secret, from: "en", to: "ru")

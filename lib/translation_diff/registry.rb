@@ -1,15 +1,6 @@
-# frozen_string_literal: true
-
-# Maps a short symbol to a class that knows how to build itself from a
-# Configuration. Three of these exist -- providers, cache stores and
-# segmenters -- so that every extension option in this library can accept
-# either a symbol naming a built-in or an object the caller supplies.
-#
-# The only thing the three kinds have in common is that a registered class
-# answers `build(config)`. That is deliberately the whole contract.
+# Maps a symbol to a class that builds itself from a Configuration; the whole contract is answering `build(config)`.
 class TranslationDiff::Registry
-  # `kind` appears in the error message for an unknown name, so it should be
-  # the singular noun a reader would use: "provider", "cache store".
+  # `kind` appears in the unknown-name error message, so it should be a singular noun: "provider".
   def initialize(kind)
     @kind = kind
     @entries = {}

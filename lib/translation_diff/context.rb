@@ -1,8 +1,4 @@
-# frozen_string_literal: true
-
-# An isolated configuration scope offering the same entry point as the
-# TranslationDiff module itself, for multi-tenant applications and
-# per-request overrides. Created with TranslationDiff.context.
+# An isolated configuration scope with the same entry point as TranslationDiff itself.
 class TranslationDiff::Context
   attr_reader :config
 

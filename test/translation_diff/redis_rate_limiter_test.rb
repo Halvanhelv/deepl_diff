@@ -1,19 +1,10 @@
-# frozen_string_literal: true
-
 require "test_helper"
 
-# RedisRateLimiter requires "ratelimit" lazily, at the first check, so this
-# file exercises the production integration against the real Ratelimit class
-# rather than a stand-in. The stand-in this file used to define hid a real
-# defect: the gem's signature is `add(subject, count)`, so `add(size)` was
-# counting under a subject named after the character count while `exceeded?`
-# read a subject nothing ever incremented -- the limit never fired.
+# A prior stand-in here hid a real defect: `add(size)` counted under the wrong subject and the limit never fired.
 require "ratelimit"
 
 class RedisRateLimiterTest < Minitest::Test
-  # An in-memory Redis server implementing exactly the commands ratelimit 1.1
-  # issues, plus the two Lua scripts it loads (interpreted here rather than
-  # run). No socket is opened; nothing here is a stub of the gem under test.
+  # An in-memory Redis server implementing exactly the commands ratelimit 1.1 issues; no socket is opened.
   class FakeRedisServer
     attr_reader :hashes, :expiries, :count_spans
 
@@ -86,8 +77,7 @@ class RedisRateLimiterTest < Minitest::Test
     assert_equal({ "ratelimit:tenant-42:call" => 7 }, server.totals)
   end
 
-  # Ratelimit's own rule is `count >= threshold`, so the check that carries
-  # the count over the line still passes and the next one raises.
+  # Ratelimit's own rule is `count >= threshold`, so the check that carries the count over the line still passes.
   def test_check_raises_once_the_threshold_is_passed
     server = FakeRedisServer.new
 
@@ -107,10 +97,7 @@ class RedisRateLimiterTest < Minitest::Test
     assert_raises(TranslationDiff::RedisRateLimiter::RateLimitExceeded) { limiter(server).check(1) }
   end
 
-  # Ratelimit buckets five seconds at a time, so the number of buckets its
-  # count script sweeps is the interval divided by five -- exactly, since
-  # both intervals here are multiples of five. That is the only observable
-  # the interval has.
+  # Ratelimit buckets five seconds at a time, so buckets swept is the interval divided by five.
   def test_check_looks_back_over_the_default_interval
     server = FakeRedisServer.new
 
@@ -127,11 +114,7 @@ class RedisRateLimiterTest < Minitest::Test
     assert_equal [120], server.count_spans
   end
 
-  # The gem used to name the bare `Ratelimit` constant, so an application
-  # that had not installed it got a raw NameError rather than the "add this
-  # gem" message the Redis path raises. The singleton `require` here is the
-  # narrowest way to simulate the gem being absent: it shadows Kernel#require
-  # for this one object only.
+  # Naming the bare `Ratelimit` constant used to raise a raw NameError instead of this gem's own message.
   def test_a_missing_ratelimit_gem_raises_a_translation_diff_error
     limiter = limiter(FakeRedisServer.new)
     limiter.define_singleton_method(:require) { |_name| raise LoadError }
