@@ -24,24 +24,7 @@ require "translation_diff/providers"
 require "translation_diff/providers/null"
 
 require "translation_diff/providers/deepl"
-
-# Google still wraps its vendor SDK directly instead of inheriting Provider
-# -- Task 5 ports it. Providers.register now raises for exactly that shape
-# of class, which would otherwise take this entire require chain, and
-# therefore every caller of this library, down with it before the provider
-# is ever used. Until it is ported, `:google` is simply absent from the
-# registry; requesting it through TranslationDiff::Providers.build raises
-# the ordinary "unknown provider" error instead. The rescue names
-# InvalidProviderError specifically, not the generic Error, so it catches
-# only "this class is the wrong shape": an option-name collision (also a
-# TranslationDiff::Error, raised by ProviderOptionOwners) is a real bug
-# rather than an expected transitional state, and must still take the
-# require chain down.
-begin
-  require "translation_diff/providers/google"
-rescue TranslationDiff::InvalidProviderError
-  nil
-end
+require "translation_diff/providers/google"
 
 require "translation_diff/segmenters"
 require "translation_diff/segmenters/simple"

@@ -2,177 +2,174 @@
 
 require "test_helper"
 require "support/provider_contract"
-
-# `TranslationDiff::Providers::Google.build` only requires the gem lazily, at
-# call time, so whether ::Google::Cloud::Translate::V2 is already defined when
-# this file runs depends on test order -- Minitest randomises it. Requiring it
-# explicitly here means this file's constant references don't depend on some
-# other test file having required it first.
-require "google/cloud/translate/v2"
+require "support/http_provider_contract"
+require "faraday"
+require "cgi"
 
 class GoogleProviderTest < Minitest::Test
   include ProviderContract
+  include HTTPProviderContract
 
-  # Stands in for Google::Cloud::Translate::V2::Api. The single/array return
-  # asymmetry is copied deliberately from the real thing: Translation
-  # .from_gapi_list and Detection.from_gapi both return a bare object rather
-  # than a one-element array when they were given one text, and a provider
-  # that forgets that hands Request a Translation where it expects an Array.
-  class FakeApi
-    Translation = Struct.new(:text)
-    Detection = Struct.new(:language)
+  # A real response envelope, shaped from the Cloud Translation v2 REST
+  # reference read 2026-09-09: translations live under a nested "data" key,
+  # not at the top level the way DeepL's do.
+  TRANSLATE_BODY = {
+    "data" => { "translations" => [
+      { "translatedText" => "один", "detectedSourceLanguage" => "en" },
+      { "translatedText" => "два", "detectedSourceLanguage" => "en" }
+    ] }
+  }.freeze
 
-    attr_reader :calls
+  attr_reader :config, :requests
 
-    def initialize
-      @calls = []
+  def setup
+    TranslationDiff.reset!
+    @config = TranslationDiff::Configuration.new
+    @config.google_api_key = "test-key"
+    @requests = []
+  end
+
+  # Builds a provider whose connection answers from a stub and records what
+  # was sent, so a test can assert on the payload as well as the parse.
+  #
+  # When neither `body:` nor `texts:` is given, the stub echoes back
+  # whatever texts were actually sent (rather than a fixed pair), so the
+  # shared ProviderContract tests -- which call `provider` with no
+  # knowledge of how many texts they are about to send -- get a response
+  # the same size as their request instead of tripping Response.build's
+  # count check.
+  def provider(body: nil, status: 200, texts: nil)
+    stubs = stub_translate(body: body, status: status, texts: texts)
+    built = TranslationDiff::Providers::Google.new(config)
+    built.name = :google
+    built.instance_variable_set(:@connection, built.send(:build_connection) do |faraday|
+      faraday.adapter :test, stubs
+    end)
+    built
+  end
+
+  def sent = JSON.parse(requests.first.body)
+  def query = CGI.parse(requests.first.url.query.to_s)
+
+  def test_the_key_travels_in_the_query_string
+    provider.translate(translation_request(%w[one]))
+
+    assert_equal ["test-key"], query["key"]
+  end
+
+  def test_it_sends_the_texts_and_the_language_pair
+    provider.translate(translation_request(%w[one two]))
+
+    assert_equal %w[one two], sent["q"]
+    assert_equal "en", sent["source"]
+    assert_equal "ru", sent["target"]
+  end
+
+  def test_it_asks_for_html
+    provider.translate(translation_request(%w[one]))
+
+    assert_equal "html", sent["format"]
+  end
+
+  def test_a_caller_may_ask_for_plain_text
+    provider.translate(translation_request(%w[one], format: :text))
+
+    assert_equal "text", sent["format"]
+  end
+
+  # Google's codes are lower case and a config written for DeepL says "EN";
+  # but "zh-Hans" and "pt-BR" carry subtags whose casing is their own.
+  def test_it_downcases_bare_codes_and_leaves_subtagged_ones_alone
+    provider.translate(translation_request(%w[one], from: "EN", to: "zh-Hans"))
+
+    assert_equal "en", sent["source"]
+    assert_equal "zh-Hans", sent["target"]
+  end
+
+  def test_it_omits_the_source_language_when_none_was_given
+    provider.translate(translation_request(%w[one], from: nil))
+
+    refute sent.key?("source")
+  end
+
+  def test_it_parses_the_nested_data_envelope
+    body = { "data" => { "translations" => [
+      { "translatedText" => "один", "detectedSourceLanguage" => "en" }
+    ] } }
+    response = provider(body: body).translate(translation_request(%w[one], from: nil))
+
+    assert_equal %w[один], response.texts
+    assert_equal "en", response.detected_source
+  end
+
+  def test_it_returns_the_translations_in_order
+    response = provider(body: TRANSLATE_BODY).translate(translation_request(%w[one two]))
+
+    assert_equal %w[один два], response.texts
+  end
+
+  def test_a_short_response_raises_rather_than_shifting_nils_into_the_results
+    short = { "data" => { "translations" => [{ "translatedText" => "один" }] } }
+
+    assert_raises(TranslationDiff::ResponseError) do
+      provider(body: short).translate(translation_request(%w[one two]))
+    end
+  end
+
+  def test_the_api_base_option_overrides_the_default
+    config.google_api_base = "https://google.internal"
+
+    assert_equal "https://google.internal", TranslationDiff::Providers::Google.new(config).api_base
+  end
+
+  def test_a_missing_key_is_named_before_any_request
+    config.google_api_key = nil
+
+    error = assert_raises(TranslationDiff::ConfigurationError) do
+      TranslationDiff::Providers::Google.new(config)
     end
 
-    def translate(*text, **options)
-      @calls << [text, options]
-      unwrap(text.map { |value| Translation.new("#{value}-translated") })
+    assert_match(/google_api_key/, error.message)
+  end
+
+  def test_its_batch_limit_is_googles_documented_one_hundred_twenty_eight
+    assert_equal 128, TranslationDiff::Providers::Google.capabilities.max_batch_size
+  end
+
+  def test_it_claims_html_and_notranslate
+    capabilities = TranslationDiff::Providers::Google.capabilities
+
+    assert_predicate capabilities, :html?
+    assert_predicate capabilities, :notranslate?
+    assert_predicate capabilities, :detects_language?
+  end
+
+  def test_google_reports_no_billing
+    refute_predicate TranslationDiff::Providers::Google.capabilities, :reports_billing?
+  end
+
+  private
+
+  def stub_translate(body:, status:, texts:)
+    recorder = @requests
+    Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.post("/language/translate/v2") do |env|
+        # Faraday's test adapter reuses this env for the response, mutating
+        # its body in place once the block returns -- capture a copy now or
+        # every read after #translate returns sees the reply, not the
+        # request.
+        recorder << env.dup
+        [status, { "Content-Type" => "application/json; charset=UTF-8" },
+         translate_response(body, texts, env).to_json]
+      end
     end
-
-    def detect(*text)
-      @calls << [text, {}]
-      unwrap(text.map { Detection.new("en") })
-    end
-
-    private
-
-    def unwrap(results) = results.size == 1 ? results.first : results
   end
 
-  def provider = TranslationDiff::Providers::Google.new(FakeApi.new)
+  def translate_response(body, texts, env)
+    return body if body
 
-  def test_translate_unwraps_the_text_of_each_result
-    assert_equal %w[one-translated two-translated],
-                 provider.translate(%w[one two], from: :en, to: :ru)
-  end
-
-  # The API hands back a bare Translation, not a one-element array, when it
-  # was given one text. Request counts the results against the values it
-  # sent, so a provider that passes that through fails the count check.
-  def test_translate_returns_an_array_for_a_single_text
-    assert_equal %w[one-translated], provider.translate(%w[one], from: :en, to: :ru)
-  end
-
-  # What reaches a provider is not plain text: Tokenizer hands over a
-  # notranslate span with its tags intact, and leaves entities such as
-  # `&amp;` in the text it emits. Asking for plain text makes Google
-  # translate the protected span and drop its markup -- verified against
-  # the live API. `html` is what this gem's tokenizer contract requires,
-  # and what it has always sent.
-  def test_translate_asks_for_html
-    api = FakeApi.new
-
-    TranslationDiff::Providers::Google.new(api).translate(%w[one], from: :en, to: :ru)
-
-    assert_equal :html, api.calls.first.last[:format]
-  end
-
-  def test_translate_lets_the_caller_override_the_format
-    api = FakeApi.new
-
-    TranslationDiff::Providers::Google.new(api).translate(%w[one], from: :en, to: :ru, format: :text)
-
-    assert_equal :text, api.calls.first.last[:format]
-  end
-
-  # A configuration written against DeepL says "EN"; Google's codes are
-  # lowercase.
-  def test_translate_downcases_bare_language_codes
-    api = FakeApi.new
-
-    TranslationDiff::Providers::Google.new(api).translate(%w[one], from: "EN", to: "RU")
-
-    assert_equal({ from: "en", to: "ru" }, api.calls.first.last.slice(:from, :to))
-  end
-
-  # "zh-Hans", "zh-CN" and "pt-BR" carry subtags whose casing is their own;
-  # a blanket downcase would corrupt them.
-  def test_translate_passes_subtagged_codes_through_untouched
-    api = FakeApi.new
-
-    TranslationDiff::Providers::Google.new(api).translate(%w[one], from: "en", to: "zh-Hans")
-
-    assert_equal "zh-Hans", api.calls.first.last[:to]
-  end
-
-  # No source language means "detect it", which the API does when `source`
-  # is absent. Sending "" instead would be rejected.
-  def test_translate_omits_the_source_language_when_none_is_given
-    api = FakeApi.new
-
-    TranslationDiff::Providers::Google.new(api).translate(%w[one], from: nil, to: :ru)
-
-    assert_nil api.calls.first.last[:from]
-  end
-
-  def test_translate_passes_provider_options_through
-    api = FakeApi.new
-
-    TranslationDiff::Providers::Google.new(api).translate(%w[one], from: :en, to: :ru, model: "nmt")
-
-    assert_equal "nmt", api.calls.first.last[:model]
-  end
-
-  def test_translate_sends_every_text_in_one_call
-    api = FakeApi.new
-
-    TranslationDiff::Providers::Google.new(api).translate(%w[one two three], from: :en, to: :ru)
-
-    assert_equal 1, api.calls.size
-    assert_equal %w[one two three], api.calls.first.first
-  end
-
-  def test_detect_returns_the_language
-    assert_equal "en", provider.detect("etwas")
-  end
-
-  # Both numbers are Google's own, and both are load-bearing: Chunker uses
-  # them to decide where to split, and a batch over 128 is rejected outright.
-  def test_the_limits_are_the_documented_ones
-    assert_equal 128, provider.max_batch_size
-    assert_equal 5_000, provider.max_request_size
-  end
-
-  def test_build_passes_the_configured_key_to_the_api
-    config = TranslationDiff::Configuration.new
-    config.google_api_key = "abc"
-
-    provider = TranslationDiff::Providers::Google.build(config)
-
-    assert_equal "abc", provider.instance_variable_get(:@api).service.key
-  end
-
-  def test_build_passes_the_configured_project_id_to_the_api
-    config = TranslationDiff::Configuration.new
-    config.google_api_key = "abc"
-    config.google_project_id = "a-project"
-
-    provider = TranslationDiff::Providers::Google.build(config)
-
-    assert_equal "a-project", provider.instance_variable_get(:@api).service.project_id
-  end
-
-  # Without a key the gem falls through to application default credentials,
-  # which need a project id it cannot find in a test environment.
-  def test_build_raises_when_no_key_is_available
-    original = ENV.to_hash.slice("TRANSLATE_KEY", "GOOGLE_CLOUD_KEY", "TRANSLATE_PROJECT")
-    original.each_key { |key| ENV[key] = nil }
-    config = TranslationDiff::Configuration.new
-
-    assert_raises(StandardError) { TranslationDiff::Providers::Google.build(config) }
-  ensure
-    original&.each { |key, value| ENV[key] = value }
-  end
-
-  def test_it_is_registered_under_its_own_name
-    config = TranslationDiff::Configuration.new
-    config.google_api_key = "abc"
-
-    assert TranslationDiff::Providers.registered?(:google)
-    assert_equal "google", TranslationDiff::Providers.build(:google, config).cache_key
+    response_texts = texts || JSON.parse(env.body)["q"]
+    translations = response_texts.map { |t| { "translatedText" => t, "detectedSourceLanguage" => "en" } }
+    { "data" => { "translations" => translations } }
   end
 end

@@ -1,92 +1,64 @@
 # frozen_string_literal: true
 
-# Talks to Google Cloud Translation v2 (Basic) through the API object the
-# google-cloud-translate-v2 gem builds, rather than its module-level
-# shortcuts, so this library never mutates another gem's global state. Two
-# behaviours come for free by using their constructor: it reads TRANSLATE_KEY
-# and GOOGLE_CLOUD_KEY when no key is given, and it falls back to application
-# default credentials when there is no key at all.
-#
-# google-cloud-translate-v2 is not a dependency of this gem. It is required
-# at build time, so an application using a different provider never needs it
-# installed.
-class TranslationDiff::Providers::Google
-  # Google's own numbers. The batch limit is a hard one -- "the maximum
-  # number of strings is 128" -- and a larger request is rejected outright.
-  # The size limit is the documented recommendation of 5K characters per
-  # request, well under the hard 100K-byte ceiling. Chunker measures the
-  # URL-escaped form, which is never smaller than the UTF-8 byte count, so
-  # staying under this in escaped characters keeps every request under it in
-  # bytes too.
-  MAX_REQUEST_SIZE = 5_000
-  MAX_BATCH_SIZE = 128
+# Talks to Cloud Translation v2 (Basic) directly. This used to wrap
+# google-cloud-translate-v2, which pulled googleauth, signet, os,
+# google-protobuf and grpc in order to send one POST with a key in the query
+# string.
+class TranslationDiff::Providers::Google < TranslationDiff::HTTPProvider
+  HOST = "https://translation.googleapis.com"
 
-  # What arrives here is not plain text, despite having been through the
-  # Tokenizer. A notranslate span is handed over whole, tags included --
-  # that is how the tokenizer marks content the provider must leave alone --
-  # and HTML entities such as `&amp;` stay in the text it emits. Asking
-  # Google for `text` makes it translate the protected span and drop the
-  # markup around it entirely:
-  #
-  #   "<span class='notranslate'>Bold Mountain</span> is a good place."
-  #   format: text  -> "Болд Маунтин — хорошее место."
-  #   format: html  -> "<span class='notranslate'>Bold Mountain</span> — хорошее место."
-  #
-  # So `html` it is, which is also what this gem sent for its whole life
-  # before the provider seam existed. The cost is that Google escapes its
-  # own output -- a literal apostrophe returns as "&#39;" -- which is
-  # correct inside the HTML fragment these values usually are, and noise
-  # inside a value that never had markup in it. A caller translating bare
-  # strings can pass `format: :text` per call.
+  # Google's own default, and what the tokenizer's output requires: a
+  # notranslate span arrives with its tags, and entities such as &amp; stay
+  # in the text. Asking for `text` makes Google translate the protected span
+  # and drop its markup -- verified against the live API.
   DEFAULT_FORMAT = :html
 
-  # A bare alphabetic code is downcased, so a configuration written for
-  # DeepL ("EN") keeps working against Google, whose codes are lowercase.
-  # Anything else is passed through untouched: "zh-Hans", "zh-CN" and
-  # "pt-BR" carry script and region subtags whose casing is their own, and a
-  # blanket downcase would corrupt them.
+  # Google's documented limits: 128 strings per request, and a recommended
+  # 5,000 characters (the hard ceiling is 100 KB). Chunker measures the
+  # URL-escaped form, never smaller than the UTF-8 byte count, so a chunk
+  # inside 5,000 escaped characters is inside it in bytes too.
+  def self.capabilities
+    TranslationDiff::Capabilities.new(
+      max_request_size: 5_000, max_batch_size: 128, max_text_size: nil,
+      html: :format, notranslate: true, detects_language: true, reports_billing: false
+    )
+  end
+
+  def self.configuration_options = %i[google_api_key google_project_id google_api_base]
+  def self.configuration_requirements = %i[google_api_key]
+
+  # A bare alphabetic code is downcased, so a configuration written for DeepL
+  # ("EN") keeps working. Anything carrying a subtag ("zh-Hans", "pt-BR") is
+  # passed through untouched: the casing of a script or region subtag is its
+  # own, and a blanket downcase would corrupt it.
   BARE_LANGUAGE_CODE = /\A[A-Za-z]{2,3}\z/
 
-  def self.configuration_options = %i[google_api_key google_project_id]
+  def api_base = config.google_api_base || HOST
+  def translate_url = "language/translate/v2?key=#{CGI.escape(config.google_api_key.to_s)}"
+  def detect_url = "language/translate/v2/detect?key=#{CGI.escape(config.google_api_key.to_s)}"
 
-  # `config.logger` is deliberately not forwarded: the gem takes no logger,
-  # and this library's own guarantee -- that no line it writes holds source
-  # text, translated text or a credential -- is easiest to keep by never
-  # handing the logger to a gem that has not made the same promise.
-  def self.build(config)
-    require "google/cloud/translate/v2"
-
-    settings = { key: config.google_api_key, project_id: config.google_project_id }.compact
-    new(::Google::Cloud::Translate::V2.new(**settings))
-  rescue LoadError
-    raise TranslationDiff::Error,
-          "provider is :google but the `google-cloud-translate-v2` gem is not available. " \
-          'Add `gem "google-cloud-translate-v2"` to your Gemfile.'
+  def render_translate_payload(request)
+    { format: DEFAULT_FORMAT }
+      .merge(request.options)
+      .merge(q: request.texts, target: language(request.to))
+      .tap { |payload| payload[:source] = language(request.from) unless request.from.nil? }
   end
 
-  def initialize(api)
-    @api = api
-  end
+  def parse_translate_response(body, _headers, request)
+    translations = Array(body.dig("data", "translations"))
 
-  def translate(texts, from:, to:, **options)
-    settings = { from: language(from), to: language(to), format: DEFAULT_FORMAT }.merge(options)
-
-    results = @api.translate(*texts, **settings)
-    # One text yields a bare Translation, not a one-element array. `Array()`
-    # is not usable to even that out: Translation would have to be trusted
-    # never to define #to_a or #to_ary, and if it ever did, `Array()` would
-    # quietly splat one translation into several strings instead of raising.
-    results = [results] unless results.is_a?(Array)
-
-    results.map(&:text)
+    TranslationDiff::Translation::Response.build(
+      request: request,
+      texts: translations.map { |t| t["translatedText"] },
+      detected_source: translations.first&.dig("detectedSourceLanguage")&.downcase,
+      usage: TranslationDiff::Translation::Usage.new(characters: request.texts.sum(&:size))
+    )
   end
 
   def detect(text)
-    @api.detect(text).language
+    response = post(detect_url, { q: [text] })
+    response.body.dig("data", "detections", 0, 0, "language")&.downcase
   end
-
-  def max_request_size = MAX_REQUEST_SIZE
-  def max_batch_size = MAX_BATCH_SIZE
 
   private
 

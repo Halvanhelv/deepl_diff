@@ -20,9 +20,9 @@ gem "redis-namespace", "~> 1.11", require: false
 # stand-in, has it available.
 gem "ratelimit", "~> 1.1", require: false
 
-# Not a runtime dependency of the gem (see the gemspec) -- the Google
-# provider requires it lazily at build time, so an application using DeepL
-# never needs it installed. It is only here so the test suite, which
-# exercises that provider's build path against the real
-# Google::Cloud::Translate::V2 objects, has it available.
-gem "google-cloud-translate-v2", "~> 1.2", require: false
+# Not a runtime dependency of the gem (see the gemspec) -- lib/ only ever
+# needs CGI.escape, which cgi/escape (in Ruby's default load path) still
+# provides. This is here because the Google provider's test decodes the
+# query string it sent, and Ruby 4.0 removed CGI.parse from the default
+# load path; "install cgi gem" is Ruby's own suggested fix.
+gem "cgi", "~> 0.5", require: false

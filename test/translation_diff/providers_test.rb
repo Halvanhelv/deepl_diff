@@ -76,6 +76,7 @@ class ProvidersTest < Minitest::Test
   def test_the_built_in_providers_are_registered
     assert TranslationDiff::Providers.registered?(:null)
     assert TranslationDiff::Providers.registered?(:deepl)
+    assert TranslationDiff::Providers.registered?(:google)
   end
 
   def test_null_keeps_its_own_cache_key
