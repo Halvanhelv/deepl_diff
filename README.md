@@ -42,6 +42,8 @@ See [Getting started](#getting-started) below.
 
 ## Installation
 
+Ruby 3.4 or newer is required.
+
 Add this line to your application's Gemfile:
 
 ```ruby
@@ -188,6 +190,120 @@ runtime:
 | ModernMT | `:modernmt` | `modernmt_api_key` | 128 | 5,000 | yes (`format`) | no | yes | yes |
 | LibreTranslate | `:libretranslate` | `libretranslate_api_base` | 50 | 5,000 | yes (`format`) | no | yes | no |
 | Amazon | `:amazon` | `amazon_access_key_id`, `amazon_secret_access_key`, `amazon_region` | 1 | 10,000 | no | no | yes | no |
+
+### Configuring each provider
+
+Every example below is complete: set the options shown and
+`TranslationDiff.translate` works. The option names, and which of them are
+required, come from the provider itself -- see [Configuration
+options](#configuration-options) for the full list and the environment
+variables each one falls back to.
+
+**DeepL** is the default, so `config.provider` may be omitted. A key ending
+in `:fx` is a free-plan key and selects the free host on its own.
+
+```ruby
+TranslationDiff.configure do |config|
+  config.provider = :deepl
+  config.deepl_api_key = ENV["DEEPL_AUTH_KEY"]
+end
+
+TranslationDiff.translate("Hello there. Second sentence.", from: "en", to: "ru")
+```
+
+**Google Cloud Translation** needs an API key and nothing else -- no project,
+no service account.
+
+```ruby
+TranslationDiff.configure do |config|
+  config.provider = :google
+  config.google_api_key = ENV["TRANSLATE_KEY"]
+end
+```
+
+**Azure AI Translator** wants the region as well when the key belongs to a
+multi-service Cognitive Services resource; a single-service Translator
+resource needs no region.
+
+```ruby
+TranslationDiff.configure do |config|
+  config.provider = :azure
+  config.azure_api_key = ENV["AZURE_TRANSLATOR_KEY"]
+  config.azure_region = "westeurope"
+end
+```
+
+**ModernMT** takes a key and can be pointed at an adaptive memory per call,
+since every unrecognised keyword reaches the provider untouched.
+
+```ruby
+TranslationDiff.configure do |config|
+  config.provider = :modernmt
+  config.modernmt_api_key = ENV["MMT_API_KEY"]
+end
+
+TranslationDiff.translate(text, from: "en", to: "ru", hints: "1234")
+```
+
+**LibreTranslate** inverts the usual arrangement: the base URL is required
+because every instance is someone's own, and the key is optional because most
+instances ask for none. It is also the only provider here you can run
+yourself, which makes it the one to develop against.
+
+```ruby
+TranslationDiff.configure do |config|
+  config.provider = :libretranslate
+  config.libretranslate_api_base = "http://localhost:5000"
+  config.libretranslate_api_key = ENV["LIBRETRANSLATE_KEY"] # optional
+end
+```
+
+```bash
+docker run -d --rm -p 5000:5000 libretranslate/libretranslate --load-only en,ru
+```
+
+**Amazon Translate** is signed rather than keyed, so it takes credentials and
+a region. There is no environment fallback: this library does not implement
+the AWS credential chain, so `AWS_ACCESS_KEY_ID` and friends are not read --
+pass them explicitly.
+
+```ruby
+TranslationDiff.configure do |config|
+  config.provider = :amazon
+  config.amazon_access_key_id = ENV.fetch("AWS_ACCESS_KEY_ID")
+  config.amazon_secret_access_key = ENV.fetch("AWS_SECRET_ACCESS_KEY")
+  config.amazon_region = "eu-central-1"
+end
+```
+
+Add `gem "aws-sigv4"` to your Gemfile for this one. It is Amazon's own
+signing library and nothing more -- no clients, no service models -- and it
+is required lazily, so an application on any other provider never installs it.
+
+**Null** translates nothing and returns what it was given. It exists so a
+pipeline can be wired up, and its cache and instrumentation exercised, before
+anyone has paid for a key.
+
+```ruby
+TranslationDiff.configure { |config| config.provider = :null }
+```
+
+Different providers can be used side by side without disturbing the global
+configuration -- `TranslationDiff.context` yields an isolated copy, and
+`provider:` overrides one call:
+
+```ruby
+formal = TranslationDiff.context do |config|
+  config.provider = :deepl
+  config.deepl_api_key = ENV["DEEPL_AUTH_KEY"]
+end
+formal.translate(contract, from: "en", to: "de", formality: :more)
+
+TranslationDiff.translate(blog_post, from: "en", to: "de", provider: :google)
+```
+
+Both read and write the same cache, keyed per provider, so switching one
+never serves you the other's translations.
 
 **Every keyword other than `from:`, `to:`, `provider:` and `config:` is
 forwarded to the provider, and every provider applies them the same way:
