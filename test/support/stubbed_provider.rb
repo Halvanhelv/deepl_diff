@@ -5,6 +5,13 @@ require "faraday"
 # Builds a provider whose Faraday connection answers from a stub and records
 # what was sent, so a test can assert on the payload as well as on the parse.
 # Including this requires the test to define #config and #provider_class.
+#
+# `body:` is either a fixed response (a Hash, an Array, or a String) or a
+# callable that is handed the request's Faraday env and returns one -- the
+# latter is how a provider's own `provider` helper can echo back a response
+# shaped to match however many texts a particular test happened to send,
+# which the shared ProviderContract tests need and a fixed body cannot give
+# them.
 module StubbedProvider
   def requests = @requests ||= []
 
@@ -26,9 +33,14 @@ module StubbedProvider
     recorder = requests
     Faraday::Adapter::Test::Stubs.new do |stub|
       stub.post(route) do |env|
-        recorder << env
+        # Faraday's test adapter reuses this env for the response, mutating
+        # its body in place once the block returns -- capture a copy now or
+        # every read after #translate returns sees the reply, not the
+        # request.
+        recorder << env.dup
+        rendered = body.respond_to?(:call) ? body.call(env) : body
         [status, { "Content-Type" => "application/json" }.merge(headers),
-         body.is_a?(String) ? body : body.to_json]
+         rendered.is_a?(String) ? rendered : rendered.to_json]
       end
     end
   end
