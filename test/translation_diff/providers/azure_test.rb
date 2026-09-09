@@ -93,6 +93,19 @@ class AzureProviderTest < Minitest::Test
     assert_equal ["pt-BR"], query["to"]
   end
 
+  # Defaults, then caller options, then mandatory fields -- the order the other five already used.
+  def test_a_caller_option_cannot_displace_a_mandatory_query_parameter
+    request = TranslationDiff::Translation::Request.new(
+      texts: %w[one], from: :en, to: :ru,
+      options: { "to" => "de", "api-version" => "1.0", "textType" => "plain" }
+    )
+    provider.translate(request)
+
+    assert_equal ["ru"], query["to"]
+    assert_equal ["3.0"], query["api-version"]
+    assert_equal ["plain"], query["textType"]
+  end
+
   def test_it_omits_from_when_none_was_given
     provider.translate(translation_request(%w[one], from: nil))
 

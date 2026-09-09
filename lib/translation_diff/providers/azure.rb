@@ -55,11 +55,12 @@ class TranslationDiff::Providers::Azure < TranslationDiff::HTTPProvider
 
   private
 
+  # Defaults, then caller options, then mandatory fields: a caller must not displace the language pair.
   def url_for(request)
-    params = { "api-version" => API_VERSION, "to" => language(request.to),
-               "textType" => DEFAULT_TEXT_TYPE }
+    params = { "textType" => DEFAULT_TEXT_TYPE }
+             .merge(request.options.transform_keys(&:to_s))
+             .merge("api-version" => API_VERSION, "to" => language(request.to))
     params["from"] = language(request.from) unless request.from.nil?
-    params.merge!(request.options.transform_keys(&:to_s))
 
     "#{translate_url}?#{URI.encode_www_form(params)}"
   end

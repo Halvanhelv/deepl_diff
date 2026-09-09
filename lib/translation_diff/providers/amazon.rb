@@ -49,11 +49,11 @@ class TranslationDiff::Providers::Amazon < TranslationDiff::HTTPProvider
   private
 
   def call(text, request)
-    payload = {
+    payload = request.options.transform_keys(&:to_s).merge(
       "Text" => text,
       "SourceLanguageCode" => request.from.nil? ? AUTO : language(request.from),
       "TargetLanguageCode" => language(request.to)
-    }.merge(request.options.transform_keys(&:to_s))
+    )
 
     post_signed(JSON.generate(payload)).body
   end

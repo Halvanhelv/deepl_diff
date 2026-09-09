@@ -77,6 +77,28 @@ class AmazonProviderTest < Minitest::Test
     assert_equal "pt-BR", body["TargetLanguageCode"]
   end
 
+  # Every provider applies defaults, then caller options, then mandatory fields. Amazon had the last two swapped.
+  def test_a_caller_option_cannot_displace_a_mandatory_field
+    request = TranslationDiff::Translation::Request.new(
+      texts: %w[one], from: :en, to: :ru,
+      options: { TargetLanguageCode: "de", Text: "somebody else's text" }
+    )
+    provider.translate(request)
+    body = JSON.parse(requests.first.body)
+
+    assert_equal "ru", body["TargetLanguageCode"]
+    assert_equal "one", body["Text"]
+  end
+
+  def test_a_caller_option_that_displaces_nothing_still_reaches_amazon
+    request = TranslationDiff::Translation::Request.new(
+      texts: %w[one], from: :en, to: :ru, options: { Settings: { "Formality" => "FORMAL" } }
+    )
+    provider.translate(request)
+
+    assert_equal({ "Formality" => "FORMAL" }, JSON.parse(requests.first.body)["Settings"])
+  end
+
   def test_the_endpoint_is_regional
     assert_equal "https://translate.eu-central-1.amazonaws.com",
                  TranslationDiff::Providers::Amazon.new(config).api_base

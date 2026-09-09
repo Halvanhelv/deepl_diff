@@ -189,6 +189,13 @@ runtime:
 | LibreTranslate | `:libretranslate` | `libretranslate_api_base` | 50 | 5,000 | yes (`format`) | no | yes | no |
 | Amazon | `:amazon` | `amazon_access_key_id`, `amazon_secret_access_key`, `amazon_region` | 1 | 10,000 | no | no | yes | no |
 
+**Every keyword other than `from:`, `to:`, `provider:` and `config:` is
+forwarded to the provider, and every provider applies them the same way:
+its own defaults first, then your options, then the fields the request cannot
+do without.** So `formality: :less` overrides a default, and a keyword
+colliding with the language pair or the texts themselves is overridden rather
+than obeyed.
+
 **`usage.billed_characters` is `nil` when the provider said nothing about
 billing and a number -- `0` included -- when it said something.** All three
 providers that report billing follow that rule; the other four always answer
