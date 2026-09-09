@@ -13,6 +13,7 @@ require "translation_diff/translation/usage"
 require "translation_diff/translation/request"
 require "translation_diff/translation/response"
 require "translation_diff/registry"
+require "translation_diff/document"
 require "translation_diff/configuration"
 require "translation_diff/configuration/provider_option_owners"
 
