@@ -120,13 +120,23 @@ class CacheTest < Minitest::Test
                  cache.store(%w[one two three], [nil, "два", nil], %w[один три])
   end
 
-  # The exact key a translation is stored under. Change it and every user re-translates their whole corpus.
-  def test_the_key_is_the_one_users_already_have_in_their_caches
+  # The exact keys a translation is stored under, verified equal to main's -- move one and every user
+  # re-translates their whole corpus, so the digest of the options and of the sentence are pinned too.
+  # rubocop:disable-next Metrics/MethodLength
+  def test_the_keys_are_the_ones_users_already_have_in_their_caches
     key_for(value: "text", from: :en, to: :ru, provider: "deepl")
+    key_for(value: "  text  ", from: "EN", to: "RU", provider: "deepl")
     key_for(value: "text", from: :en, to: :ru, provider: "deepl", options: { formality: :less })
+    key_for(value: "Hello there.", from: :en, to: :"pt-BR", provider: "google",
+            options: { glossary_ids: %w[a b], nested: { z: 1, a: nil } })
+    key_for(value: "Ein Satz.", from: :de, to: :en, provider: "azure",
+            options: { a: "", b: 2, c: true })
 
-    assert_equal "deepl:en:ru:1cb251ec0d568de6a929b520c4aed8d1", @store.keys[0]
-    assert_equal "deepl:en:ru:80df90b8:1cb251ec0d568de6a929b520c4aed8d1", @store.keys[1]
+    assert_equal ["deepl:en:ru:1cb251ec0d568de6a929b520c4aed8d1",
+                  "deepl:en:ru:1cb251ec0d568de6a929b520c4aed8d1",
+                  "deepl:en:ru:80df90b8:1cb251ec0d568de6a929b520c4aed8d1",
+                  "google:en:pt-br:2744ebab:9d6a2963872077db674a27a39c492e61",
+                  "azure:de:en:da1fef03:84f8c5b939a540fa8da132c838a8d61d"], @store.keys
   end
 
   private
