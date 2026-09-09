@@ -25,6 +25,7 @@ require "translation_diff/providers/null"
 
 require "translation_diff/providers/deepl"
 require "translation_diff/providers/google"
+require "translation_diff/providers/azure"
 
 require "translation_diff/segmenters"
 require "translation_diff/segmenters/simple"
