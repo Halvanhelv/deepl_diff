@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # Every declared setting in one place; callable defaults are invoked on read, not at load time.
 class TranslationDiff::Configuration
   class << self

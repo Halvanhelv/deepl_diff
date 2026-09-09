@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 class TranslationDiff::Tokenizer < Ox::Sax
   SKIP = %i[script style].freeze
   INNER_SPANS = %i[notranslate span end_span end_notranslate].freeze

@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # The default cache, a bounded in-process LRU. NOT thread-safe, deliberately -- set `redis_url` for that.
 class TranslationDiff::MemoryCacheStore
   def self.build(config) = new(max_size: config.cache_max_size)

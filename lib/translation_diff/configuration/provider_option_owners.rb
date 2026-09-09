@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # Tracks which provider declared each option; two silently sharing one accessor would leak a credential.
 class TranslationDiff::Configuration::ProviderOptionOwners
   def initialize

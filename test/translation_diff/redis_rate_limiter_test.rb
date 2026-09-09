@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "test_helper"
 
 # A prior stand-in here hid a real defect: `add(size)` counted under the wrong subject and the limit never fired.

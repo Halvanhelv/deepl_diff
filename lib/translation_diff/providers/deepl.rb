@@ -1,12 +1,10 @@
-# frozen_string_literal: true
-
 # Talks to DeepL's REST API directly, not deepl-rb: it logged the auth key at DEBUG and defaulted notranslate off.
 class TranslationDiff::Providers::DeepL < TranslationDiff::HTTPProvider
-  PAID_HOST = "https://api.deepl.com"
-  FREE_HOST = "https://api-free.deepl.com"
+  PAID_HOST = "https://api.deepl.com".freeze
+  FREE_HOST = "https://api-free.deepl.com".freeze
 
   # A key ending in :fx is a free-plan key, and the free plan lives on its own host.
-  FREE_KEY_SUFFIX = ":fx"
+  FREE_KEY_SUFFIX = ":fx".freeze
 
   # DeepL honours class="notranslate" only under HTML tag handling -- otherwise content translates, tags survive.
   DEFAULT_OPTIONS = { tag_handling: :html, tag_handling_version: "v2" }.freeze
@@ -23,7 +21,7 @@ class TranslationDiff::Providers::DeepL < TranslationDiff::HTTPProvider
   def self.configuration_requirements = %i[deepl_api_key]
 
   # DeepL requires a target language even when only detection is wanted, so the provider picks one.
-  DETECTION_TARGET = "EN"
+  DETECTION_TARGET = "EN".freeze
 
   def api_base
     config.deepl_api_base || (free_key? ? FREE_HOST : PAID_HOST)

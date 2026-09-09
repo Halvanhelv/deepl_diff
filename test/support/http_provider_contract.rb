@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # What every HTTP-backed provider must do; including this requires the test to define #provider and #config.
 module HTTPProviderContract
   def test_it_declares_an_api_base_that_is_a_url

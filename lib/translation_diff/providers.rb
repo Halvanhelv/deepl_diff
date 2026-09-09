@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # Translation providers, by name; registering one also declares its configuration options.
 module TranslationDiff::Providers
   class << self

@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "faraday"
 
 # Builds a provider whose Faraday connection answers from a stub and records what was sent.

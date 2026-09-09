@@ -1,14 +1,12 @@
-# frozen_string_literal: true
-
 class TranslationDiff::RedisRateLimiter
   class RateLimitExceeded < TranslationDiff::Error; end
 
   DEFAULT_THRESHOLD = 8000
   DEFAULT_INTERVAL = 60
-  DEFAULT_NAMESPACE = "translation-diff"
+  DEFAULT_NAMESPACE = "translation-diff".freeze
 
   # This library limits the provider as a whole rather than per caller, so there is exactly one subject.
-  SUBJECT = "call"
+  SUBJECT = "call".freeze
 
   def self.build(config)
     new(config.redis_pool,

@@ -1,13 +1,11 @@
-# frozen_string_literal: true
-
 require "test_helper"
 
 class TokenizerTest < Minitest::Test
-  PLAIN_TEXT = "test\nphrase"
+  PLAIN_TEXT = "test\nphrase".freeze
 
   NESTED_NOTRANSLATE = "<span class='notranslate'>foo" \
                        "<span class='notranslate'>bar</span>baz" \
-                       "</span>"
+                       "</span>".freeze
 
   # source => expected tokens
   CASES = {

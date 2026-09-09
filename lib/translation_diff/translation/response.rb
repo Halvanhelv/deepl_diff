@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # ::build checks the count: fewer texts than requested would shift nils in and surface as a distant NoMethodError.
 module TranslationDiff::Translation
   Response = Data.define(:texts, :detected_source, :usage) do

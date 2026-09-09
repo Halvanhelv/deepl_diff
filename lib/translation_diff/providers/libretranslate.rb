@@ -1,11 +1,9 @@
-# frozen_string_literal: true
-
 # The only free, self-hosted provider here; base URL is required (everyone runs their own), API key is optional.
 class TranslationDiff::Providers::LibreTranslate < TranslationDiff::HTTPProvider
-  DEFAULT_FORMAT = "html"
+  DEFAULT_FORMAT = "html".freeze
 
   # The API's own way of asking for detection: `source` is required, and "auto" means "work it out".
-  AUTO = "auto"
+  AUTO = "auto".freeze
 
   # Observed 2026-09-09 via Docker: LibreTranslate's HTML format preserves markup but translates content anyway.
   LIBRETRANSLATE_HONOURS_NOTRANSLATE = false

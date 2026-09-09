@@ -1,8 +1,6 @@
-# frozen_string_literal: true
-
 class TranslationDiff::RedisCacheStore
   ONE_WEEK = 60 * 60 * 24 * 7
-  DEFAULT_NAMESPACE = "translation-diff"
+  DEFAULT_NAMESPACE = "translation-diff".freeze
 
   def self.build(config)
     new(config.redis_pool, timeout: config.cache_ttl, namespace: config.cache_namespace)

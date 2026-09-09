@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "test_helper"
 
 class ChunkerTest < Minitest::Test
@@ -8,7 +6,7 @@ class ChunkerTest < Minitest::Test
 
   LONG = "a" * 10
   MEDIUM = "a" * 7
-  SHORT = "x"
+  SHORT = "x".freeze
   OVERSIZED = "a" * 30
 
   CASES = {

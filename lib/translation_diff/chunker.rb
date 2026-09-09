@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 class TranslationDiff::Chunker
   class Error < TranslationDiff::Error; end
 

@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # No runtime dependency, but deliberately conservative: every guard exists to turn a split off, never on.
 class TranslationDiff::Segmenters::Simple
   # CJK terminators need no trailing whitespace and no guards -- those scripts have no case or abbreviations.

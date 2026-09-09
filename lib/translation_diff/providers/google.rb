@@ -1,8 +1,6 @@
-# frozen_string_literal: true
-
 # Talks to Cloud Translation v2 directly, not google-cloud-translate-v2, which pulled in grpc for one POST.
 class TranslationDiff::Providers::Google < TranslationDiff::HTTPProvider
-  HOST = "https://translation.googleapis.com"
+  HOST = "https://translation.googleapis.com".freeze
 
   # Verified against the live API: `text` format translates the protected span and drops its markup.
   DEFAULT_FORMAT = :html

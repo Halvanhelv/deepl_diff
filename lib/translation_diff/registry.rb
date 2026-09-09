@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # Maps a symbol to a class that builds itself from a Configuration; the whole contract is answering `build(config)`.
 class TranslationDiff::Registry
   # `kind` appears in the unknown-name error message, so it should be a singular noun: "provider".

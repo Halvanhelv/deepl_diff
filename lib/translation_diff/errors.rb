@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # No error carries the text being translated -- errors are logged, and this library handles other people's content.
 module TranslationDiff
   class ConfigurationError < Error; end

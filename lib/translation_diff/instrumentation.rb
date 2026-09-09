@@ -1,8 +1,6 @@
-# frozen_string_literal: true
-
 # Payloads carry counts, language codes and provider names -- never the text, its translation, or a credential.
 module TranslationDiff::Instrumentation
-  SUFFIX = ".translation_diff"
+  SUFFIX = ".translation_diff".freeze
 
   # `include` ignores the includer's own `private` keyword, so visibility has to be declared here.
   private

@@ -1,12 +1,10 @@
-# frozen_string_literal: true
-
 # Azure AI Translator, REST v3.0: cheapest per character, most generous per request (1,000 strings/50,000 chars).
 class TranslationDiff::Providers::Azure < TranslationDiff::HTTPProvider
-  HOST = "https://api.cognitive.microsofttranslator.com"
-  API_VERSION = "3.0"
+  HOST = "https://api.cognitive.microsofttranslator.com".freeze
+  API_VERSION = "3.0".freeze
 
   # Azure spells HTML handling `textType`, and under it honours `class=notranslate` like DeepL and Google do.
-  DEFAULT_TEXT_TYPE = "html"
+  DEFAULT_TEXT_TYPE = "html".freeze
 
   def self.capabilities
     TranslationDiff::Capabilities.new(

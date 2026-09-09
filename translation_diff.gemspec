@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 lib = File.expand_path("lib", __dir__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 require "translation_diff/version"
@@ -21,7 +19,7 @@ small edit costs the price of the edit, not the whole text.
   )
   spec.homepage = "https://github.com/Halvanhelv/translation_diff"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.2"
+  spec.required_ruby_version = ">= 3.4"
 
   if spec.respond_to?(:metadata)
     spec.metadata["allowed_push_host"] = "https://rubygems.org"

@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # The executable form of the provider contract; anything that passes can be registered and reached via translate.
 module ProviderContract
   def translation_request(texts, from: :en, to: :ru, **options)

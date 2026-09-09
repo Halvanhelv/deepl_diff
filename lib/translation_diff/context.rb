@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # An isolated configuration scope with the same entry point as TranslationDiff itself.
 class TranslationDiff::Context
   attr_reader :config

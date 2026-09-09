@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 class TranslationDiff::Linearizer
   class << self
     def linearize(struct, array = [])

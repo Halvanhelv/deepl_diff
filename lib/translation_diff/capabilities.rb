@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # Declared, not discovered -- duck-typing left notranslate silently broken on two providers.
 TranslationDiff::Capabilities = Data.define(:max_request_size, :max_batch_size,
                                             :max_text_size, :html, :notranslate,

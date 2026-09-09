@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "cgi/escape"
 require "digest/md5"
 require "forwardable"

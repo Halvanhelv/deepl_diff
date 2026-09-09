@@ -1,13 +1,11 @@
-# frozen_string_literal: true
-
 # Amazon Translate: no batch API (one text per call), no HTML mode, and requests are signed, not just headed.
 class TranslationDiff::Providers::Amazon < TranslationDiff::HTTPProvider
-  SERVICE = "translate"
-  TARGET = "AWSShineFrontendService_20170701.TranslateText"
-  CONTENT_TYPE = "application/x-amz-json-1.1"
+  SERVICE = "translate".freeze
+  TARGET = "AWSShineFrontendService_20170701.TranslateText".freeze
+  CONTENT_TYPE = "application/x-amz-json-1.1".freeze
 
   # Amazon's own way of asking for detection; reaches Comprehend under the hood, in regions that have it.
-  AUTO = "auto"
+  AUTO = "auto".freeze
 
   def self.capabilities
     TranslationDiff::Capabilities.new(
@@ -103,10 +101,10 @@ class TranslationDiff::Providers::Amazon < TranslationDiff::HTTPProvider
   end
 
   # The signature covers the body exactly as sent, so this omits `faraday.request :json` unlike the base class.
-  def build_connection(&block)
+  def build_connection(&)
     Faraday.new(url: api_base, headers: headers) do |faraday|
       faraday.request :retry, retry_options
-      adapt(faraday, &block)
+      adapt(faraday, &)
       apply_timeouts(faraday)
     end
   end

@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "pragmatic_segmenter"
 
 # Default segmenter: scores 76/80 on the Golden Rules corpus vs Simple's 47/80 (golden_rules_test.rb).
@@ -8,7 +6,7 @@ class TranslationDiff::Segmenters::Pragmatic
   class Error < TranslationDiff::Error; end
 
   # Without a language, Russian mis-segments: it treats "Проф." as a full sentence and stops there.
-  DEFAULT_LANGUAGE = "en"
+  DEFAULT_LANGUAGE = "en".freeze
 
   # A lone "\n" is incidental source formatting, not a paragraph break; a run of two or more is left alone.
   SINGLE_NEWLINE = /(?<!\n)\n(?!\n)/

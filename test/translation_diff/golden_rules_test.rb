@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "test_helper"
 
 # Adapted from diasks2/pragmatic_segmenter's Golden Rules (MIT, Copyright (c) 2015 Kevin S. Dias).

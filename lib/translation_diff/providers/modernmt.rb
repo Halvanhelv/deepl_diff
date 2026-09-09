@@ -1,11 +1,9 @@
-# frozen_string_literal: true
-
 # ModernMT: adaptive translation with translation memories.
 class TranslationDiff::Providers::ModernMT < TranslationDiff::HTTPProvider
-  HOST = "https://api.modernmt.com"
+  HOST = "https://api.modernmt.com".freeze
 
   # ModernMT spells its formats as MIME types.
-  DEFAULT_FORMAT = "text/html"
+  DEFAULT_FORMAT = "text/html".freeze
 
   # Unverified, not observed: no key was available to probe it; false is the safe assumption either way.
   MODERNMT_HONOURS_NOTRANSLATE = false

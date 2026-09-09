@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # Hands back what it was given -- for tests, and for wiring a pipeline up before a real provider is available.
 class TranslationDiff::Providers::Null < TranslationDiff::Provider
   # Deliberately not detecting: this is the provider that proves the optional branch works.

@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 # Connects this library to one translation service; knows nothing about HTTP itself -- that's HTTPProvider.
 class TranslationDiff::Provider
   # A subclass that forgets to declare capabilities under-promises, not over-promises: smaller batches, not silent risk.

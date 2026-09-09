@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "faraday"
 require "faraday/retry"
 require "json"
@@ -63,11 +61,11 @@ class TranslationDiff::HTTPProvider < TranslationDiff::Provider
   def json?(response) = response.headers["content-type"].to_s.match?(/\bjson\b/)
 
   # The block is how a test swaps in Faraday's test adapter; Amazon overrides it too, to sign the body as sent.
-  def build_connection(&block)
+  def build_connection(&)
     Faraday.new(url: api_base, headers: headers) do |faraday|
       faraday.request :json
       faraday.request :retry, retry_options
-      adapt(faraday, &block)
+      adapt(faraday, &)
       apply_timeouts(faraday)
     end
   end

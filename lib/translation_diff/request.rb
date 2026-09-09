@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 class TranslationDiff::Request
   extend Forwardable
   include TranslationDiff::Instrumentation
