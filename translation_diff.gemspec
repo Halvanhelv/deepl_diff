@@ -45,11 +45,14 @@ small edit costs the price of the edit, not the whole text.
   spec.add_development_dependency "rubocop", "~> 1.90"
   spec.add_development_dependency "simplecov", "~> 1.2"
 
-  # The only two gems this one loads. `ox` walks HTML; `pragmatic_segmenter`
-  # backs the default sentence segmenter and has zero dependencies of its
-  # own. Everything else -- the DeepL client, the connection pool, and
-  # whatever backs the cache and the rate limiter -- is supplied by the
-  # application and duck typed, so it stays out of the gemspec.
+  # `ox` walks HTML; `pragmatic_segmenter` backs the default sentence
+  # segmenter and has zero dependencies of its own; `faraday` and
+  # `faraday-retry` are the HTTP transport every REST provider inherits.
+  # Everything else -- the connection pool, and whatever backs the cache and
+  # the rate limiter -- is supplied by the application and duck typed, so it
+  # stays out of the gemspec.
+  spec.add_dependency "faraday", "~> 2.9"
+  spec.add_dependency "faraday-retry", "~> 2.2"
   spec.add_dependency "ox", "~> 2.14"
   spec.add_dependency "pragmatic_segmenter", "~> 0.3"
 end

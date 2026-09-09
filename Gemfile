@@ -4,6 +4,12 @@ source "https://rubygems.org"
 
 gemspec
 
+# json 3.0 dropped the positional `opts` argument that Faraday::Response::Json
+# still passes to JSON.parse, which turns every JSON response Faraday parses
+# into a Faraday::ParsingError. Pinned here, not in the gemspec, because it is
+# a transitive dependency of faraday rather than one of ours.
+gem "json", "< 3", require: false
+
 # Not a runtime dependency of the gem (see the gemspec) -- the DeepL
 # provider requires it lazily at build time. It is only here so the test
 # suite, which exercises that provider against the real deepl-rb objects,

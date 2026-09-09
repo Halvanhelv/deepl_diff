@@ -67,6 +67,9 @@ class TranslationDiff::Configuration
   option :segmenter, :pragmatic
   option :instrumenter, nil
   option :logger, nil
+  option :open_timeout, 5
+  option :timeout, 30
+  option :max_retries, 3
 
   # Values are copied; memoised collaborators (`provider_instance`,
   # `cache_store`, `segmenter_instance`, `rate_limiter_instance` and

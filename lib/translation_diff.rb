@@ -19,6 +19,7 @@ require "translation_diff/configuration"
 require "translation_diff/configuration/provider_option_owners"
 
 require "translation_diff/provider"
+require "translation_diff/http_provider"
 require "translation_diff/providers"
 require "translation_diff/providers/null"
 

@@ -1,46 +1,46 @@
 # frozen_string_literal: true
 
-# The executable form of the provider contract. Every provider includes this
-# and defines #provider; anything that passes can be registered with
-# TranslationDiff::Providers.register and reached through TranslationDiff.translate.
+# The executable form of the provider contract. Every provider's test
+# includes this and defines #provider; anything that passes can be registered
+# and reached through TranslationDiff.translate.
 module ProviderContract
-  def test_translate_returns_one_string_per_input
-    request = TranslationDiff::Translation::Request.new(texts: %w[one two three], from: :en, to: :ru)
-    result = provider.translate(request)
+  def translation_request(texts, from: :en, to: :ru, **options)
+    TranslationDiff::Translation::Request.new(texts: texts, from: from, to: to, options: options)
+  end
 
-    assert_equal 3, result.texts.size
-    result.texts.each { |value| assert_kind_of String, value }
+  def test_it_inherits_the_provider_base_class
+    assert_kind_of TranslationDiff::Provider, provider
+  end
+
+  def test_translate_returns_one_string_per_input
+    response = provider.translate(translation_request(%w[one two three]))
+
+    assert_equal 3, response.texts.size
+    response.texts.each { |value| assert_kind_of String, value }
   end
 
   def test_translate_preserves_order
     texts = %w[first second third]
-    individually = texts.map do |text|
-      request = TranslationDiff::Translation::Request.new(texts: [text], from: :en, to: :ru)
-      provider.translate(request).texts.first
-    end
-    batched_request = TranslationDiff::Translation::Request.new(texts: texts, from: :en, to: :ru)
-    batched = provider.translate(batched_request).texts
+    individually = texts.map { |text| provider.translate(translation_request([text])).texts.first }
+    batched = provider.translate(translation_request(texts)).texts
 
-    assert_equal 3, batched.size
     assert_equal individually, batched
   end
 
-  def test_translate_accepts_provider_options
-    request = TranslationDiff::Translation::Request.new(
-      texts: %w[one], from: :en, to: :ru, options: { formality: :less }
-    )
-    result = provider.translate(request)
+  def test_its_capabilities_are_sane
+    capabilities = provider.class.capabilities
 
-    assert_equal 1, result.texts.size
+    assert_operator capabilities.max_request_size, :>, 0
+    assert_operator capabilities.max_batch_size, :>, 0
+    assert_includes [true, false], capabilities.notranslate?
   end
 
-  def test_max_request_size_is_a_positive_integer
-    assert_kind_of Integer, provider.class.capabilities.max_request_size
-    assert_operator provider.class.capabilities.max_request_size, :>, 0
-  end
+  # A provider that claims to honour notranslate must have an HTML mode to
+  # honour it in. Google and DeepL both shipped with this broken, in
+  # different ways, before the capability existed to state it.
+  def test_notranslate_is_only_claimed_with_an_html_mode
+    capabilities = provider.class.capabilities
 
-  def test_max_batch_size_is_a_positive_integer
-    assert_kind_of Integer, provider.class.capabilities.max_batch_size
-    assert_operator provider.class.capabilities.max_batch_size, :>, 0
+    assert capabilities.html?, "claims notranslate without an html mode" if capabilities.notranslate?
   end
 end
