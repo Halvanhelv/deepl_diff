@@ -7,9 +7,9 @@ symbol through a registry -- there is only one built-in implementation.
 `config.rate_limiter_instance` is:
 
 - the object assigned to `config.rate_limiter`, if any;
-- otherwise `nil` if `rate_limit` was never set -- and `Request` checks for
-  that `nil` and skips rate limiting entirely, so the common case costs
-  nothing;
+- otherwise `nil` if `rate_limit` was never set -- and `Dispatcher#throttle`
+  checks for that `nil` and skips rate limiting entirely, so the common case
+  costs nothing;
 - otherwise a `TranslationDiff::RedisRateLimiter` built from `rate_limit`,
   `rate_interval`, `redis_url` and `cache_namespace`.
 

@@ -52,7 +52,9 @@ TranslationDiff.translate(blog_post, from: "en", to: "de", provider: :google)
 ```
 
 ```ruby
-# Any keyword other than from:, to:, provider: and config: is forwarded to the provider
+# Any keyword other than from:, to:, provider:, config: and assume_supported: is forwarded to
+# the provider. assume_supported: is this library's own decision, not a vendor's, so it's
+# reserved rather than forwarded -- it must never reach a payload.
 TranslationDiff.translate(contract, from: "en", to: "de", formality: :more)
 ```
 
@@ -138,7 +140,7 @@ This gem loads `ox`, `pragmatic_segmenter`, `faraday`, and `faraday-retry` at re
 
 ## Documentation
 
-[Configuration](docs/configuration.md) · [Providers](docs/providers.md) · [Caching](docs/caching.md) · [Contracts](docs/contracts.md) · [Instrumentation](docs/instrumentation.md) · [Errors](docs/errors.md) · [How it works](docs/how-it-works.md) · [Upgrading & development](docs/development.md)
+[Configuration](docs/configuration.md) · [Providers](docs/providers.md) · [Languages](docs/languages.md) · [Caching](docs/caching.md) · [Contracts](docs/contracts.md) · [Instrumentation](docs/instrumentation.md) · [Errors](docs/errors.md) · [How it works](docs/how-it-works.md) · [Upgrading & development](docs/development.md)
 
 ## Contributing
 
