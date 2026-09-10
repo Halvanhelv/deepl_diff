@@ -23,6 +23,53 @@ jobs:
 
       - run: bundle exec rake test
 
+  postgres:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports: ["5432:5432"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - run: bundle exec rake test
+        env:
+          TRANSLATION_DIFF_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+
+  mysql:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: translation_diff_test
+        options: >-
+          --health-cmd "mysqladmin ping" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports: ["3306:3306"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - run: bundle exec rake test
+        env:
+          TRANSLATION_DIFF_DATABASE_URL: trilogy://root@127.0.0.1:3306/translation_diff_test
+
   lint:
     runs-on: ubuntu-latest
 

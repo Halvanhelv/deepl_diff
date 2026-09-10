@@ -1,4 +1,4 @@
-# The executable form of the cache store contract; anything that passes can be TranslationDiff's cache.
+# The executable form of the required cache store contract; anything that passes can be TranslationDiff's cache.
 module CacheStoreContract
   def test_write_then_read_multi_returns_the_value
     store.write("a", "one")

@@ -2,16 +2,20 @@
 
 ## The rate limiter contract
 
-Unlike `provider`, `cache` and `segmenter`, `rate_limiter` does not resolve a
-symbol through a registry -- there is only one built-in implementation.
-`config.rate_limiter_instance` is:
+Like `provider`, `cache` and `segmenter`, `rate_limiter` resolves a symbol
+through its own registry, `TranslationDiff::RateLimiters` -- `:redis` and
+`:active_record` are registered there. `config.rate_limiter_instance` is:
 
-- the object assigned to `config.rate_limiter`, if any;
+- the object assigned to `config.rate_limiter`, if any -- an object still
+  bypasses the registry entirely, the same way it does for `cache`;
 - otherwise `nil` if `rate_limit` was never set -- and `Dispatcher#throttle`
   checks for that `nil` and skips rate limiting entirely, so the common case
   costs nothing;
-- otherwise a `TranslationDiff::RedisRateLimiter` built from `rate_limit`,
-  `rate_interval`, `redis_url` and `cache_namespace`.
+- otherwise the registered limiter named by `config.rate_limiter`, or
+  `TranslationDiff::RedisRateLimiter` when `rate_limiter` is left unset --
+  built from `rate_limit`, `rate_interval`, `cache_namespace`, and either
+  `redis_url` (`:redis`) or `active_record_base` and `rate_limit_table_name`
+  (`:active_record`; see [SQL cache](sql-cache.md)).
 
 An object assigned to `rate_limiter` must implement:
 
@@ -23,10 +27,14 @@ def check(size); end
 
 `TranslationDiff::RedisRateLimiter` raises
 `TranslationDiff::RedisRateLimiter::RateLimitExceeded` when its threshold is
-exceeded within its interval. Neither `redis` nor `connection_pool` nor
-`ratelimit` is a dependency of this gem: `ratelimit` is required on the first
-check, so an application that configures no `rate_limit` never needs it, and
-its absence raises `TranslationDiff::Error` naming the gem to add.
+exceeded within its interval;
+`TranslationDiff::ActiveRecordRateLimiter` raises its own
+`RateLimitExceeded`, a distinct class under the same name. Neither `redis`
+nor `connection_pool` nor `ratelimit` is a dependency of this gem:
+`ratelimit` is required on the first check, so an application that
+configures no `rate_limit` never needs it, and its absence raises
+`TranslationDiff::Error` naming the gem to add. `activerecord` is never a
+dependency either -- see [SQL cache](sql-cache.md#the-activerecord-version-floor).
 
 **Upgrading to 3.1.0: re-validate your `rate_limit` threshold.** Before this
 release, `RedisRateLimiter` never actually limited anything -- a signature
@@ -47,6 +55,18 @@ behaves as `5`. Combined with the fix above, an interval configured above
 limiter up to six times more eagerly than the configured value suggests.
 Keep `rate_interval` within 5-600 seconds if you want the configured number
 to be the enforced one.
+
+Both the clamp above and the upgrade note before it are about
+`RedisRateLimiter`, which delegates its bucketing to the `ratelimit` gem.
+`ActiveRecordRateLimiter` owns its own bucketing instead, and its window is
+sliding rather than tumbling: buckets are `rate_interval / 12` seconds wide
+(floored at 1 second), and a check sums every bucket touching the trailing
+`rate_interval` seconds -- including the oldest one, which is only ever
+partially inside that window, summed in full rather than pro-rated. So the
+window actually enforced is `rate_interval` to `rate_interval +
+rate_interval / 12` seconds: slightly stricter than configured, never
+looser, and with no external clamp. See
+[SQL cache](sql-cache.md#the-rate-limiter).
 
 ## The segmenter contract
 

@@ -20,6 +20,21 @@ class SentenceCacheTest < Minitest::Test
     def write(key, value) = @writes[key] = value
   end
 
+  # Same recording behaviour as RecordingStore, plus write_multi, to prove the batched path is taken when offered.
+  class BatchingStore < RecordingStore
+    attr_reader :write_multi_calls
+
+    def initialize(values = {})
+      super
+      @write_multi_calls = []
+    end
+
+    def write_multi(pairs)
+      @write_multi_calls << pairs
+      pairs.each { |key, value| @writes[key] = value }
+    end
+  end
+
   def cache(store, **)
     TranslationDiff::SentenceCache.new(
       store: store, provider: "deepl", from: "en", to: "ru", **
@@ -58,6 +73,42 @@ class SentenceCacheTest < Minitest::Test
     subject_cache.store(subject)
 
     assert_equal ["Один."], store.writes.values
+  end
+
+  def test_store_batches_every_translated_segment_into_one_write_multi_call
+    subject = segments("One.", "Two.")
+    subject.zip(%w[Один. Два.]).each { |segment, translation| segment.translation = translation }
+    store = BatchingStore.new
+    subject_cache = cache(store)
+
+    subject_cache.store(subject)
+
+    expected = subject.map { |segment| [subject_cache.key(segment), segment.translation] }
+    assert_equal [expected], store.write_multi_calls
+  end
+
+  # A batch of nothing is not a batch: a store that opens a transaction in write_multi must not be asked to.
+  def test_store_never_calls_a_batching_store_when_nothing_was_translated
+    store = BatchingStore.new
+
+    cache(store).store(segments("One."))
+
+    assert_empty store.write_multi_calls
+  end
+
+  # The compatibility guarantee: a custom store written against today's write-only contract keeps working untouched.
+  def test_store_falls_back_to_write_per_key_when_the_store_has_no_write_multi
+    subject = segments("One.", "Two.")
+    subject.first.translation = "Один."
+    subject.last.translation = "Два."
+    store = RecordingStore.new
+    refute_respond_to store, :write_multi
+    subject_cache = cache(store)
+
+    subject_cache.store(subject)
+
+    assert_equal({ subject_cache.key(subject.first) => "Один.", subject_cache.key(subject.last) => "Два." },
+                 store.writes)
   end
 
   # The bug this replaces: the old cache consumed the array of updates it was

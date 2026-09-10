@@ -41,6 +41,88 @@ class ConfigurationTest < Minitest::Test
     assert_equal 60, @config.cache_ttl
   end
 
+  def test_a_nil_cache_ttl_sticks_instead_of_falling_back_to_the_default
+    @config.cache_ttl = nil
+
+    assert_nil @config.cache_ttl
+  end
+
+  def test_a_zero_cache_ttl_also_means_never_expires
+    @config.cache_ttl = 0
+
+    assert_nil @config.cache_ttl
+  end
+
+  def test_a_negative_cache_ttl_also_means_never_expires
+    @config.cache_ttl = -1
+
+    assert_nil @config.cache_ttl
+  end
+
+  def test_cache_ttl_coerces_a_numeric_string_the_way_an_env_var_arrives
+    @config.cache_ttl = "3600"
+
+    assert_equal 3600, @config.cache_ttl
+  end
+
+  def test_a_coerced_non_positive_cache_ttl_string_also_means_never_expires
+    @config.cache_ttl = "0"
+
+    assert_nil @config.cache_ttl
+  end
+
+  def test_cache_ttl_refuses_a_non_numeric_string_with_a_clear_message
+    error = assert_raises(TranslationDiff::Error) { @config.cache_ttl = "lots" }
+
+    assert_match(/cache_ttl/, error.message)
+  end
+
+  def test_cache_prune_probability_coerces_a_numeric_string_the_way_an_env_var_arrives
+    @config.cache_prune_probability = "0.5"
+
+    assert_in_delta 0.5, @config.cache_prune_probability
+  end
+
+  def test_cache_prune_probability_refuses_a_non_numeric_string_with_a_clear_message
+    error = assert_raises(TranslationDiff::Error) { @config.cache_prune_probability = "lots" }
+
+    assert_match(/cache_prune_probability/, error.message)
+  end
+
+  def test_cache_prune_probability_refuses_a_value_above_one
+    error = assert_raises(TranslationDiff::Error) { @config.cache_prune_probability = 2.0 }
+
+    assert_match(/between 0 and 1/, error.message)
+  end
+
+  def test_cache_prune_probability_refuses_a_negative_value
+    error = assert_raises(TranslationDiff::Error) { @config.cache_prune_probability = -1 }
+
+    assert_match(/between 0 and 1/, error.message)
+  end
+
+  def test_cache_prune_probability_accepts_the_boundary_values
+    @config.cache_prune_probability = 0
+
+    assert_in_delta 0.0, @config.cache_prune_probability
+
+    @config.cache_prune_probability = 1
+
+    assert_in_delta 1.0, @config.cache_prune_probability
+  end
+
+  def test_cache_namespace_longer_than_64_characters_is_refused_at_configure_time
+    error = assert_raises(TranslationDiff::Error) { @config.cache_namespace = "n" * 65 }
+
+    assert_match(/64/, error.message)
+  end
+
+  def test_cache_namespace_at_the_64_character_limit_is_accepted
+    @config.cache_namespace = "n" * 64
+
+    assert_equal "n" * 64, @config.cache_namespace
+  end
+
   def test_a_callable_default_is_evaluated_on_every_read_not_at_load_time
     original = ENV.fetch("REDIS_URL", nil)
     ENV["REDIS_URL"] = "redis://first"
@@ -314,6 +396,30 @@ class ConfigurationTest < Minitest::Test
     @config.redis_url = "redis://localhost:6379"
 
     assert_instance_of TranslationDiff::RedisRateLimiter, @config.rate_limiter_instance
+  end
+
+  def test_a_symbol_rate_limiter_resolves_through_the_registry
+    @config.rate_limit = 100
+    @config.rate_limiter = :active_record
+
+    assert_instance_of TranslationDiff::ActiveRecordRateLimiter, @config.rate_limiter_instance
+  end
+
+  def test_a_string_rate_limiter_resolves_through_the_registry
+    @config.rate_limit = 100
+    @config.rate_limiter = "active_record"
+
+    assert_instance_of TranslationDiff::ActiveRecordRateLimiter, @config.rate_limiter_instance
+  end
+
+  def test_an_unknown_rate_limiter_name_raises_listing_what_is_registered
+    @config.rate_limit = 100
+    @config.rate_limiter = :nonsense
+
+    error = assert_raises(TranslationDiff::Error) { @config.rate_limiter_instance }
+
+    assert_includes error.message, "rate limiter"
+    assert_includes error.message, "redis"
   end
 
   def test_an_assigned_rate_limiter_object_wins_over_every_value

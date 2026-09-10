@@ -1,5 +1,6 @@
 require "cgi/escape"
 require "digest/md5"
+require "digest/sha2"
 require "forwardable"
 require "stringio"
 
@@ -26,6 +27,8 @@ require "translation_diff/batch"
 require "translation_diff/fragment"
 require "translation_diff/passage"
 require "translation_diff/sentence_cache"
+require "translation_diff/cache_ttl_option"
+require "translation_diff/cache_guard_options"
 require "translation_diff/configuration"
 require "translation_diff/configuration/provider_option_owners"
 
@@ -47,11 +50,19 @@ require "translation_diff/segmenters/pragmatic"
 require "translation_diff/stores"
 require "translation_diff/memory_cache_store"
 require "translation_diff/redis_cache_store"
+require "translation_diff/active_record_support"
+require "translation_diff/active_record_cache_store"
+require "translation_diff/rate_limiters"
 require "translation_diff/redis_rate_limiter"
+require "translation_diff/active_record_rate_limiter"
 require "translation_diff/instrumentation"
 require "translation_diff/dispatcher"
 require "translation_diff/translator"
 require "translation_diff/context"
+
+# Only when a host application has already loaded Rails -- never required unconditionally, so a non-Rails
+# application never pays for it, and the gem's own suite exercises this same guarded require, not a shortcut.
+require "translation_diff/railtie" if defined?(Rails::Railtie)
 
 module TranslationDiff
   class << self

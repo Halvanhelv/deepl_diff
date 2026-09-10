@@ -30,6 +30,74 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   quietly too low: only three of the six built-in providers report billing
   at all. See [Instrumentation](docs/instrumentation.md).
 
+- **A SQL-backed cache store and rate limiter, for an application that runs
+  Postgres or MySQL and does not want Redis for this alone.**
+  `TranslationDiff::ActiveRecordCacheStore` (`config.cache =
+  :active_record`) and `TranslationDiff::ActiveRecordRateLimiter`
+  (`config.rate_limiter = :active_record`) cache translations and throttle
+  requests in the application's own database, exercised in CI against
+  Postgres, MySQL and SQLite. Nothing on this branch is breaking: both
+  are opt-in, the default resolution of `cache` and `rate_limiter` is
+  untouched, and an application with `redis_url` set keeps getting Redis
+  exactly as before. `rails generate translation_diff:install` writes the
+  migration for both tables, idempotently -- every `create_table` and
+  `add_index` in it carries `if_not_exists: true`; for anyone not on Rails,
+  its body is in [SQL cache](docs/sql-cache.md) verbatim -- **the gem
+  itself never runs DDL.** `rake translation_diff:prune` ships inside the
+  gem: a `Railtie` wires it into a Rails application's own rake tasks
+  automatically, enhanced with `:environment` so it prunes that
+  application's own configuration; a non-Rails application loads the task
+  file itself and
+  must configure `TranslationDiff` before running it, since the task gets
+  no `:environment`-equivalent there. ActiveRecord 7.1 or newer is
+  required when either is used, refused by name at build time rather than
+  failing inside a query, and `activerecord` is never a dependency of this
+  gem -- it is required lazily on first use, the same way `redis` already
+  is. Four new configuration options: `cache_table_name`,
+  `rate_limit_table_name`, `active_record_base` and
+  `cache_prune_probability`; the last, along with `cache_namespace`, is
+  now validated at `configure` time -- a `cache_prune_probability` that
+  will not coerce to a number, or a `cache_namespace` over 64 characters,
+  is refused before either reaches a query. See
+  [SQL cache](docs/sql-cache.md).
+- **The SQL cache store's write joins the caller's transaction, and its
+  errors are redacted, not silent.** A rollback in the caller's transaction
+  discards translations `ActiveRecordCacheStore` already wrote -- the
+  largest behavioural difference from `RedisCacheStore`, which is never
+  inside anyone's transaction. A failed write itself runs in its own
+  savepoint, so it no longer aborts a transaction it does not own, and the
+  `TranslationDiff::Error` it raises carries the adapter's error class, not
+  the row. `upsert_all` inlines values rather than binding them, though, so
+  a written translation still appears verbatim in the host application's
+  own ActiveRecord log at `debug` -- unrelated to this gem's own `logger`
+  option, which never prints content. See
+  [Transactions](docs/sql-cache.md#transactions) and
+  [What ends up in your log](docs/sql-cache.md#what-ends-up-in-your-log).
+- **`cache_ttl` of `0` or less now means never expires, and `nil` is
+  reachable through `TranslationDiff.configure`.** Previously `nil` was
+  documented as meaningful but unreachable through the public
+  configuration path, and `0` wrote a row whose `expires_at` was already in
+  the past -- a cache entry that could never hit. Both now fold to the same
+  `nil` `expires_at`. See
+  [`cache_ttl` becomes `expires_at`](docs/sql-cache.md#cache_ttl-becomes-expires_at).
+- **`ActiveRecordRateLimiter`'s sliding window is conservative, not
+  exact.** It sums the oldest bucket touching the trailing `rate_interval`
+  seconds in full, even though that bucket is only ever partially inside
+  the window, so the window actually enforced is `rate_interval` to
+  `rate_interval + rate_interval / 12` seconds -- slightly stricter than
+  configured, never looser. See
+  [The rate limiter](docs/sql-cache.md#the-rate-limiter).
+- `write_multi(pairs)` joins the cache store contract, as an optional
+  method: a store that implements it gets one call carrying a whole batch
+  of sentences instead of one call per sentence; a store that does not is
+  still called once per sentence, exactly as before this method existed --
+  a custom cache store written against the older contract is unaffected.
+  All three shipped stores implement it now: `MemoryCacheStore` and
+  `RedisCacheStore` gain it here too, alongside `ActiveRecordCacheStore`.
+  The two batching paths fail differently from the per-key one and from
+  each other -- see
+  [The three write paths fail differently](docs/caching.md#the-three-write-paths-fail-differently).
+
 ### Security
 
 - `Configuration#inspect` and `Provider#inspect` print `[FILTERED]` in place

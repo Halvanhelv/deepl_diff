@@ -50,10 +50,13 @@ Everything below is a collaborator one of the two drives.
    translation to a sentence by position after the fact.
 
 6. **What came back is written home, and the value is rebuilt.**
-   Only sentences that actually got a translation are cached. Then each
-   passage renders itself -- markup fragments byte-exact, translated
-   sentences re-encoded as HTML text -- and `Document` puts the renders back
-   into the caller's shape.
+   Only sentences that actually got a translation are cached, through
+   `TranslationDiff::SentenceCache#store` -- see [`write_multi` is
+   optional](caching.md#write_multi-is-optional) for what happens when the
+   store's write fails partway through a batch. Then each passage renders
+   itself -- markup fragments byte-exact, translated sentences re-encoded as
+   HTML text -- and `Document` puts the renders back into the caller's
+   shape.
 
 `TranslationDiff::Markup` is the small module underneath steps 2, 3 and 6: it
 decodes entity references on the way to a provider, encodes `&` and `<` again

@@ -111,12 +111,12 @@ See [Providers](docs/providers.md) for configuring each one, the full capabiliti
 - **Six built-in providers** -- DeepL, Google Cloud Translation, Azure AI Translator, ModernMT, LibreTranslate, Amazon Translate -- or bring your own by subclassing a small base class
 - **HTML aware:** markup is preserved, and `class="notranslate"` can protect a span (provider support varies -- see the caveats below)
 - **Any shape:** strings, arrays, and deep hashes go in and come back translated in the same shape
-- **Two cache stores:** `MemoryCacheStore` out of the box, `RedisCacheStore` once you configure `redis_url`
+- **Three cache stores:** `MemoryCacheStore` out of the box, `RedisCacheStore` once you configure `redis_url`, `ActiveRecordCacheStore` to cache in your own database instead -- see [SQL cache](docs/sql-cache.md)
 - **Isolated contexts:** `TranslationDiff.context` for multi-tenant apps and per-request provider overrides, without touching the global configuration
 - **Pluggable sentence segmenter:** `pragmatic_segmenter` by default, with a zero-dependency `Simple` alternative
 - **HTTP retries, timeouts, and backoff** on every REST-backed provider, via `faraday` and `faraday-retry`
 - **One error hierarchy** under `TranslationDiff::Error`, carrying the provider name and HTTP status
-- **Optional rate limiting and instrumentation** -- credentials and translated content never appear in a log line
+- **Optional rate limiting and instrumentation** -- credentials and translated content never appear in a log line this gem writes (the SQL cache store is the one exception worth knowing before you adopt it -- see [SQL cache](docs/sql-cache.md#what-ends-up-in-your-log))
 
 ## Installation
 
@@ -140,7 +140,7 @@ This gem loads `ox`, `pragmatic_segmenter`, `faraday`, and `faraday-retry` at re
 
 ## Documentation
 
-[Configuration](docs/configuration.md) · [Providers](docs/providers.md) · [Languages](docs/languages.md) · [Caching](docs/caching.md) · [Contracts](docs/contracts.md) · [Instrumentation](docs/instrumentation.md) · [Errors](docs/errors.md) · [How it works](docs/how-it-works.md) · [Upgrading & development](docs/development.md)
+[Configuration](docs/configuration.md) · [Providers](docs/providers.md) · [Languages](docs/languages.md) · [Caching](docs/caching.md) · [SQL cache](docs/sql-cache.md) · [Contracts](docs/contracts.md) · [Instrumentation](docs/instrumentation.md) · [Errors](docs/errors.md) · [How it works](docs/how-it-works.md) · [Upgrading & development](docs/development.md)
 
 ## Contributing
 

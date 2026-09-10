@@ -55,15 +55,19 @@ at all, so an unset environment variable never has to be special-cased.
 | --- | --- | --- |
 | `provider` | `:deepl` | The translation provider: a registered name or a `TranslationDiff::Provider` of your own. See [Providers](providers.md). |
 | `cache` | `nil` | The cache store: a registered name or an object satisfying the [cache store contract](caching.md#the-cache-store-contract). `nil` means "choose for me" -- see below. |
-| `cache_ttl` | `604_800` (one week) | Seconds a Redis cache entry is kept. Only meaningful for `RedisCacheStore`; `MemoryCacheStore` evicts by size instead. |
-| `cache_namespace` | `"translation-diff"` | Prefix applied to every Redis key this gem writes -- both cache entries and the rate limiter's own bookkeeping. |
+| `cache_ttl` | `604_800` (one week) | Seconds an entry is kept before it expires. Read by `RedisCacheStore` (a `SETEX`) and by `ActiveRecordCacheStore` (written into each row's `expires_at`); `MemoryCacheStore` evicts by size instead and ignores it. A non-positive value (`0` or less, or `nil`) means never expires. A String is coerced, so an environment variable works; a value that is not a number is refused at `configure` time rather than mid-translation. See [SQL cache](sql-cache.md#cache_ttl-becomes-expires_at). |
+| `cache_namespace` | `"translation-diff"` | Prefix applied to every Redis key this gem writes -- both cache entries and the rate limiter's own bookkeeping. Also the `namespace` column both SQL tables share and the unit `ActiveRecordCacheStore#prune` operates on. At most 64 characters -- longer is refused at `configure` time. See [SQL cache](sql-cache.md#the-tables). |
 | `cache_max_size` | `1_000` | Maximum number of entries `MemoryCacheStore` keeps before evicting the least recently used one. |
+| `cache_table_name` | `"translation_diff_translations"` | Table `ActiveRecordCacheStore` reads and writes. For a host with its own table-naming convention. See [SQL cache](sql-cache.md). |
+| `rate_limit_table_name` | `"translation_diff_rate_limits"` | Table `ActiveRecordRateLimiter` reads and writes. As above. |
+| `active_record_base` | `nil` (`::ActiveRecord::Base`) | The class `ActiveRecordCacheStore` and `ActiveRecordRateLimiter` build their model from -- point this at a second database, or a reader/writer role. See [SQL cache](sql-cache.md#active_record_base-a-second-database-or-a-readerwriter-role). |
+| `cache_prune_probability` | `0.0` | Chance, per write, that `ActiveRecordCacheStore` prunes expired rows before returning. `0.0` is off, and a value outside `0.0..1.0` is refused at `configure` time; `rake translation_diff:prune` is the other way to prune. See [SQL cache](sql-cache.md#pruning-three-answers-none-imposed). |
 | `redis_url` | `ENV["REDIS_URL"]` | Where to connect for the Redis-backed cache store and rate limiter. Setting this is what makes `cache` default to `:redis` instead of `:memory`. |
 | `redis_pool_size` | `5` | Size of the connection pool built from `redis_url`. |
 | `redis_pool_timeout` | `5` | Seconds to wait for a connection from that pool before raising. |
 | `rate_limit` | `nil` | Character threshold per `rate_interval`. Unset means no rate limiting at all. |
 | `rate_interval` | `60` | Seconds over which `rate_limit` is measured. **Actually enforced over roughly 5-600 seconds** -- see [The rate limiter contract](contracts.md#the-rate-limiter-contract). |
-| `rate_limiter` | `nil` | An object satisfying the [rate limiter contract](contracts.md#the-rate-limiter-contract), to use in place of the built-in Redis-backed one. |
+| `rate_limiter` | `nil` | A registered name (`:redis`, `:active_record`) or an object satisfying the [rate limiter contract](contracts.md#the-rate-limiter-contract). `nil` with `rate_limit` set resolves to `:redis`. |
 | `segmenter` | `:pragmatic` | The sentence segmenter: a registered name or an object satisfying the [segmenter contract](contracts.md#the-segmenter-contract). |
 | `instrumenter` | `nil` | Anything satisfying `ActiveSupport::Notifications`' `#instrument(name, payload) { }` interface. See [Instrumentation and logging](instrumentation.md). |
 | `logger` | `nil` | A standard `Logger`. Receives one `debug` line per provider resolution, naming the provider class -- never content and never a credential. See [Instrumentation and logging](instrumentation.md). |

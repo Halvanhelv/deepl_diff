@@ -1,0 +1,24 @@
+class CreateTranslationDiffTables < ActiveRecord::Migration[<%= ActiveRecord::Migration.current_version %>]
+  def change
+    create_table :translation_diff_translations, if_not_exists: true do |t|
+      t.string :namespace, null: false, limit: 64
+      t.string :key_digest, null: false, limit: 64
+      t.text :translation, null: false
+      t.datetime :expires_at
+      t.timestamps
+    end
+
+    add_index :translation_diff_translations, %i[namespace key_digest], unique: true,
+              name: "index_translation_diff_translations_on_key", if_not_exists: true
+    add_index :translation_diff_translations, :expires_at, if_not_exists: true
+
+    create_table :translation_diff_rate_limits, if_not_exists: true do |t|
+      t.string :namespace, null: false, limit: 64
+      t.bigint :bucket, null: false
+      t.integer :characters, null: false, default: 0
+    end
+
+    add_index :translation_diff_rate_limits, %i[namespace bucket], unique: true,
+              name: "index_translation_diff_rate_limits_on_bucket", if_not_exists: true
+  end
+end

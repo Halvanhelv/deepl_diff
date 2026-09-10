@@ -1,8 +1,10 @@
 require "test_helper"
 require "support/cache_store_contract"
+require "support/batching_cache_store_contract"
 
 class MemoryCacheStoreTest < Minitest::Test
   include CacheStoreContract
+  include BatchingCacheStoreContract
 
   attr_reader :store
 
@@ -30,6 +32,17 @@ class MemoryCacheStoreTest < Minitest::Test
     store.write("d", "d")
 
     assert_equal ["again", nil, "c", "d"], store.read_multi(%w[a b c d])
+  end
+
+  # The regression that broke the Redis store: this one takes no timeout at all, so a nil cache_ttl is a no-op here.
+  def test_build_ignores_a_nil_cache_ttl_and_writes_normally
+    config = TranslationDiff::Configuration.new
+    config.cache_ttl = nil
+
+    built = TranslationDiff::MemoryCacheStore.build(config)
+    built.write("a", "one")
+
+    assert_equal ["one"], built.read_multi(["a"])
   end
 
   def test_build_takes_its_bound_from_the_configuration

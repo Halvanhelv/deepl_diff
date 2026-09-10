@@ -51,3 +51,5 @@ class TranslationDiff::RedisRateLimiter
           'Add `gem "ratelimit"` to your Gemfile.'
   end
 end
+
+TranslationDiff::RateLimiters.register(:redis, TranslationDiff::RedisRateLimiter)

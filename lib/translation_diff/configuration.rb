@@ -44,6 +44,10 @@ class TranslationDiff::Configuration
   option :cache_ttl, 604_800
   option :cache_namespace, "translation-diff"
   option :cache_max_size, 1_000
+  option :cache_table_name, "translation_diff_translations"
+  option :rate_limit_table_name, "translation_diff_rate_limits"
+  option :active_record_base, nil
+  option :cache_prune_probability, 0.0
   option :redis_url, -> { ENV.fetch("REDIS_URL", nil) }
   option :redis_pool_size, 5
   option :redis_pool_timeout, 5
@@ -57,6 +61,9 @@ class TranslationDiff::Configuration
   option :timeout, 30
   option :max_retries, 3
   option :validate_languages, true
+
+  prepend TranslationDiff::CacheTtlOption
+  prepend TranslationDiff::CacheGuardOptions
 
   # Credentials are filtered by name; everything else is shown, or an inspect is one nobody reads.
   def inspect = "#<#{self.class.name} #{TranslationDiff::Redaction.render(self).join(' ')}>"
@@ -87,10 +94,9 @@ class TranslationDiff::Configuration
 
   # nil, not a null object: Dispatcher#throttle checks for nil and skips rate-limiting -- costs nothing normally.
   def rate_limiter_instance
-    return rate_limiter unless rate_limiter.nil?
-    return nil if rate_limit.nil?
+    return nil if rate_limiter.nil? && rate_limit.nil?
 
-    @rate_limiter_instance ||= TranslationDiff::RedisRateLimiter.build(self)
+    @rate_limiter_instance ||= resolve(rate_limiter || :redis, TranslationDiff::RateLimiters)
   end
 
   # One pool shared by the cache store and the rate limiter; callers used to build and pass it by hand.

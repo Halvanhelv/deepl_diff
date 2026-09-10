@@ -36,3 +36,6 @@ namespace :languages do
     report[:failed].each { |name, message| warn "failed: #{name}: #{message}" }
   end
 end
+
+# The task itself ships in lib/, so a host application's own `rake` can load it too -- this just reuses it here.
+load File.expand_path("lib/translation_diff/tasks/translation_diff.rake", __dir__)
