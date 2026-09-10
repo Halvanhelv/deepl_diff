@@ -7,12 +7,16 @@ class PruneTaskTest < Minitest::Test
     def prune = @count
   end
 
+  # Loads the task from the gem's own lib/ file -- what a host application's `rake` actually sees -- not the
+  # development Rakefile, which a host application's `rake` never loads.
+  TASK_FILE = File.expand_path("../../lib/translation_diff/tasks/translation_diff.rake", __dir__)
+
   # The application is global, so it is put back: the next Rake-based test must not inherit this one's tasks.
   def setup
     TranslationDiff.reset!
     @previous_application = Rake.application
     Rake.application = Rake::Application.new
-    load File.expand_path("../../Rakefile", __dir__)
+    load TASK_FILE
   end
 
   def teardown

@@ -57,6 +57,10 @@ require "translation_diff/dispatcher"
 require "translation_diff/translator"
 require "translation_diff/context"
 
+# Only when a host application has already loaded Rails -- never required unconditionally, so a non-Rails
+# application never pays for it, and the gem's own suite exercises this same guarded require, not a shortcut.
+require "translation_diff/railtie" if defined?(Rails::Railtie)
+
 module TranslationDiff
   class << self
     def config = @config ||= Configuration.new
