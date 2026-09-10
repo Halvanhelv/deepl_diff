@@ -32,9 +32,14 @@ class TranslationDiff::ActiveRecordRateLimiter
 
   # A sliding window: every bucket covering the last `interval` seconds is summed, not just the current one.
   def check(size)
-    raise RateLimitExceeded if current_total >= @threshold
+    raise RateLimitExceeded, exceeded_message if current_total >= @threshold
 
     add(size)
+  end
+
+  # Counts and settings, never a character of what was being translated.
+  def exceeded_message
+    "rate limit reached for #{@namespace}: #{@threshold} characters per #{@interval} seconds"
   end
 
   # Buckets that have fully aged out of the window as of now; the oldest bucket itself is still counted by it.

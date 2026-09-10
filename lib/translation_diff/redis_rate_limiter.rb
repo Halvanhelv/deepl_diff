@@ -31,13 +31,19 @@ class TranslationDiff::RedisRateLimiter
 
     connection_pool.with do |redis|
       rate_limit = limiter_class.new(namespace, redis: redis)
-      raise RateLimitExceeded if rate_limit.exceeded?(SUBJECT, threshold: threshold, interval: interval)
+      raise RateLimitExceeded, exceeded_message if rate_limit.exceeded?(SUBJECT, threshold: threshold,
+                                                                                interval: interval)
 
       rate_limit.add(SUBJECT, size)
     end
   end
 
   private
+
+  # Counts and settings, never a character of what was being translated.
+  def exceeded_message
+    "rate limit reached for #{namespace}: #{threshold} characters per #{interval} seconds"
+  end
 
   attr_reader :connection_pool, :threshold, :interval, :namespace
 
