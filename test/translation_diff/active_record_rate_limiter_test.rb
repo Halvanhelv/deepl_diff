@@ -58,23 +58,42 @@ if ActiveRecordDatabase.available?
 
     def test_prune_deletes_buckets_older_than_the_window_and_leaves_the_current_one
       limiter = build_limiter(threshold: 1000, interval: 60)
-      model.create!(namespace: "translation-diff", bucket: limiter.send(:bucket) - 1, characters: 5)
+      model.create!(namespace: "translation-diff", bucket: limiter.send(:oldest_bucket), characters: 5)
 
       limiter.check(10)
       deleted = limiter.prune
 
       assert_equal 1, deleted
-      assert_equal [limiter.send(:bucket)], model.pluck(:bucket)
+      assert_equal [limiter.send(:current_bucket)], model.pluck(:bucket)
     end
 
     def test_prune_only_deletes_rows_in_its_own_namespace
       own = build_limiter(threshold: 1000, interval: 60)
-      other = build_limiter(threshold: 1000, interval: 60, namespace: "other-tenant")
-      model.create!(namespace: "translation-diff", bucket: own.send(:bucket) - 1, characters: 5)
-      model.create!(namespace: "other-tenant", bucket: other.send(:bucket) - 1, characters: 5)
+      model.create!(namespace: "translation-diff", bucket: own.send(:oldest_bucket), characters: 5)
+      model.create!(namespace: "other-tenant", bucket: own.send(:oldest_bucket), characters: 5)
 
       assert_equal 1, own.prune
       assert_equal 1, model.where(namespace: "other-tenant").count
+    end
+
+    # The bug this review caught: a tumbling counter let a nominal 8000/60s throttle through twice, back to back.
+    def test_a_check_at_the_end_of_one_window_still_counts_two_seconds_into_the_next
+      clock = MutableClock.new(Time.at(59))
+      limiter = build_limiter(threshold: 8000, interval: 60, clock: clock)
+
+      limiter.check(8000)
+      clock.advance(2)
+
+      assert_raises(rate_limit_exceeded_error) { limiter.check(8000) }
+    end
+
+    def test_a_negative_size_does_not_hand_back_headroom
+      limiter = build_limiter(threshold: 1000, interval: 60)
+      limiter.check(500)
+
+      limiter.check(-1000)
+
+      assert_equal 500, model.sum(:characters)
     end
 
     # `size` is interpolated into the on_duplicate SQL fragment, so a value with no clean integer must not reach it.
