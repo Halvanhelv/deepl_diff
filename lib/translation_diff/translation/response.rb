@@ -5,7 +5,9 @@ module TranslationDiff::Translation
       ensure_count!(request, texts)
       ensure_strings!(texts)
 
-      new(texts: texts, detected_source: detected_source, usage: usage)
+      # Every provider's text lands here, so the same decoder the input path used runs once, here, on the way back.
+      new(texts: texts.map { |text| TranslationDiff::Markup.decode_entities(text) },
+          detected_source: detected_source, usage: usage)
     end
 
     def self.ensure_count!(request, texts)
