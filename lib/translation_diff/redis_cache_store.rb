@@ -21,6 +21,13 @@ class TranslationDiff::RedisCacheStore
     redis { |redis| redis.setex(key, timeout, value) }
   end
 
+  def write_multi(pairs)
+    return pairs if pairs.empty?
+
+    redis { |redis| redis.pipelined { |p| pairs.each { |key, value| p.setex(key, timeout, value) } } }
+    pairs
+  end
+
   private
 
   attr_reader :connection_pool, :timeout, :namespace

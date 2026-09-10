@@ -31,11 +31,19 @@ class TranslationDiff::SentenceCache
   end
 
   # Writes back only the segments that carry a translation; an untranslated segment has nothing worth caching.
+  # A store that batches gets one call; one that does not keeps the per-key contract it was written against.
   def store(segments)
-    segments.select(&:translated?).each { |segment| @store.write(key(segment), segment.translation) }
+    translated = segments.select(&:translated?)
+    return translated.each { |segment| @store.write(key(segment), segment.translation) } if legacy_store?
+
+    @store.write_multi(translated.map { |segment| [key(segment), segment.translation] })
+    translated
   end
 
   private
+
+  # A store written against the write-only contract, before write_multi existed, cannot be handed a batch.
+  def legacy_store? = !@store.respond_to?(:write_multi)
 
   # No options contributes no field at all, which is the four-field key every already-warm cache is keyed on.
   def options_digest

@@ -17,6 +17,10 @@ class Redis::Namespace
   def setex(key, timeout, value)
     @redis.setex("#{@namespace}:#{key}", timeout, value)
   end
+
+  def pipelined
+    @redis.pipelined { |pipeline| yield self.class.new(@namespace, redis: pipeline) }
+  end
 end
 
 class RedisCacheStoreTest < Minitest::Test
@@ -43,6 +47,11 @@ class RedisCacheStoreTest < Minitest::Test
       @calls << [:setex, key, timeout, value]
       @entries[key] = value
       "OK"
+    end
+
+    def pipelined
+      @calls << [:pipelined]
+      yield self
     end
   end
 
@@ -73,6 +82,24 @@ class RedisCacheStoreTest < Minitest::Test
     build_store(redis, timeout: 60, namespace: "t").write("a", "b")
 
     assert_equal [[:setex, "t:a", 60, "b"]], redis.calls
+  end
+
+  def test_write_multi_sends_one_pipeline_rather_than_one_round_trip_per_key
+    redis = FakeRedis.new
+
+    build_store(redis).write_multi([%w[a one], %w[b two]])
+
+    assert_equal [[:pipelined],
+                  [:setex, "translation-diff:a", 604_800, "one"],
+                  [:setex, "translation-diff:b", 604_800, "two"]], redis.calls
+  end
+
+  def test_write_multi_of_no_pairs_never_opens_a_pipeline
+    redis = FakeRedis.new
+
+    build_store(redis).write_multi([])
+
+    assert_empty redis.calls
   end
 
   private

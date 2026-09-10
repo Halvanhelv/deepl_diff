@@ -18,6 +18,10 @@ class TranslationDiff::MemoryCacheStore
     value
   end
 
+  def write_multi(pairs)
+    pairs.each { |key, value| write(key, value) }
+  end
+
   private
 
   def touch(key)
