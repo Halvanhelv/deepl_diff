@@ -44,6 +44,10 @@ class TranslationDiff::Configuration
   option :cache_ttl, 604_800
   option :cache_namespace, "translation-diff"
   option :cache_max_size, 1_000
+  option :cache_table_name, "translation_diff_translations"
+  option :rate_limit_table_name, "translation_diff_rate_limits"
+  option :active_record_base, nil
+  option :cache_prune_probability, 0.0
   option :redis_url, -> { ENV.fetch("REDIS_URL", nil) }
   option :redis_pool_size, 5
   option :redis_pool_timeout, 5

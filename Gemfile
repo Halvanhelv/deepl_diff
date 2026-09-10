@@ -31,3 +31,10 @@ gem "cgi", "~> 0.5", require: false
 # the test suite, which signs against the real library rather than a
 # stand-in, has it available.
 gem "aws-sigv4", "~> 1.12", require: false
+
+# Not runtime dependencies of the gem (see the gemspec) -- ActiveRecordCacheStore
+# and ActiveRecordRateLimiter require active_record lazily on first use, so an
+# application caching in Redis never needs it installed. They are here so the
+# suite can exercise the stores against a real database rather than a stand-in.
+gem "activerecord", "~> 8.1", require: false
+gem "sqlite3", "~> 2.9", require: false
