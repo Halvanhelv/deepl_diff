@@ -30,6 +30,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   quietly too low: only three of the six built-in providers report billing
   at all. See [Instrumentation](docs/instrumentation.md).
 
+- **A SQL-backed cache store and rate limiter, for an application that runs
+  Postgres or MySQL and does not want Redis for this alone.**
+  `TranslationDiff::ActiveRecordCacheStore` (`config.cache =
+  :active_record`) and `TranslationDiff::ActiveRecordRateLimiter`
+  (`config.rate_limiter = :active_record`) cache translations and throttle
+  requests in the application's own database. Nothing here is breaking:
+  both are opt-in, the default resolution of `cache` and `rate_limiter` is
+  untouched, and an application with `redis_url` set keeps getting Redis
+  exactly as before. `rails generate translation_diff:install` writes the
+  migration for both tables; for anyone not on Rails, its body is in
+  [SQL cache](docs/sql-cache.md) verbatim -- **the gem itself never runs
+  DDL.** ActiveRecord 7.1 or newer is required when either is used, refused
+  by name at build time rather than failing inside a query, and
+  `activerecord` is never a dependency of this gem -- it is required lazily
+  on first use, the same way `redis` already is. Four new configuration
+  options: `cache_table_name`, `rate_limit_table_name`,
+  `active_record_base` and `cache_prune_probability`. See
+  [SQL cache](docs/sql-cache.md).
+- `write_multi(pairs)` joins the cache store contract, as an optional
+  method: a store that implements it gets one call carrying a whole batch
+  of sentences instead of one call per sentence; a store that does not is
+  still called once per sentence, exactly as before this method existed --
+  a custom cache store written against the older contract is unaffected.
+  All three shipped stores implement it now: `MemoryCacheStore` and
+  `RedisCacheStore` already did, and `ActiveRecordCacheStore` joins them.
+  The two batching paths fail differently from the per-key one and from
+  each other -- see
+  [The two write paths fail differently](docs/caching.md#the-two-write-paths-fail-differently).
+
 ### Security
 
 - `Configuration#inspect` and `Provider#inspect` print `[FILTERED]` in place

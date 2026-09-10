@@ -58,12 +58,16 @@ at all, so an unset environment variable never has to be special-cased.
 | `cache_ttl` | `604_800` (one week) | Seconds a Redis cache entry is kept. Only meaningful for `RedisCacheStore`; `MemoryCacheStore` evicts by size instead. |
 | `cache_namespace` | `"translation-diff"` | Prefix applied to every Redis key this gem writes -- both cache entries and the rate limiter's own bookkeeping. |
 | `cache_max_size` | `1_000` | Maximum number of entries `MemoryCacheStore` keeps before evicting the least recently used one. |
+| `cache_table_name` | `"translation_diff_translations"` | Table `ActiveRecordCacheStore` reads and writes. For a host with its own table-naming convention. See [SQL cache](sql-cache.md). |
+| `rate_limit_table_name` | `"translation_diff_rate_limits"` | Table `ActiveRecordRateLimiter` reads and writes. As above. |
+| `active_record_base` | `nil` (`::ActiveRecord::Base`) | The class `ActiveRecordCacheStore` and `ActiveRecordRateLimiter` build their model from -- point this at a second database, or a reader/writer role. See [SQL cache](sql-cache.md#active_record_base-a-second-database-or-a-readerwriter-role). |
+| `cache_prune_probability` | `0.0` | Chance, per write, that `ActiveRecordCacheStore` prunes expired rows before returning. `0.0` is off; `rake translation_diff:prune` is the other way to prune. See [SQL cache](sql-cache.md#pruning-three-answers-none-imposed). |
 | `redis_url` | `ENV["REDIS_URL"]` | Where to connect for the Redis-backed cache store and rate limiter. Setting this is what makes `cache` default to `:redis` instead of `:memory`. |
 | `redis_pool_size` | `5` | Size of the connection pool built from `redis_url`. |
 | `redis_pool_timeout` | `5` | Seconds to wait for a connection from that pool before raising. |
 | `rate_limit` | `nil` | Character threshold per `rate_interval`. Unset means no rate limiting at all. |
 | `rate_interval` | `60` | Seconds over which `rate_limit` is measured. **Actually enforced over roughly 5-600 seconds** -- see [The rate limiter contract](contracts.md#the-rate-limiter-contract). |
-| `rate_limiter` | `nil` | An object satisfying the [rate limiter contract](contracts.md#the-rate-limiter-contract), to use in place of the built-in Redis-backed one. |
+| `rate_limiter` | `nil` | A registered name (`:redis`, `:active_record`) or an object satisfying the [rate limiter contract](contracts.md#the-rate-limiter-contract). `nil` with `rate_limit` set resolves to `:redis`. |
 | `segmenter` | `:pragmatic` | The sentence segmenter: a registered name or an object satisfying the [segmenter contract](contracts.md#the-segmenter-contract). |
 | `instrumenter` | `nil` | Anything satisfying `ActiveSupport::Notifications`' `#instrument(name, payload) { }` interface. See [Instrumentation and logging](instrumentation.md). |
 | `logger` | `nil` | A standard `Logger`. Receives one `debug` line per provider resolution, naming the provider class -- never content and never a credential. See [Instrumentation and logging](instrumentation.md). |
