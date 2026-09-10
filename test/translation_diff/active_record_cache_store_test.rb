@@ -105,6 +105,18 @@ if ActiveRecordDatabase.available?
       assert_equal "from-config", built.model.first.namespace
     end
 
+    def test_a_string_cache_ttl_from_env_does_not_raise_on_write
+      config = TranslationDiff::Configuration.new
+      config.cache_namespace = "translation-diff"
+      config.cache_table_name = "translation_diff_translations"
+      config.cache_ttl = "3600"
+
+      built = TranslationDiff::ActiveRecordCacheStore.build(config)
+      built.write("a", "one")
+
+      refute_nil built.model.first.expires_at
+    end
+
     def test_a_string_cache_prune_probability_from_env_does_not_raise_on_write
       config = TranslationDiff::Configuration.new
       config.cache_namespace = "translation-diff"

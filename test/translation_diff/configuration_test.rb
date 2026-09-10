@@ -59,6 +59,24 @@ class ConfigurationTest < Minitest::Test
     assert_nil @config.cache_ttl
   end
 
+  def test_cache_ttl_coerces_a_numeric_string_the_way_an_env_var_arrives
+    @config.cache_ttl = "3600"
+
+    assert_equal 3600, @config.cache_ttl
+  end
+
+  def test_a_coerced_non_positive_cache_ttl_string_also_means_never_expires
+    @config.cache_ttl = "0"
+
+    assert_nil @config.cache_ttl
+  end
+
+  def test_cache_ttl_refuses_a_non_numeric_string_with_a_clear_message
+    error = assert_raises(TranslationDiff::Error) { @config.cache_ttl = "lots" }
+
+    assert_match(/cache_ttl/, error.message)
+  end
+
   def test_cache_prune_probability_coerces_a_numeric_string_the_way_an_env_var_arrives
     @config.cache_prune_probability = "0.5"
 
