@@ -141,7 +141,7 @@ class TranslationDiff::Translator
   def store(cache, misses, provider)
     cache.store(misses)
   rescue StandardError => e
-    log("cache write failed (#{e.class}), the translation is returned uncached")
+    warn_log("cache write failed (#{e.class}), the translation is returned uncached")
     instrument("cache_error", provider: provider.cache_key, error: e.class.to_s)
   end
 end

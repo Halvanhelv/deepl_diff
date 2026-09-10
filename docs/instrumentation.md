@@ -21,9 +21,19 @@ A translation emits up to six events, each named `<name>.translation_diff`:
 the write itself is rescued, not the translation, which still reaches the
 caller -- see
 [The three write paths fail differently](caching.md#the-three-write-paths-fail-differently).
-`error` is the exception's class name (`"ActiveRecord::ReadOnlyError"`,
-`"Redis::CannotConnectError"`, ...), never its message, which could echo
-the row it failed to write.
+`error` is the exception's class name, never its message, which could echo
+the row it failed to write. Which class you see depends on the store: a
+store that redacts its own failures reports that redaction, so
+`ActiveRecordCacheStore` always gives `"TranslationDiff::Error"` -- the
+adapter's own class is named inside that error's (content-free) message,
+not in this payload. `RedisCacheStore` does not wrap, so it gives the
+driver's class, `"Redis::CannotConnectError"` and the like. Alert on the
+event, not on a particular class name.
+
+The same failure is logged at **warn**, not debug: an application whose
+cache has quietly stopped accepting writes pays the provider for every
+sentence, every time, and a signal only visible at debug level is one
+nobody sees in production.
 
 `usage`'s `characters` is what this library sent, counted locally -- the same
 number `request` carries. `billed_characters` is what the provider said it

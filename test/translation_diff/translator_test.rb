@@ -50,6 +50,9 @@ class TranslatorTest < ConfiguredTest
     def initialize = @lines = []
 
     def debug(&) = @lines << yield
+
+    # Public on purpose: Kernel#warn is private, and a logger double that inherits it silently swallows the call.
+    def warn(&) = @lines << yield
   end
 
   class Recorder
