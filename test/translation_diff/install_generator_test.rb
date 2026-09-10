@@ -29,6 +29,17 @@ if RAILS_GENERATORS_AVAILABLE && ActiveRecordDatabase.available?
       end
     end
 
+    # A DBA hand-applying this migration (see docs/sql-cache.md) may well run it twice; it must not blow up.
+    def test_the_generated_migration_can_be_applied_twice
+      Dir.mktmpdir do |dir|
+        connection = migrate_in(dir)
+
+        capture_io { CreateTranslationDiffTables.new.exec_migration(connection, :up) }
+
+        assert connection.table_exists?(:translation_diff_translations)
+      end
+    end
+
     # Only the Postgres and MySQL branches leave anything behind; SQLite's :memory: connection needs no teardown.
     def teardown
       return unless @schema
