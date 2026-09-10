@@ -1,4 +1,5 @@
 # Loaded only when Rails loads generators; nothing in lib/translation_diff.rb requires this file.
+require "translation_diff"
 require "rails/generators"
 require "rails/generators/active_record/migration"
 
