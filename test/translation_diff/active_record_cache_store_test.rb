@@ -130,6 +130,20 @@ if ActiveRecordDatabase.available?
       assert_includes options.keys, :unique_by
     end
 
+    # Naming the bare `ActiveRecord` constant in the rescue clause used to raise a raw NameError instead of this
+    # gem's own message, genuinely reproduced here rather than merely simulated by stubbing #require.
+    def test_write_raises_a_friendly_error_when_active_record_is_genuinely_unavailable
+      removed = Object.send(:remove_const, :ActiveRecord)
+      broken_store = build_store
+      broken_store.define_singleton_method(:require) { |*| raise LoadError }
+
+      error = assert_raises(TranslationDiff::Error) { broken_store.write("a", "one") }
+
+      assert_match(/`activerecord` gem is not available/, error.message)
+    ensure
+      Object.const_set(:ActiveRecord, removed) if removed
+    end
+
     private
 
     def build_store(namespace: "translation-diff", ttl: 604_800)
