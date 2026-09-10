@@ -45,4 +45,12 @@ class ContextTest < Minitest::Test
 
     assert_equal "Hello.", context.translate("Hello.", from: "en", to: "ru")
   end
+
+  # `to:` still defaults to nil here too, so a context refuses a missing target by naming the keyword.
+  def test_a_missing_target_language_is_refused_by_name
+    context = TranslationDiff.context { |c| c.cache_namespace = "tenant" }
+    error = assert_raises(ArgumentError) { context.translate("Hello.", from: "en") }
+
+    assert_match(/to:/, error.message)
+  end
 end

@@ -7,7 +7,7 @@ class TranslationDiff::Context
   end
 
   def translate(values, from: nil, to: nil, provider: nil, **)
-    TranslationDiff::Request.new(
+    TranslationDiff::Translator.new(
       values, from: from, to: to, provider: provider, config: config, **
     ).call
   end

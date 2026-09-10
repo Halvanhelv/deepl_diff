@@ -2,8 +2,6 @@
 
 A translation cache that helps translate only changes between revisions of long texts.
 
-**TranslationDiff** based on [GoogleTranslateDiff](https://github.com/gzigzigzeo/google_translate_diff)
-
 ## Why TranslationDiff?
 
 Assume your project contains a significant amount of products descriptions which:

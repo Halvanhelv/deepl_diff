@@ -11,9 +11,16 @@ A translation emits up to four events, each named `<name>.translation_diff`:
 | Event | Fired | Payload |
 | --- | --- | --- |
 | `translate` | Once per `translate` call that reaches the provider, wrapping the whole thing. A call whose source and target languages are the same, or whose values hold no translatable text at all, returns early and emits no events. | `from`, `to`, `provider`, `values` (number of texts) |
-| `cache` | Once per chunk, after checking the cache. | `provider`, `hits`, `misses` |
-| `request` | Once per chunk actually sent to the provider (skipped entirely on a full cache hit). | `provider`, `batch` (values sent), `characters` |
-| `rate_limit` | Once per chunk sent to the provider, only when a rate limiter is configured. | `provider`, `characters` |
+| `cache` | Once per `translate` call that reaches the provider, after checking the cache for every sentence at once. | `provider`, `hits`, `misses` |
+| `request` | Once per batch actually sent to the provider (skipped entirely on a full cache hit). | `provider`, `batch` (values sent), `characters` |
+| `rate_limit` | Once per batch sent to the provider, only when a rate limiter is configured. | `provider`, `characters` |
+
+**`cache` fires once per call as of 3.1.0, not once per chunk.** The cache is
+now consulted for every sentence in one `read_multi` before anything is
+batched, so there is one event where there used to be one per chunk. `hits`
+and `misses` still sum to the same totals over a call, so a counter that adds
+them up is unaffected; a counter of *events*, or a histogram of per-chunk hit
+ratios, will see the cardinality drop.
 
 **Instrumentation payloads never contain the text being translated, its
 translation, or a credential.** This is a guarantee, not an implementation

@@ -1,0 +1,130 @@
+# Baseline captured before the pipeline rewrite, against the :null provider (cache_key "null").
+# Every input below is translated with from: "en", to: "ru", provider: :null.
+# Cache keys are the sorted, de-duplicated set of every key this run passed to read_multi or write,
+# on a fresh cache store per input -- so the list is exactly what that one input asked for.
+# Generated 2026-09-09 by .superpowers/sdd/2026-09-09-pipeline-plan task 1.
+
+=== plain sentence ===
+OUTPUT: "Hello there."
+CACHE_KEYS: ["null:en:ru:9d6a2963872077db674a27a39c492e61"]
+
+=== two sentences ===
+OUTPUT: "Hello there. Second sentence!"
+CACHE_KEYS: ["null:en:ru:1520f71fffb5adf0da75e7c17059bfd1", "null:en:ru:9d6a2963872077db674a27a39c492e61"]
+
+=== nested hash ===
+OUTPUT: {title: "One. Two.", body: "Third."}
+CACHE_KEYS: ["null:en:ru:3f77101fc43570a61d5bc042bb908651", "null:en:ru:900019fa233e608091ba641d50d69b81", "null:en:ru:fdb02803abc46fba06ce1cc96d6399c5"]
+
+=== nested array ===
+OUTPUT: ["A. B.", ["C."], "D."]
+CACHE_KEYS: ["null:en:ru:9bce147872014965a531500da2666847", "null:en:ru:d0904fd99a2cfb13f897223b9213c6f1", "null:en:ru:d898b880dda075d3ce1b5feee4a7bb6f"]
+
+=== hash with non-strings ===
+OUTPUT: {title: "One.", count: 42, missing: "", flag: true}
+CACHE_KEYS: ["null:en:ru:900019fa233e608091ba641d50d69b81"]
+
+=== empty string ===
+OUTPUT: ""
+CACHE_KEYS: []
+
+=== nil ===
+OUTPUT: nil
+CACHE_KEYS: []
+
+=== not a string ===
+OUTPUT: 42
+CACHE_KEYS: []
+
+=== bold markup ===
+OUTPUT: "<b>Bold</b> text here. Second sentence."
+CACHE_KEYS: ["null:en:ru:114c3050111d8b8ddd830b99ccebd246", "null:en:ru:dd05cca0ae0eb637e49788e6daf8c23f", "null:en:ru:edcabe153bd4ad9b4a376c3af9d2dc8f"]
+
+=== attributes preserved ===
+OUTPUT: "<a href=\"/x?a=1&b=2\" title='q'>Link text.</a> After."
+CACHE_KEYS: ["null:en:ru:3300dc3f426997c4c0c8e9bcd4af8863", "null:en:ru:97f4ef09e0c768ce8bf87f7b64a3faad"]
+
+=== void element ===
+OUTPUT: "One line.<br>Two lines."
+CACHE_KEYS: ["null:en:ru:41d035f96f8712251d0ac9bb500e24cd", "null:en:ru:694fe8da2b6d6101fb916106f5c23ca0"]
+
+=== unclosed paragraph ===
+OUTPUT: "<p>First para.<p>Second para."
+CACHE_KEYS: ["null:en:ru:24e35fe61038aed7aea27bf6dfcbe623", "null:en:ru:a95237990255526ebf59cf9ffc511064"]
+
+=== uppercase tags ===
+OUTPUT: "<B>Bold</B> text."
+CACHE_KEYS: ["null:en:ru:114c3050111d8b8ddd830b99ccebd246", "null:en:ru:bde8d910cfb3b4d1670021fce1fd2592"]
+
+=== script and style ===
+OUTPUT: "аль<span>бра</span>кил<script>js</script><style>b</style>"
+CACHE_KEYS: ["null:en:ru:34430bf88522e4c1c49479eb2feeb3f3", "null:en:ru:3c11ac7405538ffcaad48db9d7149347", "null:en:ru:b1d36c7c01d8359faddba68b671e7d47"]
+
+=== processing instruction ===
+OUTPUT: "Hey!<br />Look!<?xml:namespace ns=\"urn:office\" ?>"
+CACHE_KEYS: ["null:en:ru:6ae99d4d2de5e3cbd29fec87ae7d76eb", "null:en:ru:8bd5669756914fb1c9a11cbd755dcd31"]
+
+=== comment ===
+OUTPUT: "<!-- internal note --> Visible text here."
+CACHE_KEYS: ["null:en:ru:d41646cf35fd5a9a6959f6715d5e14bc"]
+
+=== doctype ===
+OUTPUT: "<!DOCTYPE html><p>Body text.</p>"
+CACHE_KEYS: ["null:en:ru:ac9d6317208a722c1c19bd667c374d22"]
+
+=== cdata ===
+OUTPUT: "Before.<![CDATA[raw & unparsed]]>After."
+CACHE_KEYS: ["null:en:ru:97f4ef09e0c768ce8bf87f7b64a3faad", "null:en:ru:d5639cb2ca1fb06574bd02a8435be8ad"]
+
+=== notranslate span ===
+OUTPUT: "<span class=\"notranslate\">Bold Mountain</span> is a good place."
+CACHE_KEYS: ["null:en:ru:68980e62d2581d949019300826e1b197"]
+
+=== nested notranslate ===
+OUTPUT: "<span class='notranslate'>foo<span class='notranslate'>bar</span>baz</span>"
+CACHE_KEYS: ["null:en:ru:eafcec3766a26334358d8df31c5a82cc"]
+
+=== notranslate inside span ===
+OUTPUT: "<span><span class='notranslate'>foo<span>bar<br></span>baz</span></span>"
+CACHE_KEYS: ["null:en:ru:5b513613cd49691d47e6df65921f5264"]
+
+=== br before closing tag ===
+OUTPUT: "<font size='3'>Смеркалось.<br></font>"
+CACHE_KEYS: ["null:en:ru:e1583f8217a1cfc2b7ee21afd908e955"]
+
+=== blank line between sentences ===
+OUTPUT: "Первое предложение.\n\nВторое предложение."
+CACHE_KEYS: ["null:en:ru:b83f03a6405a6e2d24f9d89380c661d4", "null:en:ru:f1af66af7c0dc420d4267696c7d0aa13"]
+
+=== single newline ===
+OUTPUT: "test\nphrase"
+CACHE_KEYS: ["null:en:ru:fae8d0840a5c100965609a9d7a55135e"]
+
+=== leading and trailing space ===
+OUTPUT: "  Padded sentence.  "
+CACHE_KEYS: ["null:en:ru:fe3bf43723a64fb32bcac8d99bb431af"]
+
+=== many sentences ===
+OUTPUT: "Sentence number 1. Sentence number 2. Sentence number 3. Sentence number 4. Sentence number 5. Sentence number 6. Sentence number 7. Sentence number 8. Sentence number 9. Sentence number 10. Sentence number 11. Sentence number 12. Sentence number 13. Sentence number 14. Sentence number 15. Sentence number 16. Sentence number 17. Sentence number 18. Sentence number 19. Sentence number 20. Sentence number 21. Sentence number 22. Sentence number 23. Sentence number 24. Sentence number 25. Sentence number 26. Sentence number 27. Sentence number 28. Sentence number 29. Sentence number 30. Sentence number 31. Sentence number 32. Sentence number 33. Sentence number 34. Sentence number 35. Sentence number 36. Sentence number 37. Sentence number 38. Sentence number 39. Sentence number 40."
+CACHE_KEYS: ["null:en:ru:028166de0c432e30aa01d79966d36e27", "null:en:ru:042f7dfcdaf51c2812e9975436ff7163", "null:en:ru:0b1fa3a903f7429246b94933e1c65a22", "null:en:ru:13b8656fe18559c2e98fff3aa3b25136", "null:en:ru:1c3a311a4eef441e056310213a1051e2", "null:en:ru:27c36e35e03a99369e2b60cee64758df", "null:en:ru:2fde1f57bcf20df4087f574ae00d9692", "null:en:ru:42c04e1e1ea3177d2921386c91d0c579", "null:en:ru:43d0f7cdc6be74da0e4cfd4ef8e9b886", "null:en:ru:4c94cb29ddbbbc231ac855011456f46d", "null:en:ru:4d00adc400cec01a812aed2a741778ef", "null:en:ru:522df2f9bbac92f9714bbbb2aa229bc7", "null:en:ru:5b885db48f0a06635ab079fd96c3c7e6", "null:en:ru:5c6d3d369e65d4e33708b48263f7aa16", "null:en:ru:62992cce554f47436aa2ebc09bfa4389", "null:en:ru:80c4df8aced58f66cc564ec992836c09", "null:en:ru:817375736915088db4c098d047232820", "null:en:ru:81c38a3ec70d697ec7c10480b40a82d2", "null:en:ru:831d768717f5c58649e33141ba610e22", "null:en:ru:881e7f42d84eeac1ee76c4db213304a3", "null:en:ru:a298c866d524ed0e6a6f81eea80eb3c6", "null:en:ru:a677508b1eadd12106cc9f3f604d7d51", "null:en:ru:a98a84ab5702ea2f29c01ac35ebd4a2e", "null:en:ru:aa0e7ef164f4b6a60049265162d7b1eb", "null:en:ru:b0dc3760c308f5db9454ff53afed6842", "null:en:ru:bb716ddca5d51bae619894f6fc092337", "null:en:ru:bbd3042479feacc0e179bc05eca8a762", "null:en:ru:be90cce4c0800e090bb1127e102aaa72", "null:en:ru:bfc9abd6522e8eb83e1c05d2a84f5b67", "null:en:ru:c41c34620d095e2db18519e409a58dcf", "null:en:ru:c6a1605fb42cad1439b88d5e1a62ea97", "null:en:ru:c8a3cab86135767607d8b6cff57f7e26", "null:en:ru:d49160d08ac9cb12ca8b1c2373085b12", "null:en:ru:daf84cfee6e6a35e13e9e994850e39e3", "null:en:ru:e299181f4980628d4b3ef62ad0042c4c", "null:en:ru:e6560e25669e4af82fc667a67b74b001", "null:en:ru:e9acf5c038149e3f8e03f6c62c317c89", "null:en:ru:eba0b3330f77dbe64b70db689be5e046", "null:en:ru:fb7c729c821d5b4d5ebdab2e5273b869", "null:en:ru:fe9379e1a22ff0052f72ef22dbaf1d96"]
+
+=== non-ascii ===
+OUTPUT: "Привет. Как дела? Всё хорошо."
+CACHE_KEYS: ["null:en:ru:3ae1adb068af8b1ca435825a5f6a2dd9", "null:en:ru:6440c78297d465869ba8f86b114f7328", "null:en:ru:cc34260931ed7b37f90ec7dc5b44f3ad"]
+
+=== entity ampersand ===
+OUTPUT: "Salt &amp; pepper. Fine."
+CACHE_KEYS: ["null:en:ru:05d12994070fdde458e566149f42472f", "null:en:ru:b5010567e209726a125c9ed59162eca5"]
+
+=== entity nbsp ===
+OUTPUT: "Hard&nbsp;space here. Fine."
+CACHE_KEYS: ["null:en:ru:98abf3f0bf3b826e8f2c21fd72823687", "null:en:ru:b5010567e209726a125c9ed59162eca5"]
+
+=== bare less-than ===
+OUTPUT: "if a < b then stop. Fine."
+CACHE_KEYS: ["null:en:ru:56b4445b422a53efdff59cb72a58f599"]
+
+=== bare less-than and greater ===
+OUTPUT: "5 < 6 and 7 > 6. True."
+CACHE_KEYS: ["null:en:ru:4363b12ae39947f045a4fb5fad740dc8", "null:en:ru:65364203e430439161a97b3d245a0168", "null:en:ru:e4da3b7fbbce2345d7772b0674a318d5"]
+

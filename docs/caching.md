@@ -20,6 +20,35 @@ once.
 Both read and write the same cache, keyed per provider, so switching one
 never serves you the other's translations.
 
+`TranslationDiff::SentenceCache` is the class that builds the key and does
+both the read and the write.
+
+## The options digest is lossy, on purpose
+
+The per-call options are canonicalised to a string before they are digested,
+and that canonical form flattens more than it distinguishes. Nesting is not
+recorded, so `["x", ["y", "z"]]` and `["x", "y", "z"]` canonicalise
+identically; neither is emptiness typed, so `tags: []` and `tags: {}` do
+too. Two calls whose options differ only in one of those ways share a cache
+entry.
+
+This is a known property, not an oversight. The pipeline this replaced
+collides on exactly the same inputs -- that was checked, not assumed -- so
+reproducing it was the choice that left every warm cache warm. Fixing it
+would give those calls new keys and re-translate everything already cached
+under the old ones, for a distinction no provider option this gem ships
+actually makes. If you pass an option where that distinction matters, give
+the configuration its own `cache_namespace`.
+
+A value the canonical form cannot render at all -- anything that is not a
+String, Symbol, Numeric, `true`, `false`, `nil`, or an Array or Hash of
+those -- raises `TranslationDiff::SentenceCache::Error` rather than being
+guessed at. A key that is silently wrong costs you the whole cache and tells
+you nothing.
+
+No options at all contributes no field to the key, which is the four-field
+key every already-warm cache is keyed on.
+
 ## The cache store contract
 
 `config.cache` accepts either a registered name (`:redis`, `:memory`) or an
