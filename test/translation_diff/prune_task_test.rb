@@ -7,13 +7,18 @@ class PruneTaskTest < Minitest::Test
     def prune = @count
   end
 
+  # The application is global, so it is put back: the next Rake-based test must not inherit this one's tasks.
   def setup
     TranslationDiff.reset!
+    @previous_application = Rake.application
     Rake.application = Rake::Application.new
     load File.expand_path("../../Rakefile", __dir__)
   end
 
-  def teardown = TranslationDiff.reset!
+  def teardown
+    Rake.application = @previous_application
+    TranslationDiff.reset!
+  end
 
   def test_prunes_the_cache_store_and_the_rate_limiter_separately
     TranslationDiff.configure do |c|

@@ -117,6 +117,15 @@ class RedisRateLimiterTest < Minitest::Test
     assert_equal [120], server.count_spans
   end
 
+  # The other half of a window: what fell out of it stops counting, or a limiter never recovers.
+  def test_a_bucket_older_than_the_interval_is_not_counted
+    server = FakeRedisServer.new
+    stale = (Time.now.to_i / 5) - (TranslationDiff::RedisRateLimiter::DEFAULT_INTERVAL / 5) - 1
+    server.hashes["ratelimit:translation-diff:call"][stale.to_s] = 10_000
+
+    limiter(server, threshold: 100).check(1)
+  end
+
   # Naming the bare `Ratelimit` constant used to raise a raw NameError instead of this gem's own message.
   def test_a_missing_ratelimit_gem_raises_a_translation_diff_error
     limiter = limiter(FakeRedisServer.new)
