@@ -36,3 +36,19 @@ namespace :languages do
     report[:failed].each { |name, message| warn "failed: #{name}: #{message}" }
   end
 end
+
+namespace :translation_diff do
+  desc "Delete expired rows from the SQL cache and rate-limit tables"
+  task :prune do
+    require "translation_diff"
+
+    store = TranslationDiff.config.cache_store
+    unless store.respond_to?(:prune)
+      puts "the configured cache store (#{store.class}) does not support pruning"
+      next
+    end
+
+    deleted = store.prune
+    puts "pruned #{deleted} expired cache rows"
+  end
+end
