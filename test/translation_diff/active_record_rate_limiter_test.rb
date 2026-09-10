@@ -69,7 +69,7 @@ if ActiveRecordDatabase.available?
     end
 
     def test_prune_deletes_buckets_older_than_the_window_and_leaves_the_current_one
-      limiter = build_limiter(threshold: 1000, interval: 60, clock: MutableClock.new(Time.at(1_700_000_000)))
+      limiter = build_limiter(threshold: 1000, interval: 60, clock: frozen_clock)
       model.create!(namespace: "translation-diff", bucket: limiter.send(:oldest_bucket) - 1, characters: 5)
 
       limiter.check(10)
@@ -82,7 +82,7 @@ if ActiveRecordDatabase.available?
     # The oldest bucket is only ever partially inside the window (see current_total), so prune leaving it alone
     # is what keeps pruning from quietly undoing the strictness that sum starting at oldest_bucket relies on.
     def test_prune_leaves_the_oldest_bucket_because_the_window_still_counts_it
-      limiter = build_limiter(threshold: 1000, interval: 60, clock: MutableClock.new(Time.at(1_700_000_000)))
+      limiter = build_limiter(threshold: 1000, interval: 60, clock: frozen_clock)
       model.create!(namespace: "translation-diff", bucket: limiter.send(:oldest_bucket), characters: 5)
 
       deleted = limiter.prune
@@ -92,7 +92,7 @@ if ActiveRecordDatabase.available?
     end
 
     def test_prune_only_deletes_rows_in_its_own_namespace
-      own = build_limiter(threshold: 1000, interval: 60, clock: MutableClock.new(Time.at(1_700_000_000)))
+      own = build_limiter(threshold: 1000, interval: 60, clock: frozen_clock)
       model.create!(namespace: "translation-diff", bucket: own.send(:oldest_bucket) - 1, characters: 5)
       model.create!(namespace: "other-tenant", bucket: own.send(:oldest_bucket) - 1, characters: 5)
 
@@ -191,6 +191,9 @@ if ActiveRecordDatabase.available?
     private
 
     def rate_limit_exceeded_error = TranslationDiff::ActiveRecordRateLimiter::RateLimitExceeded
+
+    # Held still, so a five-second bucket boundary cannot fall between two reads of the clock.
+    def frozen_clock = MutableClock.new(Time.at(1_700_000_000))
 
     def build_limiter(threshold:, interval:, namespace: "translation-diff", clock: -> { Time.now })
       TranslationDiff::ActiveRecordRateLimiter.new(namespace: namespace, threshold: threshold, interval: interval,
