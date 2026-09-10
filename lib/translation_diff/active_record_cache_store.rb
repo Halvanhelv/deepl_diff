@@ -34,7 +34,7 @@ class TranslationDiff::ActiveRecordCacheStore
   def write_multi(pairs)
     return pairs if pairs.empty?
 
-    model.upsert_all(pairs.map { |key, value| row(key, value) },
+    model.upsert_all(pairs.to_h.map { |key, value| row(key, value) },
                      unique_by: %i[namespace key_digest], record_timestamps: true)
     prune_sometimes
     pairs

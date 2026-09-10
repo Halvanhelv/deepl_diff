@@ -63,6 +63,19 @@ if ActiveRecordDatabase.available?
       assert_equal 1, model.count
     end
 
+    def test_write_multi_with_the_same_key_twice_in_one_batch_stores_the_last_value
+      store.write_multi([%w[a one], %w[a two]])
+
+      assert_equal ["two"], store.read_multi(["a"])
+    end
+
+    def test_write_after_write_multi_still_replaces_the_key
+      store.write_multi([%w[a one], %w[a two]])
+      store.write("a", "three")
+
+      assert_equal ["three"], store.read_multi(["a"])
+    end
+
     def test_build_takes_its_settings_from_the_configuration
       config = TranslationDiff::Configuration.new
       config.cache_namespace = "from-config"
