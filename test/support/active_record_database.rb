@@ -18,6 +18,10 @@ module ActiveRecordDatabase
 
   def self.url = ENV.fetch("TRANSLATION_DIFF_DATABASE_URL", nil)
 
+  # Every test file that needs a real PostgreSQL (not SQLite's single writer, not MySQL's forgiving transactions)
+  # asks here, so the detection lives in one place instead of a same-named constant defined in each of them.
+  def self.postgres? = available? && url.to_s.match?(%r{\Apostgres(ql)?://})
+
   # Both tables so Task 3's migration has something to be checked against; only the first is used so far.
   def self.define_schema
     connection = ::ActiveRecord::Base.connection

@@ -1,9 +1,7 @@
 require "test_helper"
 require "support/active_record_database"
 
-POSTGRES_DATABASE = ActiveRecordDatabase.available? && ActiveRecordDatabase.url.to_s.match?(%r{\Apostgres(ql)?://})
-
-if POSTGRES_DATABASE
+if ActiveRecordDatabase.postgres?
   ActiveRecordDatabase.connect!
 
   # SQLite has one writer, so only Postgres can put these properties under a real race.

@@ -34,7 +34,10 @@ class TranslationDiff::ActiveRecordCacheStore
   def write_multi(pairs)
     return pairs if pairs.empty?
 
-    model.upsert_all(pairs.to_h.map { |key, value| row(key, value) }, **upsert_options(model.connection))
+    # A savepoint, not the caller's own transaction: a failed write must not abort a transaction it does not own.
+    model.transaction(requires_new: true) do
+      model.upsert_all(pairs.to_h.map { |key, value| row(key, value) }, **upsert_options(model.connection))
+    end
     prune_sometimes
     pairs
   end
