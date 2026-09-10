@@ -59,6 +59,30 @@ class ConfigurationTest < Minitest::Test
     assert_nil @config.cache_ttl
   end
 
+  def test_cache_prune_probability_coerces_a_numeric_string_the_way_an_env_var_arrives
+    @config.cache_prune_probability = "0.5"
+
+    assert_in_delta 0.5, @config.cache_prune_probability
+  end
+
+  def test_cache_prune_probability_refuses_a_non_numeric_string_with_a_clear_message
+    error = assert_raises(TranslationDiff::Error) { @config.cache_prune_probability = "lots" }
+
+    assert_match(/cache_prune_probability/, error.message)
+  end
+
+  def test_cache_namespace_longer_than_64_characters_is_refused_at_configure_time
+    error = assert_raises(TranslationDiff::Error) { @config.cache_namespace = "n" * 65 }
+
+    assert_match(/64/, error.message)
+  end
+
+  def test_cache_namespace_at_the_64_character_limit_is_accepted
+    @config.cache_namespace = "n" * 64
+
+    assert_equal "n" * 64, @config.cache_namespace
+  end
+
   def test_a_callable_default_is_evaluated_on_every_read_not_at_load_time
     original = ENV.fetch("REDIS_URL", nil)
     ENV["REDIS_URL"] = "redis://first"

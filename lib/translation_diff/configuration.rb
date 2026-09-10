@@ -63,6 +63,7 @@ class TranslationDiff::Configuration
   option :validate_languages, true
 
   prepend TranslationDiff::CacheTtlOption
+  prepend TranslationDiff::CacheGuardOptions
 
   # Credentials are filtered by name; everything else is shown, or an inspect is one nobody reads.
   def inspect = "#<#{self.class.name} #{TranslationDiff::Redaction.render(self).join(' ')}>"

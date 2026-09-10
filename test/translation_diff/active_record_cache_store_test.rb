@@ -105,6 +105,15 @@ if ActiveRecordDatabase.available?
       assert_equal "from-config", built.model.first.namespace
     end
 
+    def test_a_string_cache_prune_probability_from_env_does_not_raise_on_write
+      config = TranslationDiff::Configuration.new
+      config.cache_namespace = "translation-diff"
+      config.cache_table_name = "translation_diff_translations"
+      config.cache_prune_probability = "0.5"
+
+      TranslationDiff::ActiveRecordCacheStore.build(config).write("a", "one")
+    end
+
     def test_write_multi_omits_unique_by_when_the_connection_does_not_support_a_conflict_target
       connection = Class.new { def supports_insert_conflict_target? = false }.new
 

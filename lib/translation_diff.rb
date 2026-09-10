@@ -28,6 +28,7 @@ require "translation_diff/fragment"
 require "translation_diff/passage"
 require "translation_diff/sentence_cache"
 require "translation_diff/cache_ttl_option"
+require "translation_diff/cache_guard_options"
 require "translation_diff/configuration"
 require "translation_diff/configuration/provider_option_owners"
 
