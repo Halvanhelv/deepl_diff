@@ -59,10 +59,14 @@ to be the enforced one.
 Both the clamp above and the upgrade note before it are about
 `RedisRateLimiter`, which delegates its bucketing to the `ratelimit` gem.
 `ActiveRecordRateLimiter` owns its own bucketing instead, and its window is
-sliding rather than tumbling: buckets are a fraction of `rate_interval`
-wide, and a check sums every bucket covering the trailing `rate_interval`
-seconds, so `rate_interval` is enforced as configured, with no external
-clamp. See [SQL cache](sql-cache.md#the-rate-limiter).
+sliding rather than tumbling: buckets are `rate_interval / 12` seconds wide
+(floored at 1 second), and a check sums every bucket touching the trailing
+`rate_interval` seconds -- including the oldest one, which is only ever
+partially inside that window, summed in full rather than pro-rated. So the
+window actually enforced is `rate_interval` to `rate_interval +
+rate_interval / 12` seconds: slightly stricter than configured, never
+looser, and with no external clamp. See
+[SQL cache](sql-cache.md#the-rate-limiter).
 
 ## The segmenter contract
 

@@ -55,8 +55,8 @@ at all, so an unset environment variable never has to be special-cased.
 | --- | --- | --- |
 | `provider` | `:deepl` | The translation provider: a registered name or a `TranslationDiff::Provider` of your own. See [Providers](providers.md). |
 | `cache` | `nil` | The cache store: a registered name or an object satisfying the [cache store contract](caching.md#the-cache-store-contract). `nil` means "choose for me" -- see below. |
-| `cache_ttl` | `604_800` (one week) | Seconds a Redis cache entry is kept. Only meaningful for `RedisCacheStore`; `MemoryCacheStore` evicts by size instead. |
-| `cache_namespace` | `"translation-diff"` | Prefix applied to every Redis key this gem writes -- both cache entries and the rate limiter's own bookkeeping. |
+| `cache_ttl` | `604_800` (one week) | Seconds an entry is kept before it expires. Read by `RedisCacheStore` (a `SETEX`) and by `ActiveRecordCacheStore` (written into each row's `expires_at`); `MemoryCacheStore` evicts by size instead and ignores it. A non-positive value (`0` or less, or `nil`) means never expires. See [SQL cache](sql-cache.md#cache_ttl-becomes-expires_at). |
+| `cache_namespace` | `"translation-diff"` | Prefix applied to every Redis key this gem writes -- both cache entries and the rate limiter's own bookkeeping. Also the `namespace` column both SQL tables share and the unit `ActiveRecordCacheStore#prune` operates on. At most 64 characters -- longer is refused at `configure` time. See [SQL cache](sql-cache.md#the-tables). |
 | `cache_max_size` | `1_000` | Maximum number of entries `MemoryCacheStore` keeps before evicting the least recently used one. |
 | `cache_table_name` | `"translation_diff_translations"` | Table `ActiveRecordCacheStore` reads and writes. For a host with its own table-naming convention. See [SQL cache](sql-cache.md). |
 | `rate_limit_table_name` | `"translation_diff_rate_limits"` | Table `ActiveRecordRateLimiter` reads and writes. As above. |

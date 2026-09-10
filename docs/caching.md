@@ -68,7 +68,11 @@ def write_multi(pairs); end
 
 `test/support/cache_store_contract.rb` is the executable form of this
 contract: include `CacheStoreContract` in a test class that defines
-`#store`.
+`#store`. It only exercises `read_multi` and `write` -- the two required
+methods -- so a store that implements only those two still passes it.
+`test/support/batching_cache_store_contract.rb` holds the optional half:
+include `BatchingCacheStoreContract` too, alongside `CacheStoreContract`,
+once `#store` also implements `write_multi`.
 
 Three stores ship with this gem: `TranslationDiff::MemoryCacheStore`, the
 default -- a bounded, in-process LRU, not thread-safe by design, evicting by
@@ -95,7 +99,7 @@ pairs (there is no round trip to save in-process); `RedisCacheStore`
 pipelines the writes; `ActiveRecordCacheStore` upserts the whole batch in
 one statement.
 
-### The two write paths fail differently
+### The three write paths fail differently
 
 Nobody had written this down before: what a partial failure leaves cached
 depends on which of these shapes wrote it.

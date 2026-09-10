@@ -116,7 +116,7 @@ See [Providers](docs/providers.md) for configuring each one, the full capabiliti
 - **Pluggable sentence segmenter:** `pragmatic_segmenter` by default, with a zero-dependency `Simple` alternative
 - **HTTP retries, timeouts, and backoff** on every REST-backed provider, via `faraday` and `faraday-retry`
 - **One error hierarchy** under `TranslationDiff::Error`, carrying the provider name and HTTP status
-- **Optional rate limiting and instrumentation** -- credentials and translated content never appear in a log line
+- **Optional rate limiting and instrumentation** -- credentials and translated content never appear in a log line this gem writes (the SQL cache store is the one exception worth knowing before you adopt it -- see [SQL cache](docs/sql-cache.md#what-ends-up-in-your-log))
 
 ## Installation
 
