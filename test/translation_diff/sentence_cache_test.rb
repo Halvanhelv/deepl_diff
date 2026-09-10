@@ -84,8 +84,7 @@ class SentenceCacheTest < Minitest::Test
     subject_cache.store(subject)
 
     expected = subject.map { |segment| [subject_cache.key(segment), segment.translation] }
-    assert_equal 1, store.write_multi_calls.size
-    assert_equal expected, store.write_multi_calls.first
+    assert_equal [expected], store.write_multi_calls
   end
 
   # A batch of nothing is not a batch: a store that opens a transaction in write_multi must not be asked to.
