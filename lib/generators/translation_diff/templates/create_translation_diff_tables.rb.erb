@@ -3,7 +3,7 @@ class CreateTranslationDiffTables < ActiveRecord::Migration[<%= ActiveRecord::Mi
     create_table :translation_diff_translations, if_not_exists: true do |t|
       t.string :namespace, null: false, limit: 64
       t.string :key_digest, null: false, limit: 64
-      t.text :translation, null: false
+      t.text :translation, null: false, limit: 16_777_215
       t.datetime :expires_at
       t.timestamps
     end
