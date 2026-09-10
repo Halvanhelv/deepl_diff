@@ -34,10 +34,19 @@ class TranslationDiff::Provider
     values.empty? ? nil : values.sum
   end
 
+  # Never the default: a provider holds the configuration, so the default renders every key it holds.
+  def inspect = "#<#{self.class.name} name=#{name.inspect} config=#{config.inspect}>"
+
   def translate(_request) = raise NotImplementedError, "#{self.class} must implement #translate"
 
   # Only called when `capabilities.detects_language?`.
   def detect(_text) = raise NotImplementedError, "#{self.class} must implement #detect"
+
+  # Only `rake languages:refresh` calls this; a provider that cannot answer is skipped, not failed.
+  def languages = raise NotImplementedError, "#{self.class} cannot fetch its languages"
+
+  # The full URL #languages fetches; a provider whose fetch has more than one shape narrows this further.
+  def languages_endpoint = respond_to?(:api_base) ? api_base.to_s : ""
 
   # Raising when never stamped, rather than falling back to "", is deliberate: "" would merge namespaces silently.
   def cache_key
@@ -54,6 +63,12 @@ class TranslationDiff::Provider
     def language_case = :downcase
 
     def configuration_options = []
+
+    # Overridable: a provider whose credential is named unusually says so rather than leaking it.
+    def sensitive_options
+      configuration_options.flat_map { |o| o.is_a?(Hash) ? o.keys : [o] }
+                           .select { |key| TranslationDiff::Redaction.sensitive?(key) }
+    end
 
     # Checked once, at build time, so a caller learns what to set before a vendor's own exception does.
     def configuration_requirements = []

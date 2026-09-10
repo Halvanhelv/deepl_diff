@@ -36,6 +36,7 @@ module TranslationDiff::Providers
 
     def registered?(name) = registry.registered?(name)
     def names = registry.names
+    def classes = registry.classes
     def registry = @registry ||= TranslationDiff::Registry.new("provider")
 
     private
