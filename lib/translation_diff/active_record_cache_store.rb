@@ -64,6 +64,13 @@ class TranslationDiff::ActiveRecordCacheStore
                                "#{@table_name}(namespace, key_digest, translation, expires_at)")
   end
 
+  # Its own message, naming the statement prune actually runs -- a failed prune is not a failed upsert.
+  def redacted_prune_error(error)
+    adapter_error = error.cause&.class || error.class
+    TranslationDiff::Error.new("the cache prune failed (#{adapter_error}): a delete from " \
+                               "#{@table_name}(namespace, expires_at)")
+  end
+
   def row(key, value)
     { namespace: @namespace, key_digest: digest(key), translation: value, expires_at: expires_at }
   end
@@ -78,8 +85,13 @@ class TranslationDiff::ActiveRecordCacheStore
          .where(expires_at: nil).or(model.where(namespace: @namespace).where(expires_at: Time.now.utc...))
   end
 
+  # Its own savepoint, not write's -- a failing prune must not poison a transaction the caller owns either.
   def prune_sometimes
-    prune if @prune_probability.positive? && rand < @prune_probability
+    return unless @prune_probability.positive? && rand < @prune_probability
+
+    model.transaction(requires_new: true) { prune }
+  rescue ActiveRecord::StatementInvalid => e
+    raise redacted_prune_error(e), cause: nil
   end
 
   def active_record_feature = "the cache"
