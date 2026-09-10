@@ -47,7 +47,7 @@ module ActiveRecordDatabase
   def self.define_rate_limits_table(connection)
     connection.create_table :translation_diff_rate_limits do |t|
       t.string :namespace, null: false, limit: 64
-      t.integer :bucket, null: false
+      t.bigint :bucket, null: false
       t.integer :characters, null: false, default: 0
     end
     connection.add_index :translation_diff_rate_limits, %i[namespace bucket],

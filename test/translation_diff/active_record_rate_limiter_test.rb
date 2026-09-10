@@ -57,6 +57,16 @@ if ActiveRecordDatabase.available?
       assert true
     end
 
+    # int4 overflows at 2**31; any rate_interval under 24 makes the bucket the epoch second, which crosses that
+    # boundary in January 2038 -- bucket is bigint precisely so a real epoch-second value like this one fits.
+    def test_a_bucket_beyond_int32_range_is_stored_and_read_back
+      far_future_bucket = (2**31) + 1
+
+      model.create!(namespace: "translation-diff", bucket: far_future_bucket, characters: 5)
+
+      assert_equal far_future_bucket, model.find_by(namespace: "translation-diff").bucket
+    end
+
     def test_prune_deletes_buckets_older_than_the_window_and_leaves_the_current_one
       limiter = build_limiter(threshold: 1000, interval: 60)
       model.create!(namespace: "translation-diff", bucket: limiter.send(:oldest_bucket) - 1, characters: 5)

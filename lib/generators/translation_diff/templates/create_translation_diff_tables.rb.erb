@@ -14,7 +14,7 @@ class CreateTranslationDiffTables < ActiveRecord::Migration[<%= ActiveRecord::Mi
 
     create_table :translation_diff_rate_limits do |t|
       t.string :namespace, null: false, limit: 64
-      t.integer :bucket, null: false
+      t.bigint :bucket, null: false
       t.integer :characters, null: false, default: 0
     end
 
