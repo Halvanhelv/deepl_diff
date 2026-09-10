@@ -45,6 +45,15 @@ class TranslationDiff::HTTPProvider < TranslationDiff::Provider
     raise TranslationDiff::TransportError, "#{self.class}: #{e.class}: #{e.message}"
   end
 
+  def get(url)
+    raw = connection.get(url)
+    response = Decoded.new(status: raw.status, headers: raw.headers, body: decode(raw))
+    raise_for_status!(response)
+    response
+  rescue *TRANSPORT_FAILURES => e
+    raise TranslationDiff::TransportError, "#{self.class}: #{e.class}: #{e.message}"
+  end
+
   # Faraday's JSON middleware passes parser options positionally, which json 3 (default on Ruby 4.x) removed.
   def decode(response)
     body = response.body

@@ -92,6 +92,21 @@ class HTTPProviderTest < Minitest::Test
     assert_raises(TranslationDiff::TransportError) { provider.translate(request) }
   end
 
+  # #get is what every provider's #languages calls; a connection failure there must become the same StandardError
+  # #post's does, or Refresh's "keeps its previous file on any StandardError" discipline would not cover it.
+  def test_a_connection_failure_on_get_becomes_a_transport_error
+    @config.max_retries = 0
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.get("/v1/languages") { raise Faraday::ConnectionFailed, "no route" }
+    end
+    provider = Echo.new(@config)
+    provider.instance_variable_set(:@connection, provider.send(:build_connection) do |faraday|
+      faraday.adapter :test, stubs
+    end)
+
+    assert_raises(TranslationDiff::TransportError) { provider.send(:get, "v1/languages") }
+  end
+
   # No line this library writes may carry source text or a credential.
   def test_no_logging_middleware_is_installed_even_when_a_logger_is_configured
     @config.logger = Logger.new(StringIO.new)

@@ -8,7 +8,12 @@ require "ox"
 require "translation_diff/version"
 require "translation_diff/error"
 require "translation_diff/errors"
+require "translation_diff/redaction"
 require "translation_diff/capabilities"
+require "json"
+require "translation_diff/languages"
+require "translation_diff/languages/set"
+require "translation_diff/languages/refresh"
 require "translation_diff/translation/usage"
 require "translation_diff/translation/request"
 require "translation_diff/translation/response"
@@ -44,6 +49,7 @@ require "translation_diff/memory_cache_store"
 require "translation_diff/redis_cache_store"
 require "translation_diff/redis_rate_limiter"
 require "translation_diff/instrumentation"
+require "translation_diff/dispatcher"
 require "translation_diff/translator"
 require "translation_diff/context"
 
@@ -59,9 +65,10 @@ module TranslationDiff
     # An isolated copy of the configuration with the same entry point, for per-tenant settings.
     def context(&) = Context.new(config.copy.tap(&))
 
-    # `provider:` and `config:` are reserved; every other keyword is forwarded to the provider.
-    def translate(values, from: nil, to: nil, provider: nil, **)
-      Translator.new(values, from: from, to: to, provider: provider, config: config, **).call
+    # `provider:`, `config:` and `assume_supported:` are reserved; every other keyword is forwarded to the provider.
+    def translate(values, from: nil, to: nil, provider: nil, assume_supported: false, **)
+      Translator.new(values, from: from, to: to, provider: provider, config: config,
+                             assume_supported: assume_supported, **).call
     end
   end
 end

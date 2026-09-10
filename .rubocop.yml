@@ -26,17 +26,13 @@ Gemspec/DevelopmentDependencies:
 Style/FrozenStringLiteralComment:
   Enabled: false
 
-# Request takes its collaborators as keyword arguments -- values, from:, to:,
-# provider:, config: and the provider's own options. The confusion this cop
-# guards against is positional: six named arguments at a call site read
-# perfectly well, and the alternative is pulling them out of an options hash
-# where nothing documents them.
+# Translator#initialize takes its collaborators as keyword arguments -- values, from:, to:, provider:, config:,
+# assume_supported: and the provider's own options -- which read perfectly well named at a call site, unlike
+# pulling them out of an undocumented options hash, which is the confusion this cop guards against.
 Metrics/ParameterLists:
   CountKeywordArgs: false
 
 Metrics/ClassLength:
   Exclude:
-    - lib/translation_diff/tokenizer.rb
-    - lib/translation_diff/request.rb
     # Test classes are mostly tables of cases.
     - test/**/*

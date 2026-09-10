@@ -6,9 +6,10 @@ class TranslationDiff::Context
     @config = config
   end
 
-  def translate(values, from: nil, to: nil, provider: nil, **)
+  def translate(values, from: nil, to: nil, provider: nil, assume_supported: false, **)
     TranslationDiff::Translator.new(
-      values, from: from, to: to, provider: provider, config: config, **
+      values, from: from, to: to, provider: provider, config: config,
+              assume_supported: assume_supported, **
     ).call
   end
 end

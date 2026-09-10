@@ -251,7 +251,8 @@ class TranslatorTest < ConfiguredTest
   end
 
   ALL_EVENT_NAMES = %w[translate.translation_diff cache.translation_diff
-                       request.translation_diff rate_limit.translation_diff].sort.freeze
+                       request.translation_diff rate_limit.translation_diff
+                       usage.translation_diff].sort.freeze
 
   # A guard that only checked payload content would pass even if an event quietly stopped firing.
   def test_no_payload_ever_contains_the_text_being_translated
@@ -338,6 +339,116 @@ class TranslatorTest < ConfiguredTest
     error = assert_raises(ArgumentError) { translate("one.", from: "en") }
 
     assert_match(/to:/, error.message)
+  end
+
+  # A provider whose languages we ship, driven with a pair it does not do.
+  class DeepLDouble < TranslationDiff::Providers::DeepL
+    attr_reader :requests
+
+    def translate(request)
+      (@requests ||= []) << request
+      TranslationDiff::Translation::Response.build(request: request, texts: request.texts.map(&:to_s))
+    end
+
+    def cache_key = "deepl"
+  end
+
+  def deepl_double
+    TranslationDiff.configure { |c| c.deepl_api_key = "test-key" }
+    DeepLDouble.new(TranslationDiff.config)
+  end
+
+  def test_an_unsupported_pair_raises_before_a_request_is_made
+    provider = deepl_double
+
+    error = assert_raises(TranslationDiff::UnsupportedLanguageError) do
+      TranslationDiff.translate("Hello there.", from: "en", to: "klingon", provider: provider)
+    end
+
+    assert_nil provider.requests
+    assert_match(/klingon/, error.message)
+    assert_match(/deepl/, error.message)
+    assert_match(/assume_supported/, error.message)
+  end
+
+  def test_a_supported_pair_goes_through
+    assert_equal "Hello there.",
+                 TranslationDiff.translate("Hello there.", from: "en", to: "ru", provider: deepl_double)
+  end
+
+  def test_the_per_call_escape_lets_an_unlisted_pair_through
+    assert_equal "Hello there.",
+                 TranslationDiff.translate("Hello there.", from: "en", to: "klingon",
+                                                           provider: deepl_double, assume_supported: true)
+  end
+
+  def test_the_global_switch_turns_validation_off
+    TranslationDiff.configure { |c| c.validate_languages = false }
+
+    assert_equal "Hello there.",
+                 TranslationDiff.translate("Hello there.", from: "en", to: "klingon", provider: deepl_double)
+  end
+
+  # Reserved, like provider: and config: -- every other keyword is forwarded to the vendor untouched.
+  def test_assume_supported_never_reaches_the_provider
+    provider = deepl_double
+    TranslationDiff.translate("Hello there.", from: "en", to: "ru", provider: provider, assume_supported: true)
+
+    refute_includes provider.requests.first.options.keys, :assume_supported
+  end
+
+  def test_a_provider_we_ship_no_data_for_refuses_nothing
+    assert_equal "Hello there.",
+                 TranslationDiff.translate("Hello there.", from: "en", to: "klingon", provider: :null)
+  end
+
+  # ModernMT genuinely translates Persian; it just publishes it under its ISO 639-3 individual code "pes".
+  class ModernMTDouble < TranslationDiff::Providers::ModernMT
+    def translate(request)
+      TranslationDiff::Translation::Response.build(request: request, texts: request.texts.map(&:to_s))
+    end
+
+    def cache_key = "modernmt"
+  end
+
+  def test_modernmt_translates_a_macrolanguage_it_only_lists_under_its_individual_code
+    TranslationDiff.configure { |c| c.modernmt_api_key = "test-key" }
+    provider = ModernMTDouble.new(TranslationDiff.config)
+
+    assert_equal "Hello there.",
+                 TranslationDiff.translate("Hello there.", from: "en", to: "fa", provider: provider)
+  end
+
+  # A provider whose #detect would cost a real request if it were ever reached.
+  class ExplodingOnDetectDouble < DeepLDouble
+    def detect(_text) = raise "detect must never be called when the target alone is already unsupported"
+  end
+
+  def test_an_unsupported_target_is_refused_before_a_provider_is_asked_to_detect
+    TranslationDiff.configure { |c| c.deepl_api_key = "test-key" }
+    provider = ExplodingOnDetectDouble.new(TranslationDiff.config)
+
+    error = assert_raises(TranslationDiff::UnsupportedLanguageError) do
+      TranslationDiff.translate("Hello there.", to: "klingon", provider: provider)
+    end
+
+    assert_match(/klingon/, error.message)
+  end
+
+  # When `from:` is given the whole pair is already known, so there is nothing to defer: validate it once.
+  def test_a_pair_given_up_front_is_validated_exactly_once
+    original = TranslationDiff::Languages.method(:supports?)
+    calls = 0
+    TranslationDiff::Languages.define_singleton_method(:supports?) do |*args, **kwargs|
+      calls += 1
+      original.call(*args, **kwargs)
+    end
+
+    translate("one.", from: "en", to: "ru")
+
+    assert_equal 1, calls
+  ensure
+    TranslationDiff::Languages.define_singleton_method(:supports?, &original)
   end
 
   private

@@ -7,8 +7,8 @@ class TranslationDiff::Translator
 
   attr_reader :config
 
-  # `provider:` and `config:` are reserved; every other keyword is forwarded to the provider untouched.
-  def initialize(values, from: nil, to: nil, provider: nil, config: nil, **options)
+  # `provider:`, `config:` and `assume_supported:` are reserved; every other keyword reaches the provider untouched.
+  def initialize(values, from: nil, to: nil, provider: nil, config: nil, assume_supported: false, **options)
     raise ArgumentError, "a translation needs a target language: pass `to:` a language code." if to.nil?
 
     @values = values
@@ -17,6 +17,7 @@ class TranslationDiff::Translator
     @options = options
     @config = config || TranslationDiff.config
     @requested_provider = provider
+    @assume_supported = assume_supported
   end
 
   # Hands back the caller's value untouched unless something in it was actually translated.
@@ -28,13 +29,38 @@ class TranslationDiff::Translator
     return @values if same_language?(@from)
 
     provider = resolve_provider
-    from = source_language(provider, segments)
+    from = resolve_source_language(provider, segments)
     return @values if same_language?(from)
 
     translated(document, passages, segments, provider, from)
   end
 
   private
+
+  # `from:` given means the whole pair is already known, so it is validated once, up front. `from:` nil means
+  # the target alone is checked before a possibly billed #detect runs, and the full pair only once it answers.
+  def resolve_source_language(provider, segments)
+    return @from.tap { |from| ensure_supported!(provider, from) } unless @from.nil?
+
+    ensure_supported!(provider, nil)
+    source_language(provider, segments).tap { |from| ensure_supported!(provider, from) }
+  end
+
+  # nil means we ship no data for this provider, and silence is not evidence of absence.
+  # `from` nil (source not known yet) checks the target alone: a nil source is never itself refused.
+  def ensure_supported!(provider, from)
+    return if @assume_supported || !config.validate_languages
+
+    supported = TranslationDiff::Languages.supports?(provider.cache_key, from: from, to: @to)
+    return if supported.nil? || supported
+
+    raise TranslationDiff::UnsupportedLanguageError,
+          "Provider #{provider.cache_key} does not translate #{pair_description(from)}. If it does " \
+          "now, pass `assume_supported: true` for this call, or set " \
+          "`config.validate_languages = false`, and run `rake languages:refresh`."
+  end
+
+  def pair_description(from) = from.nil? ? "to #{@to}" : "#{from} to #{@to}"
 
   # The `translate` event wraps everything a call that reaches a provider does, and nothing an early return does.
   def translated(document, passages, segments, provider, from)
@@ -105,7 +131,7 @@ class TranslationDiff::Translator
     cache = sentence_cache(provider, from)
     misses = cache.fill(segments)
     instrument("cache", provider: provider.cache_key, hits: segments.size - misses.size, misses: misses.size)
-    dispatch(provider, misses, from)
+    dispatcher(provider, from).dispatch(misses)
     cache.store(misses)
   end
 
@@ -114,29 +140,7 @@ class TranslationDiff::Translator
                                        from: from, to: @to, options: @options)
   end
 
-  def dispatch(provider, segments, from)
-    batches = TranslationDiff::Batch.pack(segments, capabilities: provider.class.capabilities)
-    batches.each { |batch| send_batch(provider, batch, from) }
-  end
-
-  # The batch applies the reply to the segments that produced it, so no step ever correlates by position again.
-  def send_batch(provider, batch, from)
-    texts = batch.texts
-    payload = { provider: provider.cache_key, batch: texts.size, characters: texts.sum(&:size) }
-    throttle(provider, payload[:characters])
-    response = instrument("request", payload) { provider.translate(request(texts, from)) }
-    batch.apply(response.texts)
-  end
-
-  def request(texts, from)
-    TranslationDiff::Translation::Request.new(texts: texts, from: from, to: @to, options: @options)
-  end
-
-  # Consulted with what is about to be sent, before it is sent; nil means no rate limiting was configured at all.
-  def throttle(provider, characters)
-    limiter = config.rate_limiter_instance
-    return if limiter.nil?
-
-    instrument("rate_limit", provider: provider.cache_key, characters: characters) { limiter.check(characters) }
+  def dispatcher(provider, from)
+    TranslationDiff::Dispatcher.new(provider: provider, from: from, to: @to, options: @options, config: config)
   end
 end

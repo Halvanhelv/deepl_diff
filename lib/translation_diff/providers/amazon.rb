@@ -2,6 +2,7 @@
 class TranslationDiff::Providers::Amazon < TranslationDiff::HTTPProvider
   SERVICE = "translate".freeze
   TARGET = "AWSShineFrontendService_20170701.TranslateText".freeze
+  LIST_LANGUAGES = "AWSShineFrontendService_20170701.ListLanguages".freeze
   CONTENT_TYPE = "application/x-amz-json-1.1".freeze
 
   # Amazon's own way of asking for detection; reaches Comprehend under the hood, in regions that have it.
@@ -46,6 +47,17 @@ class TranslationDiff::Providers::Amazon < TranslationDiff::HTTPProvider
       .fetch("SourceLanguageCode", nil)&.downcase
   end
 
+  # ListLanguages is a signed POST like every other Amazon call; the list serves both directions.
+  def languages
+    body = post_signed(JSON.generate({}), target: LIST_LANGUAGES).body
+    codes = Array(body["Languages"]).map { |entry| entry["LanguageCode"] }
+
+    { source: codes, target: codes }
+  end
+
+  # There is no distinct languages URL: every Amazon call, ListLanguages included, is a signed POST to the root.
+  def languages_endpoint = "#{api_base}/"
+
   private
 
   def call(text, request)
@@ -58,8 +70,8 @@ class TranslationDiff::Providers::Amazon < TranslationDiff::HTTPProvider
     post_signed(JSON.generate(payload)).body
   end
 
-  def post_signed(body)
-    raw = connection.post("/", body, signed_headers(body))
+  def post_signed(body, target: TARGET)
+    raw = connection.post("/", body, signed_headers(body, target: target))
     response = decoded_response(raw)
     raise_for_status!(response)
     response
@@ -92,13 +104,13 @@ class TranslationDiff::Providers::Amazon < TranslationDiff::HTTPProvider
           'Add `gem "aws-sigv4"` to your Gemfile.'
   end
 
-  def signed_headers(body)
+  def signed_headers(body, target: TARGET)
     signature = signer.sign_request(
       http_method: "POST", url: "#{api_base}/", body: body,
-      headers: { "Content-Type" => CONTENT_TYPE, "X-Amz-Target" => TARGET }
+      headers: { "Content-Type" => CONTENT_TYPE, "X-Amz-Target" => target }
     )
 
-    signature.headers.merge("Content-Type" => CONTENT_TYPE, "X-Amz-Target" => TARGET)
+    signature.headers.merge("Content-Type" => CONTENT_TYPE, "X-Amz-Target" => target)
   end
 
   # The signature covers the body exactly as sent, so this omits `faraday.request :json` unlike the base class.

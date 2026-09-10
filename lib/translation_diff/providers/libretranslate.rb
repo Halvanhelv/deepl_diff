@@ -50,6 +50,16 @@ class TranslationDiff::Providers::LibreTranslate < TranslationDiff::HTTPProvider
 
     post("detect", payload).body.dig(0, "language")&.downcase
   end
+
+  # Each entry lists its own targets; a self-hosted instance answers for itself, which is the point.
+  def languages
+    entries = Array(get("languages").body)
+
+    { source: entries.map { |entry| entry["code"] },
+      target: entries.flat_map { |entry| Array(entry["targets"]) }.uniq }
+  end
+
+  def languages_endpoint = "#{api_base}/languages"
 end
 
 TranslationDiff::Providers.register(:libretranslate, TranslationDiff::Providers::LibreTranslate)
