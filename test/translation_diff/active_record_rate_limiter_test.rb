@@ -19,14 +19,15 @@ if ActiveRecordDatabase.available?
       ActiveRecordDatabase.truncate
     end
 
-    # Advancing the clock by exactly one interval always lands in the next bucket, whatever the starting phase.
+    # The window covers interval..interval + bucket_width seconds, erring strict: the oldest bucket is only ever
+    # partially inside it, so a full interval alone does not guarantee it has rolled past -- one more bucket does.
     def test_a_window_that_has_rolled_over_passes_again
       clock = MutableClock.new(Time.now)
 
       build_limiter(threshold: 10, interval: 60, clock: clock).check(10)
       assert_raises(rate_limit_exceeded_error) { build_limiter(threshold: 10, interval: 60, clock: clock).check(1) }
 
-      clock.advance(60)
+      clock.advance(65)
 
       build_limiter(threshold: 10, interval: 60, clock: clock).check(1)
     end
@@ -58,7 +59,7 @@ if ActiveRecordDatabase.available?
 
     def test_prune_deletes_buckets_older_than_the_window_and_leaves_the_current_one
       limiter = build_limiter(threshold: 1000, interval: 60)
-      model.create!(namespace: "translation-diff", bucket: limiter.send(:oldest_bucket), characters: 5)
+      model.create!(namespace: "translation-diff", bucket: limiter.send(:oldest_bucket) - 1, characters: 5)
 
       limiter.check(10)
       deleted = limiter.prune
@@ -67,10 +68,22 @@ if ActiveRecordDatabase.available?
       assert_equal [limiter.send(:current_bucket)], model.pluck(:bucket)
     end
 
+    # The oldest bucket is only ever partially inside the window (see current_total), so prune leaving it alone
+    # is what keeps pruning from quietly undoing the strictness that sum starting at oldest_bucket relies on.
+    def test_prune_leaves_the_oldest_bucket_because_the_window_still_counts_it
+      limiter = build_limiter(threshold: 1000, interval: 60)
+      model.create!(namespace: "translation-diff", bucket: limiter.send(:oldest_bucket), characters: 5)
+
+      deleted = limiter.prune
+
+      assert_equal 0, deleted
+      assert_equal [limiter.send(:oldest_bucket)], model.pluck(:bucket)
+    end
+
     def test_prune_only_deletes_rows_in_its_own_namespace
       own = build_limiter(threshold: 1000, interval: 60)
-      model.create!(namespace: "translation-diff", bucket: own.send(:oldest_bucket), characters: 5)
-      model.create!(namespace: "other-tenant", bucket: own.send(:oldest_bucket), characters: 5)
+      model.create!(namespace: "translation-diff", bucket: own.send(:oldest_bucket) - 1, characters: 5)
+      model.create!(namespace: "other-tenant", bucket: own.send(:oldest_bucket) - 1, characters: 5)
 
       assert_equal 1, own.prune
       assert_equal 1, model.where(namespace: "other-tenant").count
@@ -85,6 +98,18 @@ if ActiveRecordDatabase.available?
       clock.advance(2)
 
       assert_raises(rate_limit_exceeded_error) { limiter.check(8000) }
+    end
+
+    # The dropped partial oldest bucket: 56 real seconds have passed, well inside a true 60-second window, but
+    # a tumbling (oldest_bucket + 1) start point had already stopped counting the first deposit's bucket.
+    def test_a_deposit_inside_the_window_still_blocks_a_later_check
+      clock = MutableClock.new(Time.at(4))
+      limiter = build_limiter(threshold: 8000, interval: 60, clock: clock)
+
+      limiter.check(8000)
+      clock.advance(56)
+
+      assert_raises(rate_limit_exceeded_error) { limiter.check(1) }
     end
 
     def test_a_negative_size_does_not_hand_back_headroom

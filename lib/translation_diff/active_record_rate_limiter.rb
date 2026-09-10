@@ -32,8 +32,8 @@ class TranslationDiff::ActiveRecordRateLimiter
     add(size)
   end
 
-  # Buckets that have fully aged out of the window as of now; the host decides when, if ever, this runs.
-  def prune = model.where(namespace: @namespace).where(bucket: ...(oldest_bucket + 1)).delete_all
+  # Buckets that have fully aged out of the window as of now; the oldest bucket itself is still counted by it.
+  def prune = model.where(namespace: @namespace).where(bucket: ...oldest_bucket).delete_all
 
   def model
     @model ||= build_model
@@ -41,8 +41,9 @@ class TranslationDiff::ActiveRecordRateLimiter
 
   private
 
+  # The oldest bucket is only ever partially inside the window, so summing from it, not past it, errs strict.
   def current_total
-    model.where(namespace: @namespace, bucket: (oldest_bucket + 1)..current_bucket).sum(:characters)
+    model.where(namespace: @namespace, bucket: oldest_bucket..current_bucket).sum(:characters)
   end
 
   def current_bucket = now / @bucket_width
