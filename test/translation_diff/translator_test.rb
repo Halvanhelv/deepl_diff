@@ -72,6 +72,14 @@ class TranslatorTest < ConfiguredTest
     def check(size) = @sizes << size
   end
 
+  # Stands in for any store whose write fails -- a full batch, one sentence too long, a dropped connection.
+  class FailingCacheStore
+    class BoomError < StandardError; end
+
+    def read_multi(keys) = keys.map { nil }
+    def write_multi(_pairs) = raise BoomError, "cache write exploded"
+  end
+
   def setup
     super
     @provider = RecordingProvider.new(TranslationDiff::Configuration.new)
@@ -199,6 +207,47 @@ class TranslatorTest < ConfiguredTest
     assert_equal 0, payload[:hits]
     assert_equal 1, payload[:misses]
     assert_equal "recording", payload[:provider]
+  end
+
+  # The cache is an optimisation: a translation already paid for at the provider must reach the caller regardless.
+  def test_a_failing_cache_write_does_not_lose_a_translation_already_paid_for
+    TranslationDiff.configure { |c| c.cache = FailingCacheStore.new }
+
+    assert_equal "ONE.", translate("one.", from: "en", to: "ru")
+  end
+
+  def test_a_failing_cache_write_emits_a_cache_error_event_naming_the_provider_and_error_class
+    recorder = instrumented { |c| c.cache = FailingCacheStore.new }
+    instrumented_translate("Hello there.")
+
+    payload = payload_for(recorder, "cache_error")
+
+    assert_equal "recording", payload[:provider]
+    assert_equal "TranslatorTest::FailingCacheStore::BoomError", payload[:error]
+  end
+
+  # The instrumentation payload carries the error's class, never the store's own message, which could quote the row.
+  def test_a_failing_cache_writes_event_never_carries_the_text_being_translated
+    secret = "Zaphod Beeblebrox is president."
+    recorder = instrumented { |c| c.cache = FailingCacheStore.new }
+    instrumented_translate(secret)
+
+    serialised = recorder.events.map { |name, payload| "#{name}#{payload}" }.join
+
+    refute_includes serialised, "Zaphod"
+    refute_includes serialised, secret
+  end
+
+  def test_a_failing_cache_write_is_logged_through_the_gems_own_logger
+    logger = FakeLogger.new
+    TranslationDiff.configure do |c|
+      c.logger = logger
+      c.cache = FailingCacheStore.new
+    end
+
+    translate("one.", from: "en", to: "ru")
+
+    assert_match(/cache write failed/, logger.lines.last)
   end
 
   def test_the_request_event_carries_the_provider_a_batch_size_and_a_character_count
