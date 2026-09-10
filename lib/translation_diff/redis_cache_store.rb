@@ -17,14 +17,15 @@ class TranslationDiff::RedisCacheStore
     redis { |redis| redis.mget(*keys) }
   end
 
+  # A non-positive or nil timeout means never expires, the same rule the SQL store applies to cache_ttl.
   def write(key, value)
-    redis { |redis| redis.setex(key, timeout, value) }
+    redis { |redis| write_one(redis, key, value) }
   end
 
   def write_multi(pairs)
     return pairs if pairs.empty?
 
-    redis { |redis| redis.pipelined { |p| pairs.each { |key, value| p.setex(key, timeout, value) } } }
+    redis { |redis| redis.pipelined { |p| pairs.each { |key, value| write_one(p, key, value) } } }
     pairs
   end
 
@@ -37,6 +38,12 @@ class TranslationDiff::RedisCacheStore
       yield Redis::Namespace.new(namespace, redis: redis)
     end
   end
+
+  def write_one(redis, key, value)
+    expiring? ? redis.setex(key, timeout, value) : redis.set(key, value)
+  end
+
+  def expiring? = timeout.is_a?(Numeric) && timeout.positive?
 end
 
 TranslationDiff::Stores.register(:redis, TranslationDiff::RedisCacheStore)

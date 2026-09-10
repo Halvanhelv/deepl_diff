@@ -19,6 +19,10 @@ class Redis::Namespace
     @redis.setex("#{@namespace}:#{key}", timeout, value)
   end
 
+  def set(key, value)
+    @redis.set("#{@namespace}:#{key}", value)
+  end
+
   def pipelined
     @redis.pipelined { |pipeline| yield self.class.new(@namespace, redis: pipeline) }
   end
@@ -47,6 +51,12 @@ class RedisCacheStoreTest < Minitest::Test
 
     def setex(key, timeout, value)
       @calls << [:setex, key, timeout, value]
+      @entries[key] = value
+      "OK"
+    end
+
+    def set(key, value)
+      @calls << [:set, key, value]
       @entries[key] = value
       "OK"
     end
@@ -102,6 +112,41 @@ class RedisCacheStoreTest < Minitest::Test
     build_store(redis).write_multi([])
 
     assert_empty redis.calls
+  end
+
+  # The regression this closes: `setex(key, nil, value)` raised TypeError on every write against the default store.
+  def test_write_with_a_nil_timeout_never_expires
+    redis = FakeRedis.new
+
+    build_store(redis, timeout: nil).write("a", "b")
+
+    assert_equal [[:set, "translation-diff:a", "b"]], redis.calls
+  end
+
+  def test_write_with_a_zero_timeout_never_expires
+    redis = FakeRedis.new
+
+    build_store(redis, timeout: 0).write("a", "b")
+
+    assert_equal [[:set, "translation-diff:a", "b"]], redis.calls
+  end
+
+  def test_write_with_a_negative_timeout_never_expires
+    redis = FakeRedis.new
+
+    build_store(redis, timeout: -1).write("a", "b")
+
+    assert_equal [[:set, "translation-diff:a", "b"]], redis.calls
+  end
+
+  def test_write_multi_with_a_nil_timeout_never_expires
+    redis = FakeRedis.new
+
+    build_store(redis, timeout: nil).write_multi([%w[a one], %w[b two]])
+
+    assert_equal [[:pipelined],
+                  [:set, "translation-diff:a", "one"],
+                  [:set, "translation-diff:b", "two"]], redis.calls
   end
 
   private

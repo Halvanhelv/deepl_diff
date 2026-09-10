@@ -34,6 +34,17 @@ class MemoryCacheStoreTest < Minitest::Test
     assert_equal ["again", nil, "c", "d"], store.read_multi(%w[a b c d])
   end
 
+  # The regression that broke the Redis store: this one takes no timeout at all, so a nil cache_ttl is a no-op here.
+  def test_build_ignores_a_nil_cache_ttl_and_writes_normally
+    config = TranslationDiff::Configuration.new
+    config.cache_ttl = nil
+
+    built = TranslationDiff::MemoryCacheStore.build(config)
+    built.write("a", "one")
+
+    assert_equal ["one"], built.read_multi(["a"])
+  end
+
   def test_build_takes_its_bound_from_the_configuration
     config = TranslationDiff::Configuration.new
     config.cache_max_size = 1
