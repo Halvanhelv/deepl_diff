@@ -38,3 +38,11 @@ gem "aws-sigv4", "~> 1.12", require: false
 # suite can exercise the stores against a real database rather than a stand-in.
 gem "activerecord", "~> 8.1", require: false
 gem "sqlite3", "~> 2.9", require: false
+
+# Not a runtime dependency of the gem (see the gemspec) -- the generator under
+# lib/generators/ is loaded only when Rails loads generators, so a non-Rails
+# application never needs it installed. It is here so
+# test/translation_diff/install_generator_test.rb can load it and check the
+# generated migration against the schema the rest of the suite runs against,
+# instead of skipping itself for want of Rails::Generators::Base.
+gem "railties", "~> 8.1", require: false
