@@ -1,5 +1,6 @@
 require "test_helper"
 require "support/cache_store_contract"
+require "support/batching_cache_store_contract"
 
 # Nested inside the real Redis class, requiring it explicitly, so this never races Configuration's lazy require.
 require "redis"
@@ -25,6 +26,7 @@ end
 
 class RedisCacheStoreTest < Minitest::Test
   include CacheStoreContract
+  include BatchingCacheStoreContract
 
   # `values`, when given, forces #mget to return it regardless of keys asked, to inspect keys without real storage.
   class FakeRedis

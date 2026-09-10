@@ -1,5 +1,6 @@
 require "test_helper"
 require "support/cache_store_contract"
+require "support/batching_cache_store_contract"
 require "support/active_record_database"
 
 if ActiveRecordDatabase.available?
@@ -7,6 +8,7 @@ if ActiveRecordDatabase.available?
 
   class ActiveRecordCacheStoreTest < Minitest::Test
     include CacheStoreContract
+    include BatchingCacheStoreContract
 
     attr_reader :store
 

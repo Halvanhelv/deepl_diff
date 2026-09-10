@@ -1,8 +1,10 @@
 require "test_helper"
 require "support/cache_store_contract"
+require "support/batching_cache_store_contract"
 
 class MemoryCacheStoreTest < Minitest::Test
   include CacheStoreContract
+  include BatchingCacheStoreContract
 
   attr_reader :store
 
