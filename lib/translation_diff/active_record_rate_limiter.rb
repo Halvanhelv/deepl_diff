@@ -35,6 +35,18 @@ class TranslationDiff::ActiveRecordRateLimiter
     raise RateLimitExceeded, exceeded_message if current_total >= @threshold
 
     add(size)
+  rescue StandardError => e
+    raise unless ar_error?(e)
+
+    raise redacted_error(e), cause: nil
+  end
+
+  # The limiter's own statements carry counts, not content -- but a ReadOnlyError quotes the statement, and
+  # a raw ActiveRecord error from inside a translate call tells a caller nothing about which gem it came from.
+  def redacted_error(error)
+    adapter_error = error.cause&.class || error.class
+    TranslationDiff::Error.new("the rate limit check failed (#{adapter_error}): a read or upsert on " \
+                               "#{@table_name}(namespace, bucket, characters)")
   end
 
   # Counts and settings, never a character of what was being translated.

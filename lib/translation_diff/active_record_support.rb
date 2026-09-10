@@ -8,6 +8,11 @@ module TranslationDiff::ActiveRecordSupport
 
   private
 
+  # Any ActiveRecordError, not just StatementInvalid -- ReadOnlyError carries a whole write statement too.
+  def ar_error?(error)
+    defined?(ActiveRecord::ActiveRecordError) && error.is_a?(ActiveRecord::ActiveRecordError)
+  end
+
   def build_model
     require "active_record"
     ensure_supported_version!

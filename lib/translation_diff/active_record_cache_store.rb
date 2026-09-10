@@ -98,11 +98,6 @@ class TranslationDiff::ActiveRecordCacheStore
     raise redacted_prune_error(e), cause: nil
   end
 
-  # Any ActiveRecordError, not just StatementInvalid -- ReadOnlyError carries a whole write statement too.
-  def ar_error?(error)
-    defined?(ActiveRecord::ActiveRecordError) && error.is_a?(ActiveRecord::ActiveRecordError)
-  end
-
   def active_record_feature = "the cache"
   def active_record_component = "ActiveRecord cache store"
   def active_record_upsert_detail = "upsert_all takes unique_by and record_timestamps there."

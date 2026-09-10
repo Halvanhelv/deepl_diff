@@ -68,6 +68,19 @@ if ActiveRecordDatabase.available?
       assert_equal far_future_bucket, model.find_by(namespace: "translation-diff").bucket
     end
 
+    # Rails' DatabaseSelector sets this on every GET, and the ReadOnlyError it raises quotes the statement.
+    def test_a_write_refused_by_rails_is_reported_as_this_gem_s_own_error
+      limiter = build_limiter(threshold: 1000, interval: 60)
+
+      error = assert_raises(TranslationDiff::Error) do
+        ::ActiveRecord::Base.while_preventing_writes { limiter.check(10) }
+      end
+
+      refute_instance_of ::ActiveRecord::ReadOnlyError, error
+      assert_match(/the rate limit check failed/, error.message)
+      assert_nil error.cause
+    end
+
     def test_prune_deletes_buckets_older_than_the_window_and_leaves_the_current_one
       limiter = build_limiter(threshold: 1000, interval: 60, clock: frozen_clock)
       model.create!(namespace: "translation-diff", bucket: limiter.send(:oldest_bucket) - 1, characters: 5)
