@@ -31,8 +31,8 @@ class TranslationDiff::RedisRateLimiter
 
     connection_pool.with do |redis|
       rate_limit = limiter_class.new(namespace, redis: redis)
-      raise RateLimitExceeded, exceeded_message if rate_limit.exceeded?(SUBJECT, threshold: threshold,
-                                                                                interval: interval)
+      exceeded = rate_limit.exceeded?(SUBJECT, threshold: threshold, interval: interval)
+      raise RateLimitExceeded, exceeded_message if exceeded
 
       rate_limit.add(SUBJECT, size)
     end
