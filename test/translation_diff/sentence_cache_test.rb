@@ -77,15 +77,24 @@ class SentenceCacheTest < Minitest::Test
 
   def test_store_batches_every_translated_segment_into_one_write_multi_call
     subject = segments("One.", "Two.")
-    subject.first.translation = "Один."
-    subject.last.translation = "Два."
+    subject.zip(%w[Один. Два.]).each { |segment, translation| segment.translation = translation }
     store = BatchingStore.new
     subject_cache = cache(store)
 
     subject_cache.store(subject)
 
+    expected = subject.map { |segment| [subject_cache.key(segment), segment.translation] }
     assert_equal 1, store.write_multi_calls.size
-    assert_equal ["Один.", "Два."], store.write_multi_calls.first.map(&:last)
+    assert_equal expected, store.write_multi_calls.first
+  end
+
+  # A batch of nothing is not a batch: a store that opens a transaction in write_multi must not be asked to.
+  def test_store_never_calls_a_batching_store_when_nothing_was_translated
+    store = BatchingStore.new
+
+    cache(store).store(segments("One."))
+
+    assert_empty store.write_multi_calls
   end
 
   # The compatibility guarantee: a custom store written against today's write-only contract keeps working untouched.

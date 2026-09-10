@@ -34,6 +34,7 @@ class TranslationDiff::SentenceCache
   # A store that batches gets one call; one that does not keeps the per-key contract it was written against.
   def store(segments)
     translated = segments.select(&:translated?)
+    return translated if translated.empty?
     return translated.each { |segment| @store.write(key(segment), segment.translation) } if legacy_store?
 
     @store.write_multi(translated.map { |segment| [key(segment), segment.translation] })
