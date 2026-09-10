@@ -39,6 +39,12 @@ gem "aws-sigv4", "~> 1.12", require: false
 gem "activerecord", "~> 8.1", require: false
 gem "sqlite3", "~> 2.9", require: false
 
+# Not a runtime dependency of the gem (see the gemspec) -- only the CI job that
+# sets TRANSLATION_DIFF_DATABASE_URL ever opens a Postgres connection, where
+# the concurrency the SQL store and rate limiter rest on can actually be
+# tested. SQLite has one writer, so most of the suite never needs this gem.
+gem "pg", "~> 1.5", require: false
+
 # Not a runtime dependency of the gem (see the gemspec) -- the generator under
 # lib/generators/ is loaded only when Rails loads generators, so a non-Rails
 # application never needs it installed. It is here so

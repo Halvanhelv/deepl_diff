@@ -1,6 +1,7 @@
 require "test_helper"
 require "support/active_record_database"
 require "tmpdir"
+require "securerandom"
 
 begin
   require "generators/translation_diff/install_generator"
@@ -28,6 +29,11 @@ if RAILS_GENERATORS_AVAILABLE && ActiveRecordDatabase.available?
       end
     end
 
+    # Only the Postgres branch leaves anything behind to clean up; SQLite's :memory: connection needs no teardown.
+    def teardown
+      ::ActiveRecord::Base.connection.execute(%(DROP SCHEMA IF EXISTS "#{@schema}" CASCADE)) if @schema
+    end
+
     private
 
     def migrate_in(dir)
@@ -41,7 +47,22 @@ if RAILS_GENERATORS_AVAILABLE && ActiveRecordDatabase.available?
     end
 
     def isolated_connection
+      return sqlite_isolated_connection unless ActiveRecordDatabase.url.to_s.start_with?("postgres")
+
+      postgres_isolated_connection
+    end
+
+    def sqlite_isolated_connection
       GeneratedMigrationRecord.establish_connection(adapter: "sqlite3", database: ":memory:")
+      GeneratedMigrationRecord.connection
+    end
+
+    # A scratch schema on the same server, so the migration has nowhere to collide with the harness's own tables.
+    def postgres_isolated_connection
+      @schema = "generator_test_#{SecureRandom.hex(4)}"
+      ::ActiveRecord::Base.connection.execute(%(CREATE SCHEMA "#{@schema}"))
+      config = ::ActiveRecord::Base.connection_db_config.configuration_hash.merge(schema_search_path: @schema)
+      GeneratedMigrationRecord.establish_connection(config)
       GeneratedMigrationRecord.connection
     end
 
