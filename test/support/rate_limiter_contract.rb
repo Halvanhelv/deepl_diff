@@ -13,12 +13,6 @@ module RateLimiterContract
     assert_raises(rate_limit_exceeded_error) { build_limiter(threshold: 100, interval: 60).check(1) }
   end
 
-  def test_a_window_that_has_rolled_over_passes_again
-    build_limiter(threshold: 10, interval: rollover_interval).check(10)
-    assert_raises(rate_limit_exceeded_error) { build_limiter(threshold: 10, interval: rollover_interval).check(1) }
-
-    sleep(rollover_wait)
-
-    build_limiter(threshold: 10, interval: rollover_interval).check(1)
-  end
+  # Rollover is not in this contract: proving it means waiting for a bucket to turn over, and only
+  # ActiveRecordRateLimiter can be made to turn one over without a real sleep. See its own test file.
 end

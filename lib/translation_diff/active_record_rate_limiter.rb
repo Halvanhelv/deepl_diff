@@ -10,12 +10,14 @@ class TranslationDiff::ActiveRecordRateLimiter
         threshold: config.rate_limit, interval: config.rate_interval, base: config.active_record_base)
   end
 
-  def initialize(namespace:, table_name:, threshold: DEFAULT_THRESHOLD, interval: DEFAULT_INTERVAL, base: nil)
+  def initialize(namespace:, table_name:, threshold: DEFAULT_THRESHOLD, interval: DEFAULT_INTERVAL, base: nil,
+                 clock: -> { Time.now })
     @namespace = namespace
     @table_name = table_name
     @threshold = threshold
     @interval = interval
     @base = base
+    @clock = clock
   end
 
   # Approximate at a window boundary, the same way the `ratelimit` gem this replaces is.
@@ -36,7 +38,7 @@ class TranslationDiff::ActiveRecordRateLimiter
 
   def current_total = model.where(namespace: @namespace, bucket: bucket).sum(:characters)
 
-  def bucket = Time.now.to_i / @interval
+  def bucket = @clock.call.to_i / @interval
 
   # One statement, so two processes incrementing the same bucket cannot lose an increment between them.
   def add(size)

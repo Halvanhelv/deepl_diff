@@ -134,12 +134,6 @@ class RedisRateLimiterTest < Minitest::Test
     TranslationDiff::RedisRateLimiter.new(FakeConnectionPool.new(server), **)
   end
 
-  # Ratelimit's own bucket_interval is fixed at 5 seconds and is not configurable through this gem.
-  def rollover_interval = 5
-
-  # Two full 5-second buckets, so the boundary crosses regardless of where in a bucket the first check landed.
-  def rollover_wait = 10
-
   def rate_limit_exceeded_error = TranslationDiff::RedisRateLimiter::RateLimitExceeded
 
   def build_limiter(threshold:, interval:)

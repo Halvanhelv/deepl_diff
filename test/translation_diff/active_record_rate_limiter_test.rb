@@ -5,11 +5,30 @@ require "support/active_record_database"
 if ActiveRecordDatabase.available?
   ActiveRecordDatabase.connect!
 
+  # Moves without sleeping, so a bucket can be made to roll over on demand instead of waited out.
+  class MutableClock
+    def initialize(now) = @now = now
+    def call = @now
+    def advance(seconds) = @now += seconds
+  end
+
   class ActiveRecordRateLimiterTest < Minitest::Test
     include RateLimiterContract
 
     def setup
       ActiveRecordDatabase.truncate
+    end
+
+    # Advancing the clock by exactly one interval always lands in the next bucket, whatever the starting phase.
+    def test_a_window_that_has_rolled_over_passes_again
+      clock = MutableClock.new(Time.now)
+
+      build_limiter(threshold: 10, interval: 60, clock: clock).check(10)
+      assert_raises(rate_limit_exceeded_error) { build_limiter(threshold: 10, interval: 60, clock: clock).check(1) }
+
+      clock.advance(60)
+
+      build_limiter(threshold: 10, interval: 60, clock: clock).check(1)
     end
 
     def model
@@ -85,13 +104,9 @@ if ActiveRecordDatabase.available?
 
     def rate_limit_exceeded_error = TranslationDiff::ActiveRecordRateLimiter::RateLimitExceeded
 
-    # bucket == Time.now.to_i / interval, so a one-second interval rolls over almost immediately.
-    def rollover_interval = 1
-    def rollover_wait = 2.2
-
-    def build_limiter(threshold:, interval:, namespace: "translation-diff")
+    def build_limiter(threshold:, interval:, namespace: "translation-diff", clock: -> { Time.now })
       TranslationDiff::ActiveRecordRateLimiter.new(namespace: namespace, threshold: threshold, interval: interval,
-                                                   table_name: "translation_diff_rate_limits")
+                                                   table_name: "translation_diff_rate_limits", clock: clock)
     end
   end
 else
