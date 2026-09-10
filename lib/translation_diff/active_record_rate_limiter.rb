@@ -11,9 +11,12 @@ class TranslationDiff::ActiveRecordRateLimiter
   # gets from its own fixed five-second buckets at the default 60-second interval.
   BUCKET_FRACTION = 12
 
+  # An unset rate_limit must mean DEFAULT_THRESHOLD, not the nil that would override that keyword default.
   def self.build(config)
-    new(namespace: config.cache_namespace, table_name: config.rate_limit_table_name,
-        threshold: config.rate_limit, interval: config.rate_interval, base: config.active_record_base)
+    options = { namespace: config.cache_namespace, table_name: config.rate_limit_table_name,
+                interval: config.rate_interval, base: config.active_record_base }
+    options[:threshold] = config.rate_limit unless config.rate_limit.nil?
+    new(**options)
   end
 
   def initialize(namespace:, table_name:, threshold: DEFAULT_THRESHOLD, interval: DEFAULT_INTERVAL, base: nil,

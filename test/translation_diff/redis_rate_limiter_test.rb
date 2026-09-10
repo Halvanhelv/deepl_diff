@@ -137,6 +137,19 @@ class RedisRateLimiterTest < Minitest::Test
     assert_match(/Add `gem "ratelimit"`/, error.message)
   end
 
+  # Setting only `rate_limiter`, the config option that turns this limiter on, must not crash every call.
+  def test_build_falls_back_to_the_default_threshold_when_rate_limit_is_unset
+    server = FakeRedisServer.new
+    config = TranslationDiff::Configuration.new
+    config.rate_limiter = :redis
+    config.instance_variable_set(:@redis_pool, FakeConnectionPool.new(server))
+
+    built = TranslationDiff::RedisRateLimiter.build(config)
+
+    assert_equal TranslationDiff::RedisRateLimiter::DEFAULT_THRESHOLD, built.send(:threshold)
+    built.check(1)
+  end
+
   private
 
   def limiter(server, **)

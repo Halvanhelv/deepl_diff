@@ -8,11 +8,11 @@ class TranslationDiff::RedisRateLimiter
   # This library limits the provider as a whole rather than per caller, so there is exactly one subject.
   SUBJECT = "call".freeze
 
+  # An unset rate_limit must mean DEFAULT_THRESHOLD, not the nil that would override that keyword default.
   def self.build(config)
-    new(config.redis_pool,
-        threshold: config.rate_limit,
-        interval: config.rate_interval,
-        namespace: config.cache_namespace)
+    options = { interval: config.rate_interval, namespace: config.cache_namespace }
+    options[:threshold] = config.rate_limit unless config.rate_limit.nil?
+    new(config.redis_pool, **options)
   end
 
   # `connection_pool` is duck-typed to #with; neither connection_pool nor ratelimit is a hard dependency.

@@ -155,6 +155,17 @@ if ActiveRecordDatabase.available?
       assert_equal ["from-config"], built.model.pluck(:namespace)
     end
 
+    # Setting only `rate_limiter`, the config option that turns this limiter on, must not crash every call.
+    def test_build_falls_back_to_the_default_threshold_when_rate_limit_is_unset
+      config = TranslationDiff::Configuration.new
+      config.rate_limiter = :active_record
+
+      built = TranslationDiff::ActiveRecordRateLimiter.build(config)
+
+      assert_equal TranslationDiff::ActiveRecordRateLimiter::DEFAULT_THRESHOLD, built.instance_variable_get(:@threshold)
+      built.check(1)
+    end
+
     def test_add_omits_unique_by_when_the_connection_does_not_support_a_conflict_target
       limiter = build_limiter(threshold: 100, interval: 60)
       connection = Class.new do
