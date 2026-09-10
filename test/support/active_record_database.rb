@@ -22,6 +22,9 @@ module ActiveRecordDatabase
   # asks here, so the detection lives in one place instead of a same-named constant defined in each of them.
   def self.postgres? = available? && url.to_s.match?(%r{\Apostgres(ql)?://})
 
+  # MySQL's TEXT type caps at 65,535 bytes; only a real MySQL server proves the migration's limit: raised it.
+  def self.mysql? = available? && url.to_s.match?(%r{\A(mysql2|trilogy)://})
+
   # Both tables so Task 3's migration has something to be checked against; only the first is used so far.
   def self.define_schema
     connection = ::ActiveRecord::Base.connection
@@ -35,7 +38,7 @@ module ActiveRecordDatabase
     connection.create_table :translation_diff_translations do |t|
       t.string :namespace, null: false, limit: 64
       t.string :key_digest, null: false, limit: 64
-      t.text :translation, null: false
+      t.text :translation, null: false, limit: 16_777_215
       t.datetime :expires_at
       t.timestamps
     end

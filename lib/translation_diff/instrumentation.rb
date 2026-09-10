@@ -17,4 +17,9 @@ module TranslationDiff::Instrumentation
   def log(message)
     config.logger&.debug { "[translation_diff] #{message}" }
   end
+
+  # For the things an operator must see at a production log level; carries no more content than #log does.
+  def warn_log(message)
+    config.logger&.warn { "[translation_diff] #{message}" }
+  end
 end

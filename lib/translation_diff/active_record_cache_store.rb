@@ -41,7 +41,7 @@ class TranslationDiff::ActiveRecordCacheStore
     prune_sometimes
     pairs
   rescue StandardError => e
-    raise unless ar_statement_invalid?(e)
+    raise unless ar_error?(e)
 
     raise redacted_error(e), cause: nil
   end
@@ -93,14 +93,9 @@ class TranslationDiff::ActiveRecordCacheStore
 
     model.transaction(requires_new: true) { prune }
   rescue StandardError => e
-    raise unless ar_statement_invalid?(e)
+    raise unless ar_error?(e)
 
     raise redacted_prune_error(e), cause: nil
-  end
-
-  # `defined?` short-circuits before the `is_a?`, so this never itself raises when the gem was never loaded.
-  def ar_statement_invalid?(error)
-    defined?(ActiveRecord::StatementInvalid) && error.is_a?(ActiveRecord::StatementInvalid)
   end
 
   def active_record_feature = "the cache"

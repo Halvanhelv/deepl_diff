@@ -70,9 +70,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the row. `upsert_all` inlines values rather than binding them, though, so
   a written translation still appears verbatim in the host application's
   own ActiveRecord log at `debug` -- unrelated to this gem's own `logger`
-  option, which never prints content. See
+  option, which never prints content. The redaction now covers every
+  `ActiveRecord::ActiveRecordError` the write path can raise, not only a
+  statement failure -- an application whose GET requests are routed to a
+  read replica by `ActiveRecord::Middleware::DatabaseSelector` gets
+  `ActiveRecord::ReadOnlyError` there instead, and it is redacted the same
+  way. Pointing `active_record_base` at a different database or a
+  writer-role class does not exempt this store from that routing decision;
+  see [Rails replica routing](docs/sql-cache.md#rails-replica-routing) for
+  what does. See
   [Transactions](docs/sql-cache.md#transactions) and
   [What ends up in your log](docs/sql-cache.md#what-ends-up-in-your-log).
+- **A failing cache write no longer loses the translation it was caching --
+  for every store, not only the SQL one.** `Translator#fill` now rescues a
+  store failure, logs it, fires a new `cache_error` instrumentation event
+  (`provider` and the error's class, never the text), and returns the
+  translation regardless: the cache is an optimisation on top of a
+  translation already paid for at the provider, and losing the write should
+  never mean losing that. See
+  [The three write paths fail differently](docs/caching.md#the-three-write-paths-fail-differently)
+  and [Instrumentation](docs/instrumentation.md). The rate limiter refuses
+  rather than degrades under the same routing -- it runs before the provider
+  is called, so nothing has been paid for yet -- but it too now raises a
+  redacted `TranslationDiff::Error` rather than a raw `ActiveRecord` one.
+  See [Rails replica routing](docs/sql-cache.md#rails-replica-routing).
+- **MySQL: the migration's `translation` column now carries
+  `limit: 16_777_215`, giving it `MEDIUMTEXT` instead of `TEXT`.** `TEXT`
+  caps at 65,535 bytes on MySQL; a single sentence over that size failed
+  the whole batch it rode in with. This is a no-op on Postgres and
+  SQLite -- neither has a length ceiling on `text` to begin with, and
+  nothing else about the schema changes for either. **An installation that
+  already ran this migration on MySQL needs one statement, once:**
+  `ALTER TABLE translation_diff_translations MODIFY translation MEDIUMTEXT NOT NULL;`
+  -- this gem never runs DDL, so nothing does this for you. See
+  [The migration](docs/sql-cache.md#the-migration).
+- **`config.rate_limiter` no longer requires `config.rate_limit`.** Setting
+  the limiter alone used to pass `nil` as the threshold, overriding the
+  keyword default and crashing every check with
+  `ArgumentError: comparison of Integer with nil failed`. An unset
+  `rate_limit` now falls back to the limiter's own default -- 8,000
+  characters per `rate_interval`, the same for both shipped limiters. See
+  [Configuration options](docs/configuration.md#configuration-options).
+- **A refused request now says what it hit.** Both `RateLimitExceeded`
+  classes raise with a message naming the namespace, the threshold and the
+  interval (`"rate limit reached for translation-diff: 8000 characters per
+  60 seconds"`) -- never the content that tripped it. See
+  [Errors](docs/errors.md).
 - **`cache_ttl` of `0` or less now means never expires, and `nil` is
   reachable through `TranslationDiff.configure`.** Previously `nil` was
   documented as meaningful but unreachable through the public

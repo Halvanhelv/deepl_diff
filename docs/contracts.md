@@ -8,14 +8,18 @@ through its own registry, `TranslationDiff::RateLimiters` -- `:redis` and
 
 - the object assigned to `config.rate_limiter`, if any -- an object still
   bypasses the registry entirely, the same way it does for `cache`;
-- otherwise `nil` if `rate_limit` was never set -- and `Dispatcher#throttle`
-  checks for that `nil` and skips rate limiting entirely, so the common case
-  costs nothing;
+- otherwise `nil` if both `rate_limiter` and `rate_limit` were never set --
+  and `Dispatcher#throttle` checks for that `nil` and skips rate limiting
+  entirely, so the common case costs nothing;
 - otherwise the registered limiter named by `config.rate_limiter`, or
-  `TranslationDiff::RedisRateLimiter` when `rate_limiter` is left unset --
-  built from `rate_limit`, `rate_interval`, `cache_namespace`, and either
-  `redis_url` (`:redis`) or `active_record_base` and `rate_limit_table_name`
-  (`:active_record`; see [SQL cache](sql-cache.md)).
+  `TranslationDiff::RedisRateLimiter` when `rate_limiter` is left unset but
+  `rate_limit` is set -- built from `rate_interval`, `cache_namespace`, and
+  either `redis_url` (`:redis`) or `active_record_base` and
+  `rate_limit_table_name` (`:active_record`; see [SQL cache](sql-cache.md)).
+  `rate_limit` supplies the threshold when it is set; left unset, the
+  limiter falls back to its own default -- 8,000 characters per
+  `rate_interval` for both shipped limiters -- instead of crashing, so
+  setting `rate_limiter` alone is enough to turn a limiter on.
 
 An object assigned to `rate_limiter` must implement:
 
@@ -29,7 +33,10 @@ def check(size); end
 `TranslationDiff::RedisRateLimiter::RateLimitExceeded` when its threshold is
 exceeded within its interval;
 `TranslationDiff::ActiveRecordRateLimiter` raises its own
-`RateLimitExceeded`, a distinct class under the same name. Neither `redis`
+`RateLimitExceeded`, a distinct class under the same name. Both raise with a
+message naming the namespace, the threshold and the interval that were hit
+(`"rate limit reached for translation-diff: 8000 characters per 60
+seconds"`) -- never the text that tripped it. Neither `redis`
 nor `connection_pool` nor `ratelimit` is a dependency of this gem:
 `ratelimit` is required on the first check, so an application that
 configures no `rate_limit` never needs it, and its absence raises

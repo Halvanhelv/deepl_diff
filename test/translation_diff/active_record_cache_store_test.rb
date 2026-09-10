@@ -156,6 +156,19 @@ if ActiveRecordDatabase.available?
       Object.const_set(:ActiveRecord, removed) if removed
     end
 
+    # DatabaseSelector raises this, not StatementInvalid, and it inlines the row into its message the same way.
+    def test_a_readonly_error_never_carries_the_translated_content
+      store = build_store
+      secret = "SECRET-PATIENT-NOTE-READONLY-12345"
+
+      error = ActiveRecord::Base.while_preventing_writes do
+        assert_raises(TranslationDiff::Error) { store.write("a", secret) }
+      end
+
+      assert_includes error.message, "ActiveRecord::ReadOnlyError"
+      refute_includes error.message, secret
+    end
+
     private
 
     def build_store(namespace: "translation-diff", ttl: 604_800)

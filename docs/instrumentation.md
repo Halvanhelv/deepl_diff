@@ -6,7 +6,7 @@ and `config.logger` accepts a standard `Logger`. Neither is required: with
 both unset, `TranslationDiff.translate` runs exactly the same, at no extra
 cost.
 
-A translation emits up to five events, each named `<name>.translation_diff`:
+A translation emits up to six events, each named `<name>.translation_diff`:
 
 | Event | Fired | Payload |
 | --- | --- | --- |
@@ -15,6 +15,25 @@ A translation emits up to five events, each named `<name>.translation_diff`:
 | `request` | Once per batch actually sent to the provider (skipped entirely on a full cache hit). | `provider`, `batch` (values sent), `characters` |
 | `rate_limit` | Once per batch sent to the provider, only when a rate limiter is configured. | `provider`, `characters` |
 | `usage` | Once per batch actually sent to the provider, right after `request`. | `provider`, `characters`, `billed_characters`, `reported`, `model` |
+| `cache_error` | Only when writing the translation back to the cache fails -- after the provider has already answered. Never fires on a successful write, so it is not part of every call the way the other five are. | `provider`, `error` (the failed write's error class, as a string) |
+
+`cache_error` is what a failing cache write looks like from the outside:
+the write itself is rescued, not the translation, which still reaches the
+caller -- see
+[The three write paths fail differently](caching.md#the-three-write-paths-fail-differently).
+`error` is the exception's class name, never its message, which could echo
+the row it failed to write. Which class you see depends on the store: a
+store that redacts its own failures reports that redaction, so
+`ActiveRecordCacheStore` always gives `"TranslationDiff::Error"` -- the
+adapter's own class is named inside that error's (content-free) message,
+not in this payload. `RedisCacheStore` does not wrap, so it gives the
+driver's class, `"Redis::CannotConnectError"` and the like. Alert on the
+event, not on a particular class name.
+
+The same failure is logged at **warn**, not debug: an application whose
+cache has quietly stopped accepting writes pays the provider for every
+sentence, every time, and a signal only visible at debug level is one
+nobody sees in production.
 
 `usage`'s `characters` is what this library sent, counted locally -- the same
 number `request` carries. `billed_characters` is what the provider said it

@@ -128,19 +128,20 @@ class TranslationDiff::Translator
 
   # The cache answers for what it has, the provider for the rest, and only what came back is written home.
   def fill(provider, segments, from)
-    cache = sentence_cache(provider, from)
+    cache = TranslationDiff::SentenceCache.new(store: config.cache_store, provider: provider.cache_key,
+                                               from: from, to: @to, options: @options)
     misses = cache.fill(segments)
     instrument("cache", provider: provider.cache_key, hits: segments.size - misses.size, misses: misses.size)
-    dispatcher(provider, from).dispatch(misses)
+    TranslationDiff::Dispatcher.new(provider: provider, from: from, to: @to, options: @options,
+                                    config: config).dispatch(misses)
+    store(cache, misses, provider)
+  end
+
+  # A translation already paid for at the provider must reach the caller even if writing it back never does.
+  def store(cache, misses, provider)
     cache.store(misses)
-  end
-
-  def sentence_cache(provider, from)
-    TranslationDiff::SentenceCache.new(store: config.cache_store, provider: provider.cache_key,
-                                       from: from, to: @to, options: @options)
-  end
-
-  def dispatcher(provider, from)
-    TranslationDiff::Dispatcher.new(provider: provider, from: from, to: @to, options: @options, config: config)
+  rescue StandardError => e
+    warn_log("cache write failed (#{e.class}), the translation is returned uncached")
+    instrument("cache_error", provider: provider.cache_key, error: e.class.to_s)
   end
 end

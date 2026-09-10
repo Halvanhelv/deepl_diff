@@ -50,6 +50,22 @@ TranslationDiff::Error
                                                  # `TranslationDiff::Error` to catch both.
 ```
 
+Both `RateLimitExceeded` classes raise with a message naming the namespace,
+the threshold and the interval that were exceeded (`"rate limit reached for
+translation-diff: 8000 characters per 60 seconds"`) -- never the text that
+tripped it.
+
+Both SQL-backed collaborators report a database failure the same way. A
+cache write that the database refuses -- including under Rails'
+`prevent_writes` (a read-replica request, see
+[Rails replica routing](sql-cache.md#rails-replica-routing)) -- is rescued,
+redacted and swallowed, and the translation is returned anyway. The rate
+limiter's own write raises a redacted `TranslationDiff::Error` instead of
+continuing, because it runs before the provider does and a limiter that
+cannot count is not a limiter. Either way `rescue TranslationDiff::Error`
+around `translate` catches what a caller can catch, and no raw
+`ActiveRecord::ReadOnlyError` reaches it.
+
 `ProviderError` and its subclasses carry `#provider` (the registered name)
 and `#status` (the HTTP status code), so a caller can log or branch on which
 service and which response caused the failure without parsing the message.
