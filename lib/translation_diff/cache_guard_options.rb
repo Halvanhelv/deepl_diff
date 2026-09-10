@@ -19,9 +19,16 @@ module TranslationDiff::CacheGuardOptions
   private
 
   def coerce_probability(value)
-    Float(value)
+    probability = Float(value)
+    raise probability_out_of_range(value) unless (0..1).cover?(probability)
+
+    probability
   rescue ArgumentError, TypeError
-    raise TranslationDiff::Error, "cache_prune_probability must be a number between 0 and 1 (got #{value.inspect})"
+    raise probability_out_of_range(value)
+  end
+
+  def probability_out_of_range(value)
+    TranslationDiff::Error.new("cache_prune_probability must be a number between 0 and 1 (got #{value.inspect})")
   end
 
   def namespace_too_long(value)

@@ -71,6 +71,28 @@ class ConfigurationTest < Minitest::Test
     assert_match(/cache_prune_probability/, error.message)
   end
 
+  def test_cache_prune_probability_refuses_a_value_above_one
+    error = assert_raises(TranslationDiff::Error) { @config.cache_prune_probability = 2.0 }
+
+    assert_match(/between 0 and 1/, error.message)
+  end
+
+  def test_cache_prune_probability_refuses_a_negative_value
+    error = assert_raises(TranslationDiff::Error) { @config.cache_prune_probability = -1 }
+
+    assert_match(/between 0 and 1/, error.message)
+  end
+
+  def test_cache_prune_probability_accepts_the_boundary_values
+    @config.cache_prune_probability = 0
+
+    assert_in_delta 0.0, @config.cache_prune_probability
+
+    @config.cache_prune_probability = 1
+
+    assert_in_delta 1.0, @config.cache_prune_probability
+  end
+
   def test_cache_namespace_longer_than_64_characters_is_refused_at_configure_time
     error = assert_raises(TranslationDiff::Error) { @config.cache_namespace = "n" * 65 }
 
