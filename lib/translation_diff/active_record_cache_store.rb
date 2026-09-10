@@ -1,6 +1,6 @@
 # Caches translations in the application's own database; ActiveRecord is required on first use, never at load.
 class TranslationDiff::ActiveRecordCacheStore
-  MINIMUM_ACTIVE_RECORD = "7.1".freeze
+  include TranslationDiff::ActiveRecordSupport
 
   def self.build(config)
     new(namespace: config.cache_namespace, ttl: config.cache_ttl,
@@ -47,10 +47,6 @@ class TranslationDiff::ActiveRecordCacheStore
   # Reads never serve an expired row; deleting one is this, and it is the host's call when to run it.
   def prune = model.where(namespace: @namespace).where(expires_at: ...Time.now.utc).delete_all
 
-  def model
-    @model ||= build_model
-  end
-
   private
 
   # MySQL's adapter never answers true here and its ON DUPLICATE KEY UPDATE already targets every unique key.
@@ -86,24 +82,9 @@ class TranslationDiff::ActiveRecordCacheStore
     prune if @prune_probability.positive? && rand < @prune_probability
   end
 
-  def build_model
-    require "active_record"
-    ensure_supported_version!
-    table = @table_name
-    Class.new(@base || ::ActiveRecord::Base) { self.table_name = table }
-  rescue LoadError
-    raise TranslationDiff::Error,
-          "the cache is :active_record but the `activerecord` gem is not available. " \
-          'Add `gem "activerecord"` to your Gemfile.'
-  end
-
-  def ensure_supported_version!
-    return if Gem::Version.new(::ActiveRecord::VERSION::STRING) >= Gem::Version.new(MINIMUM_ACTIVE_RECORD)
-
-    raise TranslationDiff::Error,
-          "the ActiveRecord cache store needs ActiveRecord #{MINIMUM_ACTIVE_RECORD} or newer " \
-          "(found #{::ActiveRecord::VERSION::STRING}): upsert_all takes unique_by and record_timestamps there."
-  end
+  def active_record_feature = "the cache"
+  def active_record_component = "ActiveRecord cache store"
+  def active_record_upsert_detail = "upsert_all takes unique_by and record_timestamps there."
 end
 
 TranslationDiff::Stores.register(:active_record, TranslationDiff::ActiveRecordCacheStore)

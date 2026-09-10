@@ -1,5 +1,7 @@
 # Throttles by counting characters into namespaced, time-bucketed rows in the application's own database.
 class TranslationDiff::ActiveRecordRateLimiter
+  include TranslationDiff::ActiveRecordSupport
+
   class RateLimitExceeded < TranslationDiff::Error; end
 
   DEFAULT_THRESHOLD = 8000
@@ -35,10 +37,6 @@ class TranslationDiff::ActiveRecordRateLimiter
   # Buckets that have fully aged out of the window as of now; the oldest bucket itself is still counted by it.
   def prune = model.where(namespace: @namespace).where(bucket: ...oldest_bucket).delete_all
 
-  def model
-    @model ||= build_model
-  end
-
   private
 
   # The oldest bucket is only ever partially inside the window, so summing from it, not past it, errs strict.
@@ -67,25 +65,9 @@ class TranslationDiff::ActiveRecordRateLimiter
     options
   end
 
-  def build_model
-    require "active_record"
-    ensure_supported_version!
-    table = @table_name
-    Class.new(@base || ::ActiveRecord::Base) { self.table_name = table }
-  rescue LoadError
-    raise TranslationDiff::Error,
-          "the rate limiter is :active_record but the `activerecord` gem is not available. " \
-          'Add `gem "activerecord"` to your Gemfile.'
-  end
-
-  def ensure_supported_version!
-    minimum = TranslationDiff::ActiveRecordCacheStore::MINIMUM_ACTIVE_RECORD
-    return if Gem::Version.new(::ActiveRecord::VERSION::STRING) >= Gem::Version.new(minimum)
-
-    raise TranslationDiff::Error,
-          "the ActiveRecord rate limiter needs ActiveRecord #{minimum} or newer " \
-          "(found #{::ActiveRecord::VERSION::STRING}): upsert_all takes unique_by there."
-  end
+  def active_record_feature = "the rate limiter"
+  def active_record_component = "ActiveRecord rate limiter"
+  def active_record_upsert_detail = "upsert_all takes unique_by there."
 end
 
 TranslationDiff::RateLimiters.register(:active_record, TranslationDiff::ActiveRecordRateLimiter)
