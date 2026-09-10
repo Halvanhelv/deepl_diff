@@ -51,7 +51,23 @@ if ActiveRecordDatabase.available?
     end
 
     def test_a_nil_cache_ttl_writes_a_row_that_never_expires
-      build_store(ttl: nil).write("a", "one")
+      config = TranslationDiff::Configuration.new
+      config.cache_namespace = "translation-diff"
+      config.cache_table_name = "translation_diff_translations"
+      config.cache_ttl = nil
+
+      TranslationDiff::ActiveRecordCacheStore.build(config).write("a", "one")
+
+      assert_nil model.first.expires_at
+    end
+
+    def test_a_zero_cache_ttl_writes_a_row_that_never_expires_instead_of_already_expired
+      config = TranslationDiff::Configuration.new
+      config.cache_namespace = "translation-diff"
+      config.cache_table_name = "translation_diff_translations"
+      config.cache_ttl = 0
+
+      TranslationDiff::ActiveRecordCacheStore.build(config).write("a", "one")
 
       assert_nil model.first.expires_at
     end

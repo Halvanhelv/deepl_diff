@@ -41,6 +41,24 @@ class ConfigurationTest < Minitest::Test
     assert_equal 60, @config.cache_ttl
   end
 
+  def test_a_nil_cache_ttl_sticks_instead_of_falling_back_to_the_default
+    @config.cache_ttl = nil
+
+    assert_nil @config.cache_ttl
+  end
+
+  def test_a_zero_cache_ttl_also_means_never_expires
+    @config.cache_ttl = 0
+
+    assert_nil @config.cache_ttl
+  end
+
+  def test_a_negative_cache_ttl_also_means_never_expires
+    @config.cache_ttl = -1
+
+    assert_nil @config.cache_ttl
+  end
+
   def test_a_callable_default_is_evaluated_on_every_read_not_at_load_time
     original = ENV.fetch("REDIS_URL", nil)
     ENV["REDIS_URL"] = "redis://first"
