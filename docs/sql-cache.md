@@ -49,8 +49,9 @@ ActiveRecord log at `debug` level. That is a separate claim from the one in
 prints content, but that says nothing about the application's own SQL log,
 which sees the statement ActiveRecord actually sent. A failed write is
 scrubbed -- the `TranslationDiff::Error` it raises carries the adapter's
-error class, never the row, see [`write_multi`](#write_multi) -- but a
-successful one is not; nothing here redacts your debug-level query log. If
+error class, never the row, and its cause chain is severed so the original
+exception cannot carry the row into an error tracker either, see
+[`write_multi`](#write_multi) -- but a successful one is not; nothing here redacts your debug-level query log. If
 your application logs SQL at `debug` and what it translates is
 confidential, keep that log above `debug` around this store, or use
 `RedisCacheStore` instead.
@@ -185,7 +186,10 @@ and there is no single right answer to "when," so none is forced on you:
   no pruning at all.
 - **`config.cache_prune_probability`** (default `0.0`, off). A fraction
   between 0 and 1: on a write, `ActiveRecordCacheStore` rolls under it and
-  prunes if it wins. Off by default, because a translation-serving request
+  prunes if it wins, in a savepoint of its own so a failed prune cannot
+  abort a transaction the caller opened. A value outside `0.0..1.0`, or one
+  that is not a number, is refused at `configure` time. Off by default,
+  because a translation-serving request
   should not be paying, even occasionally, for someone else's expired rows.
   A value that will not coerce to a number is refused at `configure` time,
   not on the first write that would have consulted it.

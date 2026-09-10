@@ -5,7 +5,8 @@ require "support/active_record_database"
 if ActiveRecordDatabase.available?
   ActiveRecordDatabase.connect!
 
-  # Moves without sleeping, so a bucket can be made to roll over on demand instead of waited out.
+  # Moves without sleeping, so a bucket can be made to roll over on demand -- and holds still, so a real
+  # boundary cannot fall between two reads of it, which is what made the prune tests flake.
   class MutableClock
     def initialize(now) = @now = now
     def call = @now
@@ -68,7 +69,7 @@ if ActiveRecordDatabase.available?
     end
 
     def test_prune_deletes_buckets_older_than_the_window_and_leaves_the_current_one
-      limiter = build_limiter(threshold: 1000, interval: 60)
+      limiter = build_limiter(threshold: 1000, interval: 60, clock: MutableClock.new(Time.at(1_700_000_000)))
       model.create!(namespace: "translation-diff", bucket: limiter.send(:oldest_bucket) - 1, characters: 5)
 
       limiter.check(10)
@@ -81,7 +82,7 @@ if ActiveRecordDatabase.available?
     # The oldest bucket is only ever partially inside the window (see current_total), so prune leaving it alone
     # is what keeps pruning from quietly undoing the strictness that sum starting at oldest_bucket relies on.
     def test_prune_leaves_the_oldest_bucket_because_the_window_still_counts_it
-      limiter = build_limiter(threshold: 1000, interval: 60)
+      limiter = build_limiter(threshold: 1000, interval: 60, clock: MutableClock.new(Time.at(1_700_000_000)))
       model.create!(namespace: "translation-diff", bucket: limiter.send(:oldest_bucket), characters: 5)
 
       deleted = limiter.prune
@@ -91,7 +92,7 @@ if ActiveRecordDatabase.available?
     end
 
     def test_prune_only_deletes_rows_in_its_own_namespace
-      own = build_limiter(threshold: 1000, interval: 60)
+      own = build_limiter(threshold: 1000, interval: 60, clock: MutableClock.new(Time.at(1_700_000_000)))
       model.create!(namespace: "translation-diff", bucket: own.send(:oldest_bucket) - 1, characters: 5)
       model.create!(namespace: "other-tenant", bucket: own.send(:oldest_bucket) - 1, characters: 5)
 
