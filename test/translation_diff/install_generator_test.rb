@@ -29,9 +29,15 @@ if RAILS_GENERATORS_AVAILABLE && ActiveRecordDatabase.available?
       end
     end
 
-    # Only the Postgres branch leaves anything behind to clean up; SQLite's :memory: connection needs no teardown.
+    # Only the Postgres and MySQL branches leave anything behind; SQLite's :memory: connection needs no teardown.
     def teardown
-      ::ActiveRecord::Base.connection.execute(%(DROP SCHEMA IF EXISTS "#{@schema}" CASCADE)) if @schema
+      return unless @schema
+
+      if ActiveRecordDatabase.url.to_s.start_with?("postgres")
+        ::ActiveRecord::Base.connection.execute(%(DROP SCHEMA IF EXISTS "#{@schema}" CASCADE))
+      else
+        ::ActiveRecord::Base.connection.execute(%(DROP DATABASE IF EXISTS `#{@schema}`))
+      end
     end
 
     private
@@ -47,9 +53,11 @@ if RAILS_GENERATORS_AVAILABLE && ActiveRecordDatabase.available?
     end
 
     def isolated_connection
-      return sqlite_isolated_connection unless ActiveRecordDatabase.url.to_s.start_with?("postgres")
+      url = ActiveRecordDatabase.url.to_s
+      return postgres_isolated_connection if url.start_with?("postgres")
+      return mysql_isolated_connection if url.match?(%r{\A(mysql2|trilogy)://})
 
-      postgres_isolated_connection
+      sqlite_isolated_connection
     end
 
     def sqlite_isolated_connection
@@ -62,6 +70,15 @@ if RAILS_GENERATORS_AVAILABLE && ActiveRecordDatabase.available?
       @schema = "generator_test_#{SecureRandom.hex(4)}"
       ::ActiveRecord::Base.connection.execute(%(CREATE SCHEMA "#{@schema}"))
       config = ::ActiveRecord::Base.connection_db_config.configuration_hash.merge(schema_search_path: @schema)
+      GeneratedMigrationRecord.establish_connection(config)
+      GeneratedMigrationRecord.connection
+    end
+
+    # MySQL has no per-connection search path, so a scratch database stands in for Postgres's scratch schema.
+    def mysql_isolated_connection
+      @schema = "generator_test_#{SecureRandom.hex(4)}"
+      ::ActiveRecord::Base.connection.execute(%(CREATE DATABASE `#{@schema}`))
+      config = ::ActiveRecord::Base.connection_db_config.configuration_hash.merge(database: @schema)
       GeneratedMigrationRecord.establish_connection(config)
       GeneratedMigrationRecord.connection
     end

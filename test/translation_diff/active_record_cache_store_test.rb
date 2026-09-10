@@ -87,6 +87,22 @@ if ActiveRecordDatabase.available?
       assert_equal "from-config", built.model.first.namespace
     end
 
+    def test_write_multi_omits_unique_by_when_the_connection_does_not_support_a_conflict_target
+      connection = Class.new { def supports_insert_conflict_target? = false }.new
+
+      options = store.send(:upsert_options, connection)
+
+      refute_includes options.keys, :unique_by
+    end
+
+    def test_write_multi_keeps_unique_by_when_the_connection_supports_a_conflict_target
+      connection = Class.new { def supports_insert_conflict_target? = true }.new
+
+      options = store.send(:upsert_options, connection)
+
+      assert_includes options.keys, :unique_by
+    end
+
     private
 
     def build_store(namespace: "translation-diff", ttl: 604_800)

@@ -56,8 +56,14 @@ class TranslationDiff::ActiveRecordRateLimiter
   def add(size)
     size = size.to_i.clamp(0..)
     model.upsert_all([{ namespace: @namespace, bucket: current_bucket, characters: size }],
-                     unique_by: %i[namespace bucket],
-                     on_duplicate: Arel.sql("characters = #{model.table_name}.characters + #{size}"))
+                     **upsert_options(model.connection, size))
+  end
+
+  # MySQL's adapter never answers true here and its ON DUPLICATE KEY UPDATE already targets every unique key.
+  def upsert_options(connection, size)
+    options = { on_duplicate: Arel.sql("characters = #{model.table_name}.characters + #{size}") }
+    options[:unique_by] = %i[namespace bucket] if connection.supports_insert_conflict_target?
+    options
   end
 
   def build_model

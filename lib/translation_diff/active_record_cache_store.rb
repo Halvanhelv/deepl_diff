@@ -34,8 +34,7 @@ class TranslationDiff::ActiveRecordCacheStore
   def write_multi(pairs)
     return pairs if pairs.empty?
 
-    model.upsert_all(pairs.to_h.map { |key, value| row(key, value) },
-                     unique_by: %i[namespace key_digest], record_timestamps: true)
+    model.upsert_all(pairs.to_h.map { |key, value| row(key, value) }, **upsert_options(model.connection))
     prune_sometimes
     pairs
   end
@@ -48,6 +47,13 @@ class TranslationDiff::ActiveRecordCacheStore
   end
 
   private
+
+  # MySQL's adapter never answers true here and its ON DUPLICATE KEY UPDATE already targets every unique key.
+  def upsert_options(connection)
+    options = { record_timestamps: true }
+    options[:unique_by] = %i[namespace key_digest] if connection.supports_insert_conflict_target?
+    options
+  end
 
   def row(key, value)
     { namespace: @namespace, key_digest: digest(key), translation: value, expires_at: expires_at }

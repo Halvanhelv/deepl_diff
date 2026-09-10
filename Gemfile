@@ -45,6 +45,13 @@ gem "sqlite3", "~> 2.9", require: false
 # tested. SQLite has one writer, so most of the suite never needs this gem.
 gem "pg", "~> 1.5", require: false
 
+# Not a runtime dependency of the gem (see the gemspec) -- only the CI job that
+# sets TRANSLATION_DIFF_DATABASE_URL to a MySQL database ever opens one, where
+# the missing supports_insert_conflict_target? behaviour actually bites. Trilogy
+# over mysql2: it is a pure Ruby/C socket client with no libmysqlclient headers
+# to install, so it builds on a bare CI runner and on this machine alike.
+gem "trilogy", "~> 2.9", require: false
+
 # Not a runtime dependency of the gem (see the gemspec) -- the generator under
 # lib/generators/ is loaded only when Rails loads generators, so a non-Rails
 # application never needs it installed. It is here so
