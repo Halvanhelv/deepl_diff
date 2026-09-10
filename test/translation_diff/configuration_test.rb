@@ -316,6 +316,30 @@ class ConfigurationTest < Minitest::Test
     assert_instance_of TranslationDiff::RedisRateLimiter, @config.rate_limiter_instance
   end
 
+  def test_a_symbol_rate_limiter_resolves_through_the_registry
+    @config.rate_limit = 100
+    @config.rate_limiter = :active_record
+
+    assert_instance_of TranslationDiff::ActiveRecordRateLimiter, @config.rate_limiter_instance
+  end
+
+  def test_a_string_rate_limiter_resolves_through_the_registry
+    @config.rate_limit = 100
+    @config.rate_limiter = "active_record"
+
+    assert_instance_of TranslationDiff::ActiveRecordRateLimiter, @config.rate_limiter_instance
+  end
+
+  def test_an_unknown_rate_limiter_name_raises_listing_what_is_registered
+    @config.rate_limit = 100
+    @config.rate_limiter = :nonsense
+
+    error = assert_raises(TranslationDiff::Error) { @config.rate_limiter_instance }
+
+    assert_includes error.message, "rate limiter"
+    assert_includes error.message, "redis"
+  end
+
   def test_an_assigned_rate_limiter_object_wins_over_every_value
     limiter = Object.new
     @config.rate_limiter = limiter

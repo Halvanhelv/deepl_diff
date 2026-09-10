@@ -91,10 +91,9 @@ class TranslationDiff::Configuration
 
   # nil, not a null object: Dispatcher#throttle checks for nil and skips rate-limiting -- costs nothing normally.
   def rate_limiter_instance
-    return rate_limiter unless rate_limiter.nil?
-    return nil if rate_limit.nil?
+    return nil if rate_limiter.nil? && rate_limit.nil?
 
-    @rate_limiter_instance ||= TranslationDiff::RedisRateLimiter.build(self)
+    @rate_limiter_instance ||= resolve(rate_limiter || :redis, TranslationDiff::RateLimiters)
   end
 
   # One pool shared by the cache store and the rate limiter; callers used to build and pass it by hand.

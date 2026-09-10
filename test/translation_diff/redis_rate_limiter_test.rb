@@ -1,9 +1,12 @@
 require "test_helper"
+require "support/rate_limiter_contract"
 
 # A prior stand-in here hid a real defect: `add(size)` counted under the wrong subject and the limit never fired.
 require "ratelimit"
 
 class RedisRateLimiterTest < Minitest::Test
+  include RateLimiterContract
+
   # An in-memory Redis server implementing exactly the commands ratelimit 1.1 issues; no socket is opened.
   class FakeRedisServer
     attr_reader :hashes, :expiries, :count_spans
@@ -129,5 +132,18 @@ class RedisRateLimiterTest < Minitest::Test
 
   def limiter(server, **)
     TranslationDiff::RedisRateLimiter.new(FakeConnectionPool.new(server), **)
+  end
+
+  # Ratelimit's own bucket_interval is fixed at 5 seconds and is not configurable through this gem.
+  def rollover_interval = 5
+
+  # Two full 5-second buckets, so the boundary crosses regardless of where in a bucket the first check landed.
+  def rollover_wait = 10
+
+  def rate_limit_exceeded_error = TranslationDiff::RedisRateLimiter::RateLimitExceeded
+
+  def build_limiter(threshold:, interval:)
+    @contract_server ||= FakeRedisServer.new
+    limiter(@contract_server, threshold: threshold, interval: interval)
   end
 end
