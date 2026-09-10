@@ -2,6 +2,9 @@
 module TranslationDiff
   class ConfigurationError < Error; end
 
+  # Raised before any request: the pair is checked against data captured from the vendor, not by asking it.
+  class UnsupportedLanguageError < Error; end
+
   class ProviderError < Error
     attr_reader :provider, :status
 

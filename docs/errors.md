@@ -23,6 +23,9 @@ TranslationDiff::Error
 │                                                # that returned no translation for an input
 ├── TranslationDiff::InvalidProviderError       # a class registered without inheriting
 │                                                # TranslationDiff::Provider
+├── TranslationDiff::UnsupportedLanguageError   # the shipped language data doesn't list
+│                                                # this source/target pair for this
+│                                                # provider -- see docs/languages.md
 ├── TranslationDiff::Translator::Error          # from: missing and the provider cannot
 │                                                # detect, cache_key missing on an
 │                                                # assigned provider object

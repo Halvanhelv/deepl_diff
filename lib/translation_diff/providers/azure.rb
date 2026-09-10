@@ -53,6 +53,15 @@ class TranslationDiff::Providers::Azure < TranslationDiff::HTTPProvider
     response.body.dig(0, "language")&.downcase
   end
 
+  # Azure's own docs mark this endpoint public, but this provider still requires a key to be built at all.
+  def languages
+    codes = Array(get("languages?api-version=#{API_VERSION}&scope=translation").body["translation"]&.keys)
+
+    { source: codes, target: codes }
+  end
+
+  def languages_endpoint = "#{api_base}/languages?api-version=#{API_VERSION}&scope=translation"
+
   private
 
   # Defaults, then caller options, then mandatory fields: a caller must not displace the language pair.

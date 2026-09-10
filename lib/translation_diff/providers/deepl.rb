@@ -63,7 +63,17 @@ class TranslationDiff::Providers::DeepL < TranslationDiff::HTTPProvider
     translate(request).detected_source
   end
 
+  def languages
+    { source: codes(get("v2/languages?type=source").body),
+      target: codes(get("v2/languages?type=target").body) }
+  end
+
+  # The source-list URL is enough to document what #languages fetches; the target one differs only by query.
+  def languages_endpoint = "#{api_base}/v2/languages"
+
   private
+
+  def codes(body) = Array(body).map { |entry| entry["language"] }
 
   def free_key? = config.deepl_api_key.to_s.end_with?(FREE_KEY_SUFFIX)
 

@@ -69,8 +69,54 @@ class InstrumentationTest < ConfiguredTest
     assert_equal "Hello there.".size, payload[:characters]
   end
 
+  # Reports billing, so `reported` is true and the count is the provider's own claim.
+  class Billing < TranslationDiff::Provider
+    def self.capabilities
+      TranslationDiff::Capabilities.new(
+        max_request_size: 1_000_000, max_batch_size: 1_000_000, max_text_size: nil,
+        html: :none, notranslate: false, detects_language: false, reports_billing: true
+      )
+    end
+
+    def translate(request)
+      TranslationDiff::Translation::Response.build(
+        request: request, texts: request.texts.map(&:to_s),
+        usage: TranslationDiff::Translation::Usage.new(
+          characters: request.texts.sum(&:size), billed_characters: 42, model: "billing-v1"
+        )
+      )
+    end
+
+    def cache_key = "billing"
+  end
+
+  def test_the_usage_event_carries_what_the_provider_reported
+    TranslationDiff.translate("Hello there.", from: "en", to: "ru", provider: Billing.new(TranslationDiff.config))
+
+    payload = usage_event_payload
+
+    assert_equal "billing", payload[:provider]
+    assert_equal "Hello there.".size, payload[:characters]
+    assert_equal 42, payload[:billed_characters]
+    assert payload[:reported]
+    assert_equal "billing-v1", payload[:model]
+  end
+
+  # nil billed_characters alone cannot distinguish "never says" from "did not say this time".
+  def test_a_provider_that_does_not_report_billing_says_so
+    TranslationDiff.translate("Hello there.", from: "en", to: "ru")
+
+    payload = usage_event_payload
+
+    assert_equal "null", payload[:provider]
+    assert_nil payload[:billed_characters]
+    refute payload[:reported]
+    assert_equal "Hello there.".size, payload[:characters]
+  end
+
   ALL_EVENT_NAMES = %w[translate.translation_diff cache.translation_diff
-                       request.translation_diff rate_limit.translation_diff].sort.freeze
+                       request.translation_diff rate_limit.translation_diff
+                       usage.translation_diff].sort.freeze
 
   # A guard that only checked payload content would pass even if an event quietly stopped firing.
   def test_no_payload_ever_contains_the_text_being_translated
@@ -88,5 +134,11 @@ class InstrumentationTest < ConfiguredTest
     TranslationDiff.configure { |c| c.instrumenter = nil }
 
     assert_equal "Hello.", TranslationDiff.translate("Hello.", from: "en", to: "ru")
+  end
+
+  private
+
+  def usage_event_payload
+    @recorder.events.find { |name, _| name == "usage.translation_diff" }.last
   end
 end

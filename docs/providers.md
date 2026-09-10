@@ -7,6 +7,31 @@ translation service can be plugged in by subclassing a small base class.
 
 See the provider table in the [README](../README.md#providers).
 
+Language pairs are checked against shipped vendor data before every call, and
+a provider with no shipped data refuses nothing. Data ships for **DeepL,
+Google, Azure and ModernMT**; **Amazon** and **LibreTranslate** ship none --
+see [Languages](languages.md).
+
+`Configuration#inspect` and `Provider#inspect` print `[FILTERED]` in place of
+every credential option below -- `deepl_api_key`, `azure_api_key`,
+`amazon_secret_access_key`, and so on -- so a Rails error page and a stray
+`p config` in a console cannot leak one; `pp` and `p` both go through the
+overridden `inspect`. That guarantee stops at `inspect`, though: an error
+reporter that serialises object state instead of calling `inspect` is not
+covered, and neither is `p provider.connection`, which prints Faraday's own
+headers, `Authorization` included, untouched.
+
+Options that carry no credential at all, like `azure_region` or
+`cache_namespace`, stay visible in full. Any option whose value parses as a
+URI carrying userinfo -- `redis_url` among them -- has just that userinfo
+redacted: `rediss://default:AbCdEf-TOKEN@cache.example.upstash.io:6379`
+prints as `rediss://default:[FILTERED]@cache.example.upstash.io:6379`. The
+scheme, host, port and path stay visible, since that's what you need to
+debug against -- only the credential Heroku, Upstash, Redis Cloud and Aiven
+all put in the userinfo is hidden. A value that isn't a URI, or a URI with no
+userinfo, is left unchanged, and a malformed value never raises out of
+`inspect`.
+
 ## Configuring each provider
 
 Every example below is complete: set the options shown and
@@ -125,16 +150,20 @@ never serves you the other's translations.
 
 ## Capabilities, in full
 
-**Every keyword other than `from:`, `to:`, `provider:` and `config:` is
-forwarded to the provider, and every provider applies them the same way:
-its own defaults first, then your options, then the fields the request cannot
-do without.** So `formality: :less` overrides a default, and a keyword
-colliding with the language pair or the texts themselves is overridden rather
-than obeyed.
+**Every keyword other than `from:`, `to:`, `provider:`, `config:` and
+`assume_supported:` is forwarded to the provider, and every provider applies
+them the same way: its own defaults first, then your options, then the
+fields the request cannot do without.** So `formality: :less` overrides a
+default, and a keyword colliding with the language pair or the texts
+themselves is overridden rather than obeyed. `assume_supported:` is reserved
+because it is this library's own decision -- whether to skip language
+validation for this call -- not a vendor's, and it must never reach a
+payload.
 
 **`usage.billed_characters` is `nil` when the provider said nothing about
-billing and a number -- `0` included -- when it said something.** All three
-providers that report billing follow that rule; the other four always answer
+billing and a number -- `0` included -- when it said something.** Three of
+the six built-in providers report billing that way -- DeepL, Azure and
+ModernMT; the other three, Google, LibreTranslate and Amazon, always answer
 `nil`.
 
 **Language codes are normalised per vendor, so switching provider needs no
@@ -268,6 +297,19 @@ the three seams `HTTPProvider#translate` calls in order; `detect` is
 entirely optional -- omit it (and leave `capabilities.detects_language:
 false`) if the provider has no detection endpoint, or if callers of this
 gem always pass `from:` explicitly.
+
+**`self.sensitive_options` decides which of this provider's
+`configuration_options` `Configuration#inspect` and `Provider#inspect`
+filter.** By default it is every declared option whose name matches
+`TranslationDiff::Redaction::SENSITIVE` (`key`, `secret`, `token`,
+`password`, `auth`, `credential`) -- `acme_api_key` above is caught by that
+pattern for free. Override it when a credential's name doesn't match: a
+provider reading `config.acme_handshake` for its credential leaks it on
+every `inspect` unless it says so itself:
+
+```ruby
+def self.sensitive_options = %i[acme_handshake]
+```
 
 **Provider names must be unique.** `TranslationDiff::Providers.register`
 overwrites whatever was previously registered under that name, silently --

@@ -6,7 +6,7 @@ and `config.logger` accepts a standard `Logger`. Neither is required: with
 both unset, `TranslationDiff.translate` runs exactly the same, at no extra
 cost.
 
-A translation emits up to four events, each named `<name>.translation_diff`:
+A translation emits up to five events, each named `<name>.translation_diff`:
 
 | Event | Fired | Payload |
 | --- | --- | --- |
@@ -14,6 +14,19 @@ A translation emits up to four events, each named `<name>.translation_diff`:
 | `cache` | Once per `translate` call that reaches the provider, after checking the cache for every sentence at once. | `provider`, `hits`, `misses` |
 | `request` | Once per batch actually sent to the provider (skipped entirely on a full cache hit). | `provider`, `batch` (values sent), `characters` |
 | `rate_limit` | Once per batch sent to the provider, only when a rate limiter is configured. | `provider`, `characters` |
+| `usage` | Once per batch actually sent to the provider, right after `request`. | `provider`, `characters`, `billed_characters`, `reported`, `model` |
+
+`usage`'s `characters` is what this library sent, counted locally -- the same
+number `request` carries. `billed_characters` is what the provider said it
+charged for, or `nil` when it said nothing. **`reported` means the provider
+reports billing at all -- not that this particular response was billed.**
+`billed_characters: nil` alone cannot tell "this provider never says" apart
+from "this response omitted it"; `reported` is what makes the `nil` honest.
+Summing `billed_characters` across providers without checking `reported`
+first produces a total that is quietly too low, since only three of the six
+built-in providers (DeepL, Azure, ModernMT) report billing at all -- the
+other three always answer `nil`. `model` is the model the provider used,
+when it names one, and `nil` otherwise.
 
 **`cache` fires once per call as of 3.1.0, not once per chunk.** The cache is
 now consulted for every sentence in one `read_multi` before anything is

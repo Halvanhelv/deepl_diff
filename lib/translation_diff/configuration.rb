@@ -56,6 +56,10 @@ class TranslationDiff::Configuration
   option :open_timeout, 5
   option :timeout, 30
   option :max_retries, 3
+  option :validate_languages, true
+
+  # Credentials are filtered by name; everything else is shown, or an inspect is one nobody reads.
+  def inspect = "#<#{self.class.name} #{TranslationDiff::Redaction.render(self).join(' ')}>"
 
   # Memoised collaborators aren't copied, or a tenant's own cache_namespace leaks its parent's rate limiter.
   def copy
@@ -81,7 +85,7 @@ class TranslationDiff::Configuration
     @segmenter_instance ||= resolve(segmenter, TranslationDiff::Segmenters.registry)
   end
 
-  # nil, not a null object: Request checks for nil and skips rate-limiting entirely -- costs nothing normally.
+  # nil, not a null object: Dispatcher#throttle checks for nil and skips rate-limiting -- costs nothing normally.
   def rate_limiter_instance
     return rate_limiter unless rate_limiter.nil?
     return nil if rate_limit.nil?

@@ -18,6 +18,8 @@ class TranslationDiff::Registry
 
   def names = @entries.keys
 
+  def classes = @entries.values
+
   private
 
   def fetch(name)

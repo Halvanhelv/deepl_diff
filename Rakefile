@@ -10,3 +10,29 @@ Rake::TestTask.new(:test) do |t|
 end
 
 task default: :test
+
+namespace :languages do
+  desc "Re-fetch every provider's language lists from its vendor"
+  task :refresh do
+    require "translation_diff"
+
+    not_shipped = TranslationDiff::Languages::NOT_SHIPPED
+    unless not_shipped.empty?
+      puts "not shipping data for #{not_shipped.join(', ')}: a vendor credential or a private instance " \
+           "would make the file unshareable"
+    end
+
+    skip = [:null, *not_shipped]
+    providers = TranslationDiff::Providers.names.reject { |name| skip.include?(name) }.map do |name|
+      TranslationDiff::Providers.build(name, TranslationDiff.config)
+    rescue TranslationDiff::ConfigurationError => e
+      warn "skipping #{name}: #{e.message}"
+      nil
+    end.compact
+
+    report = TranslationDiff::Languages::Refresh.call(providers: providers)
+    puts "updated: #{report[:updated].join(', ')}" unless report[:updated].empty?
+    puts "skipped: #{report[:skipped].join(', ')}" unless report[:skipped].empty?
+    report[:failed].each { |name, message| warn "failed: #{name}: #{message}" }
+  end
+end

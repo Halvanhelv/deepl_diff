@@ -70,6 +70,7 @@ at all, so an unset environment variable never has to be special-cased.
 | `open_timeout` | `5` | Seconds an HTTP-backed provider waits to open a connection before raising `TranslationDiff::TransportError`. |
 | `timeout` | `30` | Seconds an HTTP-backed provider waits for a response before raising `TranslationDiff::TransportError`. |
 | `max_retries` | `3` | Retries `faraday-retry` attempts on a transport failure or a `429`/`500`/`502`/`503`/`504` response, with exponential backoff. `faraday-retry` honours a `Retry-After` header itself, so a `429` usually exhausts its retries before `TranslationDiff::RateLimitError` is ever raised. |
+| `validate_languages` | `true` | Whether `translate` refuses a source/target pair the shipped data doesn't list, before making a request. See [Languages](languages.md). |
 
 ## Provider options
 

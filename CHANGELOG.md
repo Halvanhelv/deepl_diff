@@ -4,6 +4,45 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Breaking
+
+- **Language validation is on by default.** `TranslationDiff.translate` now
+  refuses, before making a request, any source/target pair the shipped data
+  doesn't list for that provider -- raising
+  `TranslationDiff::UnsupportedLanguageError`. Data ships for DeepL, Google,
+  Azure and ModernMT only; Amazon and LibreTranslate ship none, and a
+  provider with no shipped data refuses nothing. Two escapes: pass
+  `assume_supported: true` for one call, or set
+  `config.validate_languages = false` globally. See
+  [Languages](docs/languages.md).
+
+### Added
+
+- A `usage` instrumentation event, firing once per provider request, beside
+  `translate`, `cache`, `request` and `rate_limit`. Its payload carries
+  `provider`, `characters` (what this library sent, counted locally),
+  `billed_characters` (what the provider said it charged, or `nil`),
+  `reported` (whether the provider reports billing **at all** -- not that
+  this response was billed) and `model`. Summing `billed_characters` across
+  providers without checking `reported` first produces a total that is
+  quietly too low: only three of the six built-in providers report billing
+  at all. See [Instrumentation](docs/instrumentation.md).
+
+### Security
+
+- `Configuration#inspect` and `Provider#inspect` print `[FILTERED]` in place
+  of every credential option's value, instead of the credential itself. The
+  filtered set is derived, not hand-maintained: option names matching a
+  sensitive pattern, plus whatever each registered provider declares in
+  `sensitive_options`. A non-credential option -- a base URL, a region,
+  `cache_namespace` -- stays visible in full. A URL-valued option that
+  carries a credential in its userinfo, `redis_url` included, has just that
+  part redacted (`rediss://default:[FILTERED]@cache.example.upstash.io:6379`);
+  the scheme, host, port and path stay visible. See
+  [Providers](docs/providers.md).
+
 ## [3.1.0] - 2026-09-08
 
 First release under the name **translation_diff**. This gem was published as

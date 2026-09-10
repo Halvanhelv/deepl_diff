@@ -48,6 +48,17 @@ class TranslationDiff::Providers::Google < TranslationDiff::HTTPProvider
     response = post(detect_url, { q: [text] })
     response.body.dig("data", "detections", 0, 0, "language")&.downcase
   end
+
+  # One list, used in both directions.
+  def languages
+    codes = Array(get("language/translate/v2/languages?key=#{CGI.escape(config.google_api_key.to_s)}")
+                    .body.dig("data", "languages")).map { |entry| entry["language"] }
+
+    { source: codes, target: codes }
+  end
+
+  # The key is left out: it is a credential, not part of what documents where this list comes from.
+  def languages_endpoint = "#{api_base}/language/translate/v2/languages"
 end
 
 TranslationDiff::Providers.register(:google, TranslationDiff::Providers::Google)

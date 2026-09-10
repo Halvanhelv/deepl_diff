@@ -4,8 +4,12 @@ A call to `TranslationDiff.translate` walks a value, cuts the prose in it
 into sentences, translates only the sentences no cache already holds, and
 puts the value back together in the shape it arrived in.
 
-`TranslationDiff::Translator` is the one class that coordinates all of it.
-Everything below is a collaborator it drives.
+`TranslationDiff::Translator` coordinates document assembly, provider
+resolution, settling the source language, language validation and the
+sentence cache. `TranslationDiff::Dispatcher` takes over once there are cache
+misses to send: it packs them into batches, throttles each one, makes the
+wire call, and fires the `request`, `rate_limit` and `usage` events.
+Everything below is a collaborator one of the two drives.
 
 ## The steps
 
@@ -36,13 +40,14 @@ Everything below is a collaborator it drives.
    them all in a single `read_multi`. Sentences it answers for are already
    done; the rest are misses. See [Caching](caching.md).
 
-5. **The misses are packed into requests.**
-   `TranslationDiff::Batch.pack` groups the missing sentences into batches
-   that fit inside the provider's declared `max_batch_size` and
-   `max_request_size` -- its `TranslationDiff::Capabilities` (see
-   [Providers](providers.md)). Each batch is sent, and the reply is
-   applied back onto the very segments that produced it -- no step ever
-   correlates a translation to a sentence by position after the fact.
+5. **The misses are handed to `TranslationDiff::Dispatcher`.**
+   `TranslationDiff::Batch.pack` groups them into batches that fit inside the
+   provider's declared `max_batch_size` and `max_request_size` -- its
+   `TranslationDiff::Capabilities` (see [Providers](providers.md)).
+   `Dispatcher` throttles each batch through `config.rate_limiter_instance`
+   when one is configured, sends it to the provider, and applies the reply
+   back onto the very segments that produced it -- no step ever correlates a
+   translation to a sentence by position after the fact.
 
 6. **What came back is written home, and the value is rebuilt.**
    Only sentences that actually got a translation are cached. Then each

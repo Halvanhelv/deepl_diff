@@ -48,6 +48,14 @@ class TranslationDiff::Providers::ModernMT < TranslationDiff::HTTPProvider
     translate(request).detected_source
   end
 
+  def languages
+    codes = Array(get("translate/languages").body["data"])
+
+    { source: codes, target: codes }
+  end
+
+  def languages_endpoint = "#{api_base}/translate/languages"
+
   private
 
   def results_from(body)
