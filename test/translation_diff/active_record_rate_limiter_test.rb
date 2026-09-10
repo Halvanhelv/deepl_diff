@@ -146,7 +146,10 @@ if ActiveRecordDatabase.available?
 
     def test_add_omits_unique_by_when_the_connection_does_not_support_a_conflict_target
       limiter = build_limiter(threshold: 100, interval: 60)
-      connection = Class.new { def supports_insert_conflict_target? = false }.new
+      connection = Class.new do
+        def supports_insert_conflict_target? = false
+        def quote_table_name(name) = %("#{name}")
+      end.new
 
       options = limiter.send(:upsert_options, connection, 1)
 
@@ -155,11 +158,23 @@ if ActiveRecordDatabase.available?
 
     def test_add_keeps_unique_by_when_the_connection_supports_a_conflict_target
       limiter = build_limiter(threshold: 100, interval: 60)
-      connection = Class.new { def supports_insert_conflict_target? = true }.new
+      connection = Class.new do
+        def supports_insert_conflict_target? = true
+        def quote_table_name(name) = %("#{name}")
+      end.new
 
       options = limiter.send(:upsert_options, connection, 1)
 
       assert_includes options.keys, :unique_by
+    end
+
+    def test_add_quotes_the_table_name_in_the_on_duplicate_fragment
+      limiter = build_limiter(threshold: 100, interval: 60)
+      connection = limiter.model.connection
+
+      options = limiter.send(:upsert_options, connection, 1)
+
+      assert_includes options[:on_duplicate].to_s, connection.quote_table_name(limiter.model.table_name)
     end
 
     private

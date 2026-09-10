@@ -60,7 +60,8 @@ class TranslationDiff::ActiveRecordRateLimiter
 
   # MySQL's adapter never answers true here and its ON DUPLICATE KEY UPDATE already targets every unique key.
   def upsert_options(connection, size)
-    options = { on_duplicate: Arel.sql("characters = #{model.table_name}.characters + #{size}") }
+    table = connection.quote_table_name(model.table_name)
+    options = { on_duplicate: Arel.sql("characters = #{table}.characters + #{size}") }
     options[:unique_by] = %i[namespace bucket] if connection.supports_insert_conflict_target?
     options
   end
