@@ -32,13 +32,17 @@ expired row, it does not remove it by itself. See
 ## Transactions
 
 A write joins the caller's transaction. A failed write no longer poisons
-it -- the write runs in its own savepoint, so a `StatementInvalid` there
-does not abort a transaction it does not own -- but the rollback semantics
-otherwise stay ordinary: if the caller's transaction rolls back, a
+it -- the write runs in its own savepoint, so an `ActiveRecord::ActiveRecordError`
+there does not abort a transaction it does not own -- but the rollback
+semantics otherwise stay ordinary: if the caller's transaction rolls back, a
 translation this store just wrote rolls back with it, and the next request
 pays for it again. This is the largest difference between this store and
 the Redis one it substitutes for -- a Redis write is never inside anyone's
 transaction, so it never rolls back with one.
+
+That savepoint failure never reaches a caller of `TranslationDiff.translate`
+either, whatever raised it -- see
+[The three write paths fail differently](caching.md#the-three-write-paths-fail-differently).
 
 ## What ends up in your log
 
@@ -55,6 +59,11 @@ exception cannot carry the row into an error tracker either, see
 your application logs SQL at `debug` and what it translates is
 confidential, keep that log above `debug` around this store, or use
 `RedisCacheStore` instead.
+
+That scrubbing covers every `ActiveRecord::ActiveRecordError` the write path
+can raise, not just a syntax or constraint failure -- see
+[Rails replica routing](#rails-replica-routing) below for the error this
+widened scope was written for.
 
 ## The tables
 
@@ -110,7 +119,7 @@ class CreateTranslationDiffTables < ActiveRecord::Migration[7.1]
     create_table :translation_diff_translations, if_not_exists: true do |t|
       t.string :namespace, null: false, limit: 64
       t.string :key_digest, null: false, limit: 64
-      t.text :translation, null: false
+      t.text :translation, null: false, limit: 16_777_215
       t.datetime :expires_at
       t.timestamps
     end
@@ -142,6 +151,23 @@ timestamp, and a 4-byte integer column holding that overflows in January
 Both tables are always created together -- there is no generator flag to
 get one without the other, since deciding to use one but not the other
 costs nothing at migration time.
+
+`translation` carries `limit: 16_777_215`, which is a no-op on Postgres and
+SQLite -- `text` there has no length ceiling regardless -- and yields
+`MEDIUMTEXT` on MySQL instead of the default `TEXT`, which tops out at
+65,535 bytes. Without it, one sentence over that size failed the whole
+batch it rode in with on MySQL, and PostgreSQL and SQLite were never
+affected.
+
+**An existing MySQL installation** that ran this migration before it
+carried the `limit:` needs one statement, once, through its own deploy
+process -- this gem still never runs DDL for you:
+
+```sql
+ALTER TABLE translation_diff_translations MODIFY translation MEDIUMTEXT NOT NULL;
+```
+
+Postgres and SQLite users have nothing to do here.
 
 ## `cache_ttl` becomes `expires_at`
 
@@ -192,7 +218,10 @@ and there is no single right answer to "when," so none is forced on you:
   because a translation-serving request
   should not be paying, even occasionally, for someone else's expired rows.
   A value that will not coerce to a number is refused at `configure` time,
-  not on the first write that would have consulted it.
+  not on the first write that would have consulted it. A prune that fails
+  here fails exactly like a failed write, and is rescued the same way -- it
+  does not lose the translation it rode in with, see
+  [The three write paths fail differently](caching.md#the-three-write-paths-fail-differently).
 - **Doing nothing.** Also a supported answer. An unpruned table is correct
   -- reads still skip every expired row -- just larger than it needs to be.
 
@@ -200,13 +229,12 @@ and there is no single right answer to "when," so none is forced on you:
 multi-tenant table with several namespaces needs `#prune` called once per
 namespace if every tenant is to be pruned.
 
-## `active_record_base`: a second database, or a reader/writer role
+## `active_record_base`: a second database
 
 `config.active_record_base` (default `::ActiveRecord::Base`) is the class
 `ActiveRecordCacheStore` and `ActiveRecordRateLimiter` build their model
-from. Point it at a class connected to a second database, or one pinned to
-a writer role, and this store's traffic follows that connection instead of
-your application's primary one:
+from. Point it at a class connected to a second database and this store's
+traffic follows that connection instead of your application's primary one:
 
 ```ruby
 class TranslationDiffRecord < ActiveRecord::Base
@@ -219,6 +247,61 @@ TranslationDiff.configure do |config|
   config.active_record_base = TranslationDiffRecord
 end
 ```
+
+**This is not a way around a read-replica decision Rails already made for
+the request.** See [Rails replica routing](#rails-replica-routing) below --
+`active_record_base` still matters, but not for that.
+
+## Rails replica routing
+
+If your application routes GET requests to a read replica the way the Rails
+guides describe -- `ActiveRecord::Middleware::DatabaseSelector` in the
+middleware stack -- every GET runs with `prevent_writes` on. A page that
+calls `translate` and triggers a cache or rate-limit write during that
+request hits `ActiveRecord::ReadOnlyError`.
+
+Pointing `active_record_base` at a class connected to its own writer role,
+or at an entirely separate database, does **not** avoid this. `prevent_writes`
+is enforced by the connection handler for the request as a whole, not per
+model or per connection: verified against a live Rails application,
+pointing `active_record_base` at the application's own writer-role class,
+and separately at a wholly unrelated MySQL database, both still raised
+`ActiveRecord::ReadOnlyError` on the write. `active_record_base` changes
+which database this store's traffic goes to; it does not change whether
+Rails currently permits writes at all.
+
+For the cache write specifically, the error is redacted -- see
+[What ends up in your log](#what-ends-up-in-your-log) -- and it does not
+reach your call to `translate` as an exception: the translator rescues it,
+logs it, fires a `cache_error` instrumentation event (provider and error
+class only, never content -- see [Instrumentation](instrumentation.md)),
+and returns the translation anyway. What does not happen is the write: a
+translation served on a GET beneath this middleware is not cached by this
+store, for that request.
+
+**The rate limiter's own write is not covered by that same protection.**
+If `config.rate_limiter = :active_record` and the same request hits it,
+`ActiveRecordRateLimiter#check` raises a raw `ActiveRecord::ReadOnlyError`
+-- not redacted, not rescued, and not a `TranslationDiff::Error` at all.
+Since the rate limit check runs before the provider is ever called, the
+`translate` call fails outright rather than degrading: verified against the
+same live application. The row this table would have written never carries
+translated content either way, so nothing confidential is in that raw
+message -- but a `rescue TranslationDiff::Error` around `translate` will
+not catch it, and no translation comes back.
+
+Two things actually avoid both failures, both checked directly against a
+Rails application with `DatabaseSelector` configured:
+
+- **Translate somewhere `DatabaseSelector` is not wrapping.** A background
+  job, a POST action, a console session -- anywhere outside a GET this
+  middleware routes, there is no `prevent_writes` in effect to begin with.
+- **Wrap the call to permit writes for its duration:**
+  ```ruby
+  ActiveRecord::Base.connected_to(role: :writing) do
+    TranslationDiff.translate(text, from: "en", to: "es")
+  end
+  ```
 
 ## The ActiveRecord version floor
 

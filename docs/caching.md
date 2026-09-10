@@ -119,3 +119,16 @@ depends on which of these shapes wrote it.
 A caller that needs to know which sentences got cached after a failure
 needs to know which of these three shapes wrote them; the answer is not the
 same for all three.
+
+None of the three ever reaches the caller as an exception, though. The
+cache is an optimisation on top of a translation that has already been
+paid for at the provider: `Translator#fill` rescues whatever error surfaces
+here, logs it, fires a `cache_error` event (provider and error class only,
+never the text -- see [Instrumentation](instrumentation.md)), and returns
+the translation regardless. This holds for all three shapes and every
+store, not only `ActiveRecordCacheStore` -- a `MemoryCacheStore` bug, a
+dropped Redis connection, a SQL write blocked by a read-only replica (see
+[Rails replica routing](sql-cache.md#rails-replica-routing)) all behave the
+same way from the caller's side. What differs between the three shapes
+above is only what ends up cached, never whether the translation comes
+back.
