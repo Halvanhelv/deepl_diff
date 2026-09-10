@@ -40,6 +40,8 @@ class TranslationDiff::ActiveRecordCacheStore
     end
     prune_sometimes
     pairs
+  rescue ActiveRecord::StatementInvalid => e
+    raise redacted_error(e)
   end
 
   # Reads never serve an expired row; deleting one is this, and it is the host's call when to run it.
@@ -56,6 +58,14 @@ class TranslationDiff::ActiveRecordCacheStore
     options = { record_timestamps: true }
     options[:unique_by] = %i[namespace key_digest] if connection.supports_insert_conflict_target?
     options
+  end
+
+  # upsert_all inlines values into the statement it sends, so the adapter's own message can carry a whole row --
+  # this names the adapter's error class and the statement's shape, never the row a caller's logger already has.
+  def redacted_error(error)
+    adapter_error = error.cause&.class || error.class
+    TranslationDiff::Error.new("the cache write failed (#{adapter_error}): an upsert into " \
+                               "#{@table_name}(namespace, key_digest, translation, expires_at)")
   end
 
   def row(key, value)
