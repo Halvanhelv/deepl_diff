@@ -37,6 +37,17 @@ if ActiveRecordDatabase.postgres?
       assert_includes error.message, "PG::CheckViolation"
     end
 
+    # Ruby attaches the rescued original as #cause unless the raise says otherwise -- and #cause carries the row.
+    def test_the_redacted_error_severs_the_cause_chain
+      store = TranslationDiff::ActiveRecordCacheStore.new(namespace: "forbidden-namespace", ttl: 60,
+                                                          table_name: "translation_diff_translations")
+
+      error = assert_raises(TranslationDiff::Error) { store.write("a", "SECRET-PATIENT-NOTE-12345") }
+
+      assert_nil error.cause
+      refute_includes error.full_message, "SECRET-PATIENT-NOTE-12345"
+    end
+
     private
 
     def connection

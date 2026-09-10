@@ -41,7 +41,7 @@ class TranslationDiff::ActiveRecordCacheStore
     prune_sometimes
     pairs
   rescue ActiveRecord::StatementInvalid => e
-    raise redacted_error(e)
+    raise redacted_error(e), cause: nil
   end
 
   # Reads never serve an expired row; deleting one is this, and it is the host's call when to run it.
