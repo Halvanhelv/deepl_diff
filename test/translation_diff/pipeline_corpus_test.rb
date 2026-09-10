@@ -1,11 +1,12 @@
 require "test_helper"
 require "support/pipeline_corpus"
 
-# Judges the pipeline rewrite against the baseline captured in ~/JetRockets/.deepl_diff-specs/pipeline-baseline.txt
-# before any of the pipeline changed, translating every input the same way the baseline script did: through the
-# :null provider, from "en" to "ru".
+# Judges the pipeline rewrite against test/fixtures/pipeline_baseline.txt, captured before any of the pipeline
+# changed, translating every input the way the baseline script did: through the :null provider, en to ru.
 class PipelineCorpusTest < ConfiguredTest
-  BASELINE_PATH = File.expand_path("~/JetRockets/.deepl_diff-specs/pipeline-baseline.txt")
+  # Committed, not read from a developer's home directory: a test that depends on an untracked file on one machine
+  # passes there and fails everywhere else, which is what it did in CI.
+  BASELINE_PATH = File.expand_path("../fixtures/pipeline_baseline.txt", __dir__)
 
   def self.baseline_outputs
     @baseline_outputs ||= File.read(BASELINE_PATH).scan(/^=== (.+) ===\nOUTPUT: (.*)\n/).to_h
