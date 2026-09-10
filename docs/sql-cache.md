@@ -279,16 +279,15 @@ and returns the translation anyway. What does not happen is the write: a
 translation served on a GET beneath this middleware is not cached by this
 store, for that request.
 
-**The rate limiter's own write is not covered by that same protection.**
-If `config.rate_limiter = :active_record` and the same request hits it,
-`ActiveRecordRateLimiter#check` raises a raw `ActiveRecord::ReadOnlyError`
--- not redacted, not rescued, and not a `TranslationDiff::Error` at all.
-Since the rate limit check runs before the provider is ever called, the
-`translate` call fails outright rather than degrading: verified against the
-same live application. The row this table would have written never carries
-translated content either way, so nothing confidential is in that raw
-message -- but a `rescue TranslationDiff::Error` around `translate` will
-not catch it, and no translation comes back.
+**The rate limiter fails differently, because it runs earlier.** If
+`config.rate_limiter = :active_record` and the same request hits it,
+`ActiveRecordRateLimiter#check` cannot record what it is about to allow, so
+it raises `TranslationDiff::Error` naming the adapter's error class -- and
+because the check runs before the provider is ever called, the `translate`
+call fails outright rather than degrading. Nothing has been paid for at
+that point, which is why this one refuses instead of continuing: a limiter
+that cannot count is not a limiter, and quietly translating past it is how
+an application loses its provider account.
 
 Two things actually avoid both failures, both checked directly against a
 Rails application with `DatabaseSelector` configured:

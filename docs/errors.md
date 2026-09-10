@@ -55,15 +55,16 @@ the threshold and the interval that were exceeded (`"rate limit reached for
 translation-diff: 8000 characters per 60 seconds"`) -- never the text that
 tripped it.
 
-**One documented exception to "every error this gem raises."**
-`ActiveRecordRateLimiter#check`'s own write is not wrapped in this gem's
-error handling at all: under Rails' `prevent_writes` (a read-replica
-request, see [Rails replica routing](sql-cache.md#rails-replica-routing)),
-it raises a raw `ActiveRecord::ReadOnlyError` straight through, uncaught
-and un-redacted. `ActiveRecordCacheStore`'s write does not have this gap --
-its errors are redacted `TranslationDiff::Error`s, rescued before they ever
-reach a caller. A `rescue TranslationDiff::Error` around `translate` does
-not catch the rate limiter's version.
+Both SQL-backed collaborators report a database failure the same way. A
+cache write that the database refuses -- including under Rails'
+`prevent_writes` (a read-replica request, see
+[Rails replica routing](sql-cache.md#rails-replica-routing)) -- is rescued,
+redacted and swallowed, and the translation is returned anyway. The rate
+limiter's own write raises a redacted `TranslationDiff::Error` instead of
+continuing, because it runs before the provider does and a limiter that
+cannot count is not a limiter. Either way `rescue TranslationDiff::Error`
+around `translate` catches what a caller can catch, and no raw
+`ActiveRecord::ReadOnlyError` reaches it.
 
 `ProviderError` and its subclasses carry `#provider` (the registered name)
 and `#status` (the HTTP status code), so a caller can log or branch on which

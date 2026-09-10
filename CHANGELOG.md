@@ -89,10 +89,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   translation already paid for at the provider, and losing the write should
   never mean losing that. See
   [The three write paths fail differently](docs/caching.md#the-three-write-paths-fail-differently)
-  and [Instrumentation](docs/instrumentation.md). One gap remains:
-  `ActiveRecordRateLimiter`'s own write is not covered by this -- under the
-  same read-replica routing, it still raises a raw, un-rescued
-  `ActiveRecord::ReadOnlyError` that fails the `translate` call outright.
+  and [Instrumentation](docs/instrumentation.md). The rate limiter refuses
+  rather than degrades under the same routing -- it runs before the provider
+  is called, so nothing has been paid for yet -- but it too now raises a
+  redacted `TranslationDiff::Error` rather than a raw `ActiveRecord` one.
   See [Rails replica routing](docs/sql-cache.md#rails-replica-routing).
 - **MySQL: the migration's `translation` column now carries
   `limit: 16_777_215`, giving it `MEDIUMTEXT` instead of `TEXT`.** `TEXT`
