@@ -82,8 +82,11 @@ class TranslationDiff::Translator
     TranslationDiff::Providers.resolve(@requested_provider, config).tap { |provider| log("provider #{provider.class}") }
   end
 
+  # opaque_elements comes from the configuration this call is actually using -- a context's own setting must
+  # never fall back to Passage's global default.
   def passage(string)
-    TranslationDiff::Passage.new(string, segmenter: config.segmenter_instance, language: @from)
+    TranslationDiff::Passage.new(string, segmenter: config.segmenter_instance, language: @from,
+                                         opaque_elements: config.opaque_elements)
   end
 
   # The strings walk and the map walk visit the same leaves in the same order, and the value itself was never touched.

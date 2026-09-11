@@ -38,8 +38,11 @@ class TranslationDiff::Previewer
     document.strings.flat_map { |string| passage(string).segments }.reject(&:empty?)
   end
 
+  # opaque_elements comes from the configuration this call is actually using -- a context's own setting must
+  # never fall back to Passage's global default.
   def passage(string)
-    TranslationDiff::Passage.new(string, segmenter: @config.segmenter_instance, language: @from)
+    TranslationDiff::Passage.new(string, segmenter: @config.segmenter_instance, language: @from,
+                                         opaque_elements: @config.opaque_elements)
   end
 
   # A detected language arrives as a String while `to:` is usually a Symbol, so neither type nor case can be assumed.
