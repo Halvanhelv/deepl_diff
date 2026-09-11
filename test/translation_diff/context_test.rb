@@ -46,6 +46,26 @@ class ContextTest < Minitest::Test
     assert_equal "Hello.", context.translate("Hello.", from: "en", to: "ru")
   end
 
+  # translate and preview are a matched pair at the top level; a context is the same entry point, so it
+  # must be able to preview a tenant's call too, not just carry it out.
+  def test_a_context_previews_through_its_own_configuration
+    context = TranslationDiff.context do |c|
+      c.provider = TranslationDiff::Providers::Null.new(TranslationDiff::Configuration.new)
+    end
+
+    preview = context.preview("Hello.", from: "en", to: "ru")
+
+    assert_equal 1, preview.sendable_sentences
+  end
+
+  # `to:` still defaults to nil here too, so a context refuses a missing target by naming the keyword.
+  def test_a_missing_target_language_is_refused_by_name_for_preview
+    context = TranslationDiff.context { |c| c.cache_namespace = "tenant" }
+    error = assert_raises(ArgumentError) { context.preview("Hello.", from: "en") }
+
+    assert_match(/to:/, error.message)
+  end
+
   # `to:` still defaults to nil here too, so a context refuses a missing target by naming the keyword.
   def test_a_missing_target_language_is_refused_by_name
     context = TranslationDiff.context { |c| c.cache_namespace = "tenant" }
