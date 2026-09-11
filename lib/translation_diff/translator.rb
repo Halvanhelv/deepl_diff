@@ -65,7 +65,9 @@ class TranslationDiff::Translator
   # The `translate` event wraps everything a call that reaches a provider does, and nothing an early return does.
   def translated(document, passages, segments, provider, from)
     values = TranslationDiff::Leaves.count(@values)
-    payload = { call_id: call_id, from: from.to_s, to: @to.to_s, provider: provider.cache_key, values: values }
+    characters = segments.sum { |segment| segment.core.size }
+    payload = { call_id: call_id, from: from.to_s, to: @to.to_s, provider: provider.cache_key,
+                values: values, characters: characters }
     instrument("translate", payload) do
       fill(provider, segments, from)
       rebuild(document, passages)

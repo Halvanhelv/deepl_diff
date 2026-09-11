@@ -51,6 +51,16 @@ class InstrumentationTest < ConfiguredTest
     assert_equal 2, payload[:values]
   end
 
+  # `characters` here is what this call considered, whatever the cache had -- `request`'s `characters` is only
+  # what one batch actually sent, so a fully-cached call reports here and never has a `request` event at all.
+  def test_the_translate_event_carries_the_characters_this_call_considered
+    TranslationDiff.translate("Hello there.", from: "en", to: "ru")
+
+    payload = @recorder.events.find { |name, _| name == "translate.translation_diff" }.last
+
+    assert_equal "Hello there.".size, payload[:characters]
+  end
+
   def test_every_event_from_one_call_carries_the_same_call_id
     TranslationDiff.translate("Hello there.", from: "en", to: "ru")
 

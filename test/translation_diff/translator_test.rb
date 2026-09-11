@@ -201,6 +201,27 @@ class TranslatorTest < ConfiguredTest
     assert_equal 2, payload[:values]
   end
 
+  # `request`'s own `characters` is only what one batch sent; this is what the call considered, hit or miss.
+  def test_the_translate_event_carries_the_characters_this_call_considered
+    recorder = instrumented
+    instrumented_translate("Hello there.")
+
+    assert_equal "Hello there.".size, payload_for(recorder, "translate")[:characters]
+  end
+
+  # A call served entirely from cache still knows what it considered, even though no request event ever fires.
+  def test_the_translate_event_reports_characters_even_when_the_call_is_served_entirely_from_cache
+    recorder = instrumented
+    instrumented_translate("Hello there.")
+    instrumented_translate("Hello there.")
+
+    payload = recorder.events.reverse.find { |event| event.first == "translate.translation_diff" }.last
+    request_count = recorder.events.count { |event| event.first == "request.translation_diff" }
+
+    assert_equal "Hello there.".size, payload[:characters]
+    assert_equal 1, request_count
+  end
+
   def test_the_cache_event_carries_hit_and_miss_counts
     recorder = instrumented
     instrumented_translate("Hello there.")
