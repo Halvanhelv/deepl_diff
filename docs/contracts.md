@@ -12,7 +12,7 @@ through its own registry, `TranslationDiff::RateLimiters` -- `:redis` and
   and `Dispatcher#throttle` checks for that `nil` and skips rate limiting
   entirely, so the common case costs nothing;
 - otherwise the registered limiter named by `config.rate_limiter`, or
-  `TranslationDiff::RedisRateLimiter` when `rate_limiter` is left unset but
+  `TranslationDiff::RateLimiters::Redis` when `rate_limiter` is left unset but
   `rate_limit` is set -- built from `rate_interval`, `cache_namespace`, and
   either `redis_url` (`:redis`) or `active_record_base` and
   `rate_limit_table_name` (`:active_record`; see [SQL cache](sql-cache.md)).
@@ -29,11 +29,10 @@ An object assigned to `rate_limiter` must implement:
 def check(size); end
 ```
 
-`TranslationDiff::RedisRateLimiter` raises
-`TranslationDiff::RedisRateLimiter::RateLimitExceeded` when its threshold is
-exceeded within its interval;
-`TranslationDiff::ActiveRecordRateLimiter` raises its own
-`RateLimitExceeded`, a distinct class under the same name. Both raise with a
+Both shipped limiters raise `TranslationDiff::RateLimitExceeded` when the
+threshold is exceeded within the interval -- one class whichever limiter is
+configured, so switching from `:redis` to `:active_record` does not quietly
+stop a `rescue` from matching. They raise with a
 message naming the namespace, the threshold and the interval that were hit
 (`"rate limit reached for translation-diff: 8000 characters per 60
 seconds"`) -- never the text that tripped it. Neither `redis`
@@ -44,7 +43,7 @@ configures no `rate_limit` never needs it, and its absence raises
 dependency either -- see [SQL cache](sql-cache.md#the-activerecord-version-floor).
 
 **Upgrading to 3.1.0: re-validate your `rate_limit` threshold.** Before this
-release, `RedisRateLimiter` never actually limited anything -- a signature
+release, `RateLimiters::Redis` never actually limited anything -- a signature
 mismatch with the `ratelimit` gem meant it recorded hits under a subject
 `exceeded?` never read, so the threshold could never be reached. That bug
 shipped in every release since `v1.0.2` (2023-02-16). If you have
@@ -64,8 +63,8 @@ Keep `rate_interval` within 5-600 seconds if you want the configured number
 to be the enforced one.
 
 Both the clamp above and the upgrade note before it are about
-`RedisRateLimiter`, which delegates its bucketing to the `ratelimit` gem.
-`ActiveRecordRateLimiter` owns its own bucketing instead, and its window is
+`RateLimiters::Redis`, which delegates its bucketing to the `ratelimit` gem.
+`RateLimiters::ActiveRecord` owns its own bucketing instead, and its window is
 sliding rather than tumbling: buckets are `rate_interval / 12` seconds wide
 (floored at 1 second), and a check sums every bucket touching the trailing
 `rate_interval` seconds -- including the oldest one, which is only ever

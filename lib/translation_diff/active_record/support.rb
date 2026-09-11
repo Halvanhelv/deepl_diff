@@ -1,5 +1,5 @@
 # The lazy require, the version floor and the anonymous model class, shared by the cache store and the limiter.
-module TranslationDiff::ActiveRecordSupport
+module TranslationDiff::ActiveRecord::Support
   MINIMUM_ACTIVE_RECORD = "7.1".freeze
 
   def model
@@ -10,7 +10,7 @@ module TranslationDiff::ActiveRecordSupport
 
   # Any ActiveRecordError, not just StatementInvalid -- ReadOnlyError carries a whole write statement too.
   def ar_error?(error)
-    defined?(ActiveRecord::ActiveRecordError) && error.is_a?(ActiveRecord::ActiveRecordError)
+    defined?(::ActiveRecord::ActiveRecordError) && error.is_a?(::ActiveRecord::ActiveRecordError)
   end
 
   def build_model

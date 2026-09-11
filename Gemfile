@@ -3,7 +3,7 @@ source "https://rubygems.org"
 gemspec
 
 # Not runtime dependencies of the gem (see the gemspec) -- Configuration#
-# redis_pool requires them lazily, and RedisCacheStore/RedisRateLimiter
+# redis_pool requires them lazily, and Stores::Redis/RateLimiters::Redis
 # duck-type against whatever a caller's connection pool yields. They are
 # only here so the test suite, which builds real pools against these
 # classes, has them available.
@@ -11,7 +11,7 @@ gem "connection_pool", "~> 2.4", require: false
 gem "redis", "~> 5.0", require: false
 gem "redis-namespace", "~> 1.11", require: false
 
-# Not a runtime dependency of the gem (see the gemspec) -- RedisRateLimiter
+# Not a runtime dependency of the gem (see the gemspec) -- RateLimiters::Redis
 # requires it lazily on the first check, so an application that configures no
 # rate limit never needs it installed. It is only here so the test suite,
 # which exercises the limiter against the real Ratelimit class rather than a
@@ -32,8 +32,8 @@ gem "cgi", "~> 0.5", require: false
 # stand-in, has it available.
 gem "aws-sigv4", "~> 1.12", require: false
 
-# Not runtime dependencies of the gem (see the gemspec) -- ActiveRecordCacheStore
-# and ActiveRecordRateLimiter require active_record lazily on first use, so an
+# Not runtime dependencies of the gem (see the gemspec) -- TranslationDiff::Stores::ActiveRecord
+# and TranslationDiff::RateLimiters::ActiveRecord require active_record lazily on first use, so an
 # application caching in Redis never needs it installed. They are here so the
 # suite can exercise the stores against a real database rather than a stand-in.
 gem "activerecord", "~> 8.1", require: false

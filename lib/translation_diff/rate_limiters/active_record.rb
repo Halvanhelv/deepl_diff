@@ -1,8 +1,6 @@
 # Throttles by counting characters into namespaced, time-bucketed rows in the application's own database.
-class TranslationDiff::ActiveRecordRateLimiter
-  include TranslationDiff::ActiveRecordSupport
-
-  class RateLimitExceeded < TranslationDiff::Error; end
+class TranslationDiff::RateLimiters::ActiveRecord
+  include TranslationDiff::ActiveRecord::Support
 
   DEFAULT_THRESHOLD = 8000
   DEFAULT_INTERVAL = 60
@@ -32,7 +30,7 @@ class TranslationDiff::ActiveRecordRateLimiter
 
   # A sliding window: every bucket covering the last `interval` seconds is summed, not just the current one.
   def check(size)
-    raise RateLimitExceeded, exceeded_message if current_total >= @threshold
+    raise TranslationDiff::RateLimitExceeded, exceeded_message if current_total >= @threshold
 
     add(size)
   rescue StandardError => e
@@ -91,4 +89,4 @@ class TranslationDiff::ActiveRecordRateLimiter
   def active_record_upsert_detail = "upsert_all takes unique_by there."
 end
 
-TranslationDiff::RateLimiters.register(:active_record, TranslationDiff::ActiveRecordRateLimiter)
+TranslationDiff::RateLimiters.register(:active_record, TranslationDiff::RateLimiters::ActiveRecord)

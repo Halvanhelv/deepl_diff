@@ -41,7 +41,7 @@ class PruneTaskTest < Minitest::Test
 
     out, = capture_io { Rake::Task["translation_diff:prune"].invoke }
 
-    assert_includes out, "the configured cache store (TranslationDiff::MemoryCacheStore) does not support pruning"
+    assert_includes out, "the configured cache store (TranslationDiff::Stores::Memory) does not support pruning"
   end
 
   def test_reports_when_there_is_no_rate_limiter_configured

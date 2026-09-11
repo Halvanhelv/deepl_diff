@@ -2,14 +2,14 @@ require "test_helper"
 require "support/cache_store_contract"
 require "support/batching_cache_store_contract"
 
-class MemoryCacheStoreTest < Minitest::Test
+class MemoryStoreTest < Minitest::Test
   include CacheStoreContract
   include BatchingCacheStoreContract
 
   attr_reader :store
 
   def setup
-    @store = TranslationDiff::MemoryCacheStore.new(max_size: 3)
+    @store = TranslationDiff::Stores::Memory.new(max_size: 3)
   end
 
   def test_it_evicts_the_oldest_entry_once_the_bound_is_reached
@@ -39,7 +39,7 @@ class MemoryCacheStoreTest < Minitest::Test
     config = TranslationDiff::Configuration.new
     config.cache_ttl = nil
 
-    built = TranslationDiff::MemoryCacheStore.build(config)
+    built = TranslationDiff::Stores::Memory.build(config)
     built.write("a", "one")
 
     assert_equal ["one"], built.read_multi(["a"])
@@ -49,7 +49,7 @@ class MemoryCacheStoreTest < Minitest::Test
     config = TranslationDiff::Configuration.new
     config.cache_max_size = 1
 
-    built = TranslationDiff::MemoryCacheStore.build(config)
+    built = TranslationDiff::Stores::Memory.build(config)
     built.write("a", "one")
     built.write("b", "two")
 

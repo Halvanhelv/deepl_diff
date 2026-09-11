@@ -1,5 +1,5 @@
 # Prepended onto Configuration: fails cache_prune_probability and cache_namespace at configure time, not later.
-module TranslationDiff::CacheGuardOptions
+module TranslationDiff::Configuration::CacheGuardOptions
   CACHE_NAMESPACE_LIMIT = 64
 
   # An ENV var arrives as a String; coerced here so a translate call never meets a bare String's missing

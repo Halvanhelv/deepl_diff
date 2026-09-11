@@ -47,7 +47,7 @@ class PreviewerTest < ConfiguredTest
     attr_reader :write_calls
 
     def initialize
-      @inner = TranslationDiff::MemoryCacheStore.new(max_size: 100)
+      @inner = TranslationDiff::Stores::Memory.new(max_size: 100)
       @write_calls = 0
     end
 

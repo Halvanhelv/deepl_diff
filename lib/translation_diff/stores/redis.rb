@@ -1,4 +1,4 @@
-class TranslationDiff::RedisCacheStore
+class TranslationDiff::Stores::Redis
   ONE_WEEK = 60 * 60 * 24 * 7
   DEFAULT_NAMESPACE = "translation-diff".freeze
 
@@ -35,7 +35,7 @@ class TranslationDiff::RedisCacheStore
 
   def redis
     connection_pool.with do |redis|
-      yield Redis::Namespace.new(namespace, redis: redis)
+      yield ::Redis::Namespace.new(namespace, redis: redis)
     end
   end
 
@@ -46,4 +46,4 @@ class TranslationDiff::RedisCacheStore
   def expiring? = timeout.is_a?(Numeric) && timeout.positive?
 end
 
-TranslationDiff::Stores.register(:redis, TranslationDiff::RedisCacheStore)
+TranslationDiff::Stores.register(:redis, TranslationDiff::Stores::Redis)

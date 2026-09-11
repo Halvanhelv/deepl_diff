@@ -41,20 +41,14 @@ TranslationDiff::Error
 │                                                # Pragmatic computed offsets that
 │                                                # violate its own postcondition --
 │                                                # not raised by ordinary use
-├── TranslationDiff::RedisRateLimiter::RateLimitExceeded
-│                                                # the configured rate_limit was exceeded,
-│                                                # raised by the Redis-backed limiter
-└── TranslationDiff::ActiveRecordRateLimiter::RateLimitExceeded
-                                                 # the same condition, raised by the SQL-backed
-                                                 # limiter -- a distinct class under its own
-                                                 # namespace, not the class above. Rescuing
-                                                 # `RedisRateLimiter::RateLimitExceeded`
-                                                 # specifically and switching `rate_limiter` to
-                                                 # `:active_record` stops catching it; rescue
-                                                 # `TranslationDiff::Error` to catch both.
+└── TranslationDiff::RateLimitExceeded           # the configured rate_limit was exceeded --
+                                                 # one class whichever limiter noticed, so
+                                                 # switching `rate_limiter` between `:redis`
+                                                 # and `:active_record` cannot quietly stop a
+                                                 # rescue from matching
 ```
 
-Both `RateLimitExceeded` classes raise with a message naming the namespace,
+`RateLimitExceeded` carries a message naming the namespace,
 the threshold and the interval that were exceeded (`"rate limit reached for
 translation-diff: 8000 characters per 60 seconds"`) -- never the text that
 tripped it.

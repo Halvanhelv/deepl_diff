@@ -6,7 +6,7 @@ if ActiveRecordDatabase.postgres?
 
   # upsert_all inlines values into the SQL it sends, so PostgreSQL's own error detail can carry a whole row;
   # only a real constraint violation against a real server reproduces that, hence the PostgreSQL gate.
-  class ActiveRecordCacheStoreRedactionTest < Minitest::Test
+  class ActiveRecordStoreRedactionTest < Minitest::Test
     CONSTRAINT = "no_forbidden_namespace_in_redaction_test".freeze
 
     def setup
@@ -20,8 +20,8 @@ if ActiveRecordDatabase.postgres?
     end
 
     def test_a_statement_invalid_never_carries_the_translated_content
-      store = TranslationDiff::ActiveRecordCacheStore.new(namespace: "forbidden-namespace", ttl: 60,
-                                                          table_name: "translation_diff_translations")
+      store = TranslationDiff::Stores::ActiveRecord.new(namespace: "forbidden-namespace", ttl: 60,
+                                                        table_name: "translation_diff_translations")
 
       error = assert_raises(TranslationDiff::Error) { store.write("a", "SECRET-PATIENT-NOTE-12345") }
 
@@ -29,8 +29,8 @@ if ActiveRecordDatabase.postgres?
     end
 
     def test_the_redacted_error_names_the_adapters_own_error_class
-      store = TranslationDiff::ActiveRecordCacheStore.new(namespace: "forbidden-namespace", ttl: 60,
-                                                          table_name: "translation_diff_translations")
+      store = TranslationDiff::Stores::ActiveRecord.new(namespace: "forbidden-namespace", ttl: 60,
+                                                        table_name: "translation_diff_translations")
 
       error = assert_raises(TranslationDiff::Error) { store.write("a", "one") }
 
@@ -39,8 +39,8 @@ if ActiveRecordDatabase.postgres?
 
     # Ruby attaches the rescued original as #cause unless the raise says otherwise -- and #cause carries the row.
     def test_the_redacted_error_severs_the_cause_chain
-      store = TranslationDiff::ActiveRecordCacheStore.new(namespace: "forbidden-namespace", ttl: 60,
-                                                          table_name: "translation_diff_translations")
+      store = TranslationDiff::Stores::ActiveRecord.new(namespace: "forbidden-namespace", ttl: 60,
+                                                        table_name: "translation_diff_translations")
 
       error = assert_raises(TranslationDiff::Error) { store.write("a", "SECRET-PATIENT-NOTE-12345") }
 
@@ -51,12 +51,12 @@ if ActiveRecordDatabase.postgres?
     private
 
     def connection
-      TranslationDiff::ActiveRecordCacheStore.new(namespace: "harness", ttl: 60,
-                                                  table_name: "translation_diff_translations").model.connection
+      TranslationDiff::Stores::ActiveRecord.new(namespace: "harness", ttl: 60,
+                                                table_name: "translation_diff_translations").model.connection
     end
   end
 else
-  class ActiveRecordCacheStoreRedactionTest < Minitest::Test
+  class ActiveRecordStoreRedactionTest < Minitest::Test
     def test_postgres_is_unavailable
       skip "TRANSLATION_DIFF_DATABASE_URL does not name a PostgreSQL database; " \
            "a check violation's row detail is what this test reproduces"

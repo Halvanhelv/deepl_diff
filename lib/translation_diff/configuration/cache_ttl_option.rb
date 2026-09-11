@@ -1,5 +1,5 @@
 # Prepended onto Configuration: nil sticks here as "never expires", unlike the generic option rule.
-module TranslationDiff::CacheTtlOption
+module TranslationDiff::Configuration::CacheTtlOption
   NEVER_ASSIGNED = Object.new.freeze
 
   def initialize

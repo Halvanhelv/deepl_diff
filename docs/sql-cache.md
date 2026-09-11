@@ -3,9 +3,9 @@
 ## What it's for
 
 If you already run Postgres or MySQL and do not want to stand up Redis for
-one cache, `TranslationDiff::ActiveRecordCacheStore` caches translations in
+one cache, `TranslationDiff::Stores::ActiveRecord` caches translations in
 the application's own database instead, and
-`TranslationDiff::ActiveRecordRateLimiter` throttles requests there too.
+`TranslationDiff::RateLimiters::ActiveRecord` throttles requests there too.
 Supported means exercised in CI: the suite runs against Postgres, MySQL
 and SQLite on every push.
 
@@ -58,7 +58,7 @@ exception cannot carry the row into an error tracker either, see
 [`write_multi`](#write_multi) -- but a successful one is not; nothing here redacts your debug-level query log. If
 your application logs SQL at `debug` and what it translates is
 confidential, keep that log above `debug` around this store, or use
-`RedisCacheStore` instead.
+`Stores::Redis` instead.
 
 That scrubbing covers every `ActiveRecord::ActiveRecordError` the write path
 can raise, not just a syntax or constraint failure -- see
@@ -171,7 +171,7 @@ Postgres and SQLite users have nothing to do here.
 
 ## `cache_ttl` becomes `expires_at`
 
-`cache_ttl` (in seconds, same option `RedisCacheStore` reads) is written
+`cache_ttl` (in seconds, same option `Stores::Redis` reads) is written
 into each row's `expires_at` at write time. A row past `expires_at` is
 never read, whether or not anything has deleted it yet -- expiry and
 deletion are two different questions here, unlike Redis, where a `SETEX`
@@ -211,7 +211,7 @@ and there is no single right answer to "when," so none is forced on you:
   silently against the wrong (or unconfigured) configuration is worse than
   no pruning at all.
 - **`config.cache_prune_probability`** (default `0.0`, off). A fraction
-  between 0 and 1: on a write, `ActiveRecordCacheStore` rolls under it and
+  between 0 and 1: on a write, `Stores::ActiveRecord` rolls under it and
   prunes if it wins, in a savepoint of its own so a failed prune cannot
   abort a transaction the caller opened. A value outside `0.0..1.0`, or one
   that is not a number, is refused at `configure` time. Off by default,
@@ -232,7 +232,7 @@ namespace if every tenant is to be pruned.
 ## `active_record_base`: a second database
 
 `config.active_record_base` (default `::ActiveRecord::Base`) is the class
-`ActiveRecordCacheStore` and `ActiveRecordRateLimiter` build their model
+`Stores::ActiveRecord` and `RateLimiters::ActiveRecord` build their model
 from. Point it at a class connected to a second database and this store's
 traffic follows that connection instead of your application's primary one:
 
@@ -281,7 +281,7 @@ store, for that request.
 
 **The rate limiter fails differently, because it runs earlier.** If
 `config.rate_limiter = :active_record` and the same request hits it,
-`ActiveRecordRateLimiter#check` cannot record what it is about to allow, so
+`RateLimiters::ActiveRecord#check` cannot record what it is about to allow, so
 it raises `TranslationDiff::Error` naming the adapter's error class -- and
 because the check runs before the provider is ever called, the `translate`
 call fails outright rather than degrading. Nothing has been paid for at
@@ -315,22 +315,22 @@ upsert_all takes unique_by and record_timestamps there.
 ```
 
 `activerecord` is never a dependency of this gem -- neither in the gemspec
-nor required at load time. `ActiveRecordCacheStore#model` and
-`ActiveRecordRateLimiter#model` `require "active_record"` on first use, so
+nor required at load time. `Stores::ActiveRecord#model` and
+`RateLimiters::ActiveRecord#model` `require "active_record"` on first use, so
 an application that never configures `:active_record` never loads it, the
-same way `RedisCacheStore` only reaches for `redis` when `redis_url` is
+same way `Stores::Redis` only reaches for `redis` when `redis_url` is
 set. Add `gem "activerecord"` (and a database adapter) to your own Gemfile
 to use either.
 
 ## `write_multi`
 
-Both `ActiveRecordCacheStore` and `RedisCacheStore` implement the cache
+Both `Stores::ActiveRecord` and `Stores::Redis` implement the cache
 store contract's optional `write_multi(pairs)` -- see
 [`write_multi` is optional](caching.md#write_multi-is-optional) for what
 that means, and
 [The three write paths fail differently](caching.md#the-three-write-paths-fail-differently)
 for how a batch write fails differently from a per-key one.
-`ActiveRecordCacheStore#write_multi` is a single `upsert_all` for the whole
+`Stores::ActiveRecord#write_multi` is a single `upsert_all` for the whole
 batch: a forty-sentence paragraph is one statement, not forty.
 
 ## The rate limiter

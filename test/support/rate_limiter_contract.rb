@@ -25,5 +25,5 @@ module RateLimiterContract
   end
 
   # Rollover is not in this contract: proving it means waiting for a bucket to turn over, and only
-  # ActiveRecordRateLimiter can be made to turn one over without a real sleep. See its own test file.
+  # RateLimiters::ActiveRecord can be made to turn one over without a real sleep. See its own test file.
 end

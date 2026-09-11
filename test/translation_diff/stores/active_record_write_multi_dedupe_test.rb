@@ -38,8 +38,8 @@ if ActiveRecordDatabase.postgres?
     private
 
     def build_store
-      TranslationDiff::ActiveRecordCacheStore.new(namespace: "translation-diff", ttl: 60,
-                                                  table_name: "translation_diff_translations")
+      TranslationDiff::Stores::ActiveRecord.new(namespace: "translation-diff", ttl: 60,
+                                                table_name: "translation_diff_translations")
     end
   end
 else

@@ -1,5 +1,5 @@
 # The default cache, a bounded in-process LRU. NOT thread-safe, deliberately -- set `redis_url` for that.
-class TranslationDiff::MemoryCacheStore
+class TranslationDiff::Stores::Memory
   def self.build(config) = new(max_size: config.cache_max_size)
 
   def initialize(max_size:)
@@ -31,4 +31,4 @@ class TranslationDiff::MemoryCacheStore
   end
 end
 
-TranslationDiff::Stores.register(:memory, TranslationDiff::MemoryCacheStore)
+TranslationDiff::Stores.register(:memory, TranslationDiff::Stores::Memory)

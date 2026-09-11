@@ -6,7 +6,7 @@ require "support/active_record_database"
 if ActiveRecordDatabase.available?
   ActiveRecordDatabase.connect!
 
-  class ActiveRecordCacheStoreTest < Minitest::Test
+  class ActiveRecordStoreTest < Minitest::Test
     include CacheStoreContract
     include BatchingCacheStoreContract
 
@@ -56,7 +56,7 @@ if ActiveRecordDatabase.available?
       config.cache_table_name = "translation_diff_translations"
       config.cache_ttl = nil
 
-      TranslationDiff::ActiveRecordCacheStore.build(config).write("a", "one")
+      TranslationDiff::Stores::ActiveRecord.build(config).write("a", "one")
 
       assert_nil model.first.expires_at
     end
@@ -67,7 +67,7 @@ if ActiveRecordDatabase.available?
       config.cache_table_name = "translation_diff_translations"
       config.cache_ttl = 0
 
-      TranslationDiff::ActiveRecordCacheStore.build(config).write("a", "one")
+      TranslationDiff::Stores::ActiveRecord.build(config).write("a", "one")
 
       assert_nil model.first.expires_at
     end
@@ -99,7 +99,7 @@ if ActiveRecordDatabase.available?
       config.cache_namespace = "from-config"
       config.cache_table_name = "translation_diff_translations"
 
-      built = TranslationDiff::ActiveRecordCacheStore.build(config)
+      built = TranslationDiff::Stores::ActiveRecord.build(config)
       built.write("a", "one")
 
       assert_equal "from-config", built.model.first.namespace
@@ -111,7 +111,7 @@ if ActiveRecordDatabase.available?
       config.cache_table_name = "translation_diff_translations"
       config.cache_ttl = "3600"
 
-      built = TranslationDiff::ActiveRecordCacheStore.build(config)
+      built = TranslationDiff::Stores::ActiveRecord.build(config)
       built.write("a", "one")
 
       refute_nil built.model.first.expires_at
@@ -123,7 +123,7 @@ if ActiveRecordDatabase.available?
       config.cache_table_name = "translation_diff_translations"
       config.cache_prune_probability = "0.5"
 
-      TranslationDiff::ActiveRecordCacheStore.build(config).write("a", "one")
+      TranslationDiff::Stores::ActiveRecord.build(config).write("a", "one")
     end
 
     def test_write_multi_omits_unique_by_when_the_connection_does_not_support_a_conflict_target
@@ -172,8 +172,8 @@ if ActiveRecordDatabase.available?
     private
 
     def build_store(namespace: "translation-diff", ttl: 604_800)
-      TranslationDiff::ActiveRecordCacheStore.new(namespace: namespace, ttl: ttl,
-                                                  table_name: "translation_diff_translations")
+      TranslationDiff::Stores::ActiveRecord.new(namespace: namespace, ttl: ttl,
+                                                table_name: "translation_diff_translations")
     end
 
     def expire(store, key)
@@ -182,7 +182,7 @@ if ActiveRecordDatabase.available?
     end
   end
 else
-  class ActiveRecordCacheStoreTest < Minitest::Test
+  class ActiveRecordStoreTest < Minitest::Test
     def test_active_record_is_unavailable
       skip "active_record could not be loaded on this Ruby; the SQL cache store suite is skipped"
     end
