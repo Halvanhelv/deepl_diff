@@ -75,7 +75,7 @@ class MarkupTest < Minitest::Test
   # the same string also contains a bare <.
   def test_a_real_tag_beside_a_bare_less_than_is_still_markup
     assert_equal ["if a < b then", "stop."], cores("if a < b then <b>stop.</b>")
-    assert_equal "IF A < B THEN <b>STOP.</b>", translated("if a < b then <b>stop.</b>")
+    assert_equal "IF A &lt; B THEN <b>STOP.</b>", translated("if a < b then <b>stop.</b>")
   end
 
   def test_a_less_than_immediately_before_a_letter_is_a_tag

@@ -67,6 +67,15 @@ module TranslationDiff::Markup
   # What a document renders is markup, so text that changed is made safe again -- and only where it is unsafe.
   def self.encode_entities(text) = text.gsub(ENCODABLE, ENCODED)
 
+  # An entity the round trip already produced must not be escaped a second time, and a `<` shaped like a tag is
+  # trusted the same way a source tag already is -- everything else a provider sent back is untrusted new text.
+  TRANSLATED_ENCODABLE = /&(?:amp|lt|gt);|&|<(?!#{TAG_OPENER})/
+
+  # What a translation renders as: unlike #encode_entities, this leaves a provider's own reproduced tags alone.
+  def self.encode_translation(text)
+    text.gsub(TRANSLATED_ENCODABLE) { |match| match.length == 1 ? ENCODED[match] : match }
+  end
+
   # Ox hands back the decoded text of the one element it was given; a name it does not know arrives as the text it was.
   class Resolver < Ox::Sax
     attr_reader :text

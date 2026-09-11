@@ -60,15 +60,16 @@ class PipelineCorpusTest < ConfiguredTest
       document: "Hard\u00A0space here. Fine.",
       echoed: "Hard\u00A0space here. Fine."
     },
+    # A translated `<` not shaped like a tag is escaped now, so it can never read back as one after this fix.
     "bare less-than" => {
       texts: ["if a < b then stop.", "Fine."],
-      document: "if a < b then stop. Fine.",
-      echoed: "if a < b then stop. Fine."
+      document: "if a &lt; b then stop. Fine.",
+      echoed: "if a &lt; b then stop. Fine."
     },
     "bare less-than and greater" => {
       texts: ["5 < 6 and 7 > 6.", "True."],
-      document: "5 < 6 and 7 > 6. True.",
-      echoed: "5 < 6 and 7 > 6. True."
+      document: "5 &lt; 6 and 7 > 6. True.",
+      echoed: "5 &lt; 6 and 7 > 6. True."
     },
     # The recorded limit: `<b` is read as a tag, so the sentence after it is markup and never reaches a provider.
     "bare less-than before a letter" => {
