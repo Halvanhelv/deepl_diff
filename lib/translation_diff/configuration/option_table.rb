@@ -12,7 +12,7 @@ module TranslationDiff::Configuration::OptionTable
     [:cache_max_size, 1_000, :cache_store],
     [:cache_table_name, "translation_diff_translations", :cache_store],
     [:rate_limit_table_name, "translation_diff_rate_limits", :rate_limiter_instance],
-    [:active_record_base, nil, :cache_store],
+    [:active_record_base, nil, %i[cache_store rate_limiter_instance]],
     [:cache_prune_probability, 0.0, :cache_store],
     [:redis_url, -> { ENV.fetch("REDIS_URL", nil) }, %i[redis_pool cache_store rate_limiter_instance]],
     [:redis_pool_size, 5, %i[redis_pool cache_store rate_limiter_instance]],

@@ -577,6 +577,18 @@ class ConfigurationTest < Minitest::Test
     refute_same limiter, @config.rate_limiter_instance
   end
 
+  # The ActiveRecord limiter builds from it too, exactly as the store does, so one of them moving alone is a bug.
+  def test_changing_the_active_record_base_rebuilds_the_store_and_the_rate_limiter
+    @config.rate_limit = 100
+    store = @config.cache_store
+    limiter = @config.rate_limiter_instance
+
+    @config.active_record_base = Class.new
+
+    refute_same store, @config.cache_store
+    refute_same limiter, @config.rate_limiter_instance
+  end
+
   def test_changing_the_redis_url_rebuilds_the_pool_the_store_and_the_rate_limiter
     @config.redis_url = "redis://localhost:6379"
     @config.rate_limit = 100
