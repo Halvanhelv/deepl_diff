@@ -45,28 +45,8 @@ class TranslationDiff::Previewer
   # A detected language arrives as a String while `to:` is usually a Symbol, so neither type nor case can be assumed.
   def same_language?(from) = from.to_s.casecmp?(@to.to_s)
 
-  # Mirrors Translator#build_provider: a name to build, an object to use as it is, or the configured one.
-  def resolve_provider
-    provider = built_provider
-    ensure_cache_key!(provider)
-    provider
-  end
-
-  def built_provider
-    requested = @requested_provider
-    return @config.provider_instance if requested.nil?
-    return TranslationDiff::Providers.build(requested, @config) if requested.is_a?(Symbol) || requested.is_a?(String)
-
-    TranslationDiff::Providers.ensure_provider!(requested)
-  end
-
-  # The cache key names the provider in the cache key too: it is the one identifier every provider must have.
-  def ensure_cache_key!(provider)
-    return unless provider.cache_key.to_s.strip.empty?
-
-    raise Error, "#{provider.class} must define #cache_key: a blank one would file its " \
-                 "translations in every other provider's cache namespace."
-  end
+  # Same resolution Translator#call uses: a name to build, an object to use as it is, or the configured one.
+  def resolve_provider = TranslationDiff::Providers.resolve(@requested_provider, @config)
 
   # `from:` given means the pair is already known, so it is validated once; `from:` nil needs a detection this
   # method never pays for, so it stops here instead of guessing what a paid request would have answered.

@@ -79,27 +79,7 @@ class TranslationDiff::Translator
 
   # Resolved at first use, never in the constructor: a value with nothing to translate needs no provider at all.
   def resolve_provider
-    build_provider.tap do |provider|
-      log("provider #{provider.class}")
-      ensure_cache_key!(provider)
-    end
-  end
-
-  # A provider arrives as a name to build, as an object to use as it is, or not at all -- then it is the configured one.
-  def build_provider
-    requested = @requested_provider
-    return config.provider_instance if requested.nil?
-    return TranslationDiff::Providers.build(requested, config) if requested.is_a?(Symbol) || requested.is_a?(String)
-
-    TranslationDiff::Providers.ensure_provider!(requested)
-  end
-
-  # The cache key names the provider in every payload too: it is the one identifier every provider must have.
-  def ensure_cache_key!(provider)
-    return unless provider.cache_key.to_s.strip.empty?
-
-    raise Error, "#{provider.class} must define #cache_key: a blank one would file its " \
-                 "translations in every other provider's cache namespace."
+    TranslationDiff::Providers.resolve(@requested_provider, config).tap { |provider| log("provider #{provider.class}") }
   end
 
   def passage(string)

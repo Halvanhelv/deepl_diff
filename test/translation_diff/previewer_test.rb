@@ -37,6 +37,11 @@ class PreviewerTest < ConfiguredTest
     def cache_key = "blind"
   end
 
+  # An empty cache key would file this provider's translations in every other provider's namespace.
+  class NamelessProvider < RecordingProvider
+    def cache_key = "   "
+  end
+
   # Counts every write the pipeline attempts, whichever contract it uses, so "writes nothing" has real evidence.
   class WriteTrackingStore
     attr_reader :write_calls
@@ -181,6 +186,16 @@ class PreviewerTest < ConfiguredTest
 
     assert_equal 1, default_options.sendable_sentences
     assert_equal 0, same_options.sendable_sentences
+  end
+
+  # Same guard Translator uses, shared through TranslationDiff::Providers.resolve: a preview that read the
+  # wrong namespace would lie about the cache, so a blank cache_key is refused here too, and as the same error.
+  def test_a_provider_whose_cache_key_is_blank_is_refused_rather_than_lying_about_the_cache
+    @provider = NamelessProvider.new(TranslationDiff::Configuration.new)
+
+    error = assert_raises(TranslationDiff::InvalidProviderError) { preview("One.", from: "en", to: "ru") }
+
+    assert_match(/must define #cache_key/, error.message)
   end
 
   def test_no_preview_error_message_carries_the_text_being_previewed
