@@ -49,30 +49,9 @@ class TranslationDiff::Configuration
     def provider_option_owners = @provider_option_owners ||= ProviderOptionOwners.new
   end
 
-  option :provider, :deepl, invalidates: :provider_instance
-  option :cache, nil, invalidates: :cache_store
-  option :cache_ttl, 604_800, invalidates: :cache_store
-  option :cache_namespace, "translation-diff", invalidates: :cache_store
-  option :cache_max_size, 1_000, invalidates: :cache_store
-  option :cache_table_name, "translation_diff_translations", invalidates: :cache_store
-  option :rate_limit_table_name, "translation_diff_rate_limits", invalidates: :rate_limiter_instance
-  option :active_record_base, nil, invalidates: :cache_store
-  option :cache_prune_probability, 0.0, invalidates: :cache_store
-  option :redis_url, -> { ENV.fetch("REDIS_URL", nil) },
-         invalidates: %i[redis_pool cache_store rate_limiter_instance]
-  option :redis_pool_size, 5, invalidates: %i[redis_pool cache_store rate_limiter_instance]
-  option :redis_pool_timeout, 5, invalidates: %i[redis_pool cache_store rate_limiter_instance]
-  option :rate_limit, nil, invalidates: :rate_limiter_instance
-  option :rate_interval, 60, invalidates: :rate_limiter_instance
-  option :rate_limiter, nil, invalidates: :rate_limiter_instance
-  option :segmenter, :pragmatic, invalidates: :segmenter_instance
-  option :opaque_elements, %i[script style pre code]
-  option :instrumenter, nil
-  option :logger, nil
-  option :open_timeout, 5
-  option :timeout, 30
-  option :max_retries, 3
-  option :validate_languages, true
+  # Required here, not centrally: the module it defines nests under this class, which must exist first.
+  require "translation_diff/configuration/option_table"
+  TranslationDiff::Configuration::OptionTable.declare_on(self)
 
   prepend TranslationDiff::CacheTtlOption
   prepend TranslationDiff::CacheGuardOptions

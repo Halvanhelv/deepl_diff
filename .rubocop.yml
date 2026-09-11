@@ -33,8 +33,7 @@ Metrics/ParameterLists:
   CountKeywordArgs: false
 
 Metrics/ClassLength:
-  # Configuration is a flat table of declared options; each one is a line, not a sign the class is doing too much.
-  Max: 110
+  Max: 100
   Exclude:
     # Test classes are mostly tables of cases.
     - test/**/*
