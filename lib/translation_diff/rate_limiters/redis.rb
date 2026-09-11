@@ -1,4 +1,4 @@
-class TranslationDiff::RedisRateLimiter
+class TranslationDiff::RateLimiters::Redis
   class RateLimitExceeded < TranslationDiff::Error; end
 
   DEFAULT_THRESHOLD = 8000
@@ -58,4 +58,4 @@ class TranslationDiff::RedisRateLimiter
   end
 end
 
-TranslationDiff::RateLimiters.register(:redis, TranslationDiff::RedisRateLimiter)
+TranslationDiff::RateLimiters.register(:redis, TranslationDiff::RateLimiters::Redis)

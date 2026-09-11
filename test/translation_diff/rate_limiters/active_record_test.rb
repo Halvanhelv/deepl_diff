@@ -34,8 +34,8 @@ if ActiveRecordDatabase.available?
     end
 
     def model
-      TranslationDiff::ActiveRecordRateLimiter.new(namespace: "translation-diff",
-                                                   table_name: "translation_diff_rate_limits").model
+      TranslationDiff::RateLimiters::ActiveRecord.new(namespace: "translation-diff",
+                                                      table_name: "translation_diff_rate_limits").model
     end
 
     def test_two_limiters_sharing_a_namespace_see_each_others_characters
@@ -162,7 +162,7 @@ if ActiveRecordDatabase.available?
       config.rate_limit = 100
       config.rate_interval = 60
 
-      built = TranslationDiff::ActiveRecordRateLimiter.build(config)
+      built = TranslationDiff::RateLimiters::ActiveRecord.build(config)
       built.check(1)
 
       assert_equal ["from-config"], built.model.pluck(:namespace)
@@ -173,9 +173,10 @@ if ActiveRecordDatabase.available?
       config = TranslationDiff::Configuration.new
       config.rate_limiter = :active_record
 
-      built = TranslationDiff::ActiveRecordRateLimiter.build(config)
+      built = TranslationDiff::RateLimiters::ActiveRecord.build(config)
 
-      assert_equal TranslationDiff::ActiveRecordRateLimiter::DEFAULT_THRESHOLD, built.instance_variable_get(:@threshold)
+      assert_equal TranslationDiff::RateLimiters::ActiveRecord::DEFAULT_THRESHOLD,
+                   built.instance_variable_get(:@threshold)
       built.check(1)
     end
 
@@ -214,14 +215,14 @@ if ActiveRecordDatabase.available?
 
     private
 
-    def rate_limit_exceeded_error = TranslationDiff::ActiveRecordRateLimiter::RateLimitExceeded
+    def rate_limit_exceeded_error = TranslationDiff::RateLimiters::ActiveRecord::RateLimitExceeded
 
     # Held still, so a five-second bucket boundary cannot fall between two reads of the clock.
     def frozen_clock = MutableClock.new(Time.at(1_700_000_000))
 
     def build_limiter(threshold:, interval:, namespace: "translation-diff", clock: -> { Time.now })
-      TranslationDiff::ActiveRecordRateLimiter.new(namespace: namespace, threshold: threshold, interval: interval,
-                                                   table_name: "translation_diff_rate_limits", clock: clock)
+      TranslationDiff::RateLimiters::ActiveRecord.new(namespace: namespace, threshold: threshold, interval: interval,
+                                                      table_name: "translation_diff_rate_limits", clock: clock)
     end
   end
 else

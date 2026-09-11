@@ -35,15 +35,15 @@ if ActiveRecordDatabase.postgres?
     private
 
     def build_cache_store
-      TranslationDiff::ActiveRecordCacheStore.new(namespace: "translation-diff", ttl: 60,
-                                                  table_name: "translation_diff_translations")
+      TranslationDiff::Stores::ActiveRecord.new(namespace: "translation-diff", ttl: 60,
+                                                table_name: "translation_diff_translations")
     end
 
     # A shared, frozen clock keeps both limiters in the same bucket for the length of the test.
     def build_rate_limiter(now)
-      TranslationDiff::ActiveRecordRateLimiter.new(namespace: "translation-diff", threshold: 1_000_000,
-                                                   interval: 60, table_name: "translation_diff_rate_limits",
-                                                   clock: -> { now })
+      TranslationDiff::RateLimiters::ActiveRecord.new(namespace: "translation-diff", threshold: 1_000_000,
+                                                      interval: 60, table_name: "translation_diff_rate_limits",
+                                                      clock: -> { now })
     end
   end
 else

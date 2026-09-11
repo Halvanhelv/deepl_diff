@@ -86,7 +86,7 @@ class RedisRateLimiterTest < Minitest::Test
 
     limiter(server, threshold: 100).check(100)
 
-    assert_raises(TranslationDiff::RedisRateLimiter::RateLimitExceeded) do
+    assert_raises(TranslationDiff::RateLimiters::Redis::RateLimitExceeded) do
       limiter(server, threshold: 100).check(1)
     end
     assert_equal({ "ratelimit:translation-diff:call" => 100 }, server.totals)
@@ -95,9 +95,9 @@ class RedisRateLimiterTest < Minitest::Test
   def test_check_uses_the_default_threshold
     server = FakeRedisServer.new
 
-    limiter(server).check(TranslationDiff::RedisRateLimiter::DEFAULT_THRESHOLD)
+    limiter(server).check(TranslationDiff::RateLimiters::Redis::DEFAULT_THRESHOLD)
 
-    assert_raises(TranslationDiff::RedisRateLimiter::RateLimitExceeded) { limiter(server).check(1) }
+    assert_raises(TranslationDiff::RateLimiters::Redis::RateLimitExceeded) { limiter(server).check(1) }
   end
 
   # Ratelimit buckets five seconds at a time, so buckets swept is the interval divided by five.
@@ -106,7 +106,7 @@ class RedisRateLimiterTest < Minitest::Test
 
     limiter(server).check(1)
 
-    assert_equal [TranslationDiff::RedisRateLimiter::DEFAULT_INTERVAL / 5], server.count_spans
+    assert_equal [TranslationDiff::RateLimiters::Redis::DEFAULT_INTERVAL / 5], server.count_spans
   end
 
   def test_check_looks_back_over_a_custom_interval
@@ -120,7 +120,7 @@ class RedisRateLimiterTest < Minitest::Test
   # The other half of a window: what fell out of it stops counting, or a limiter never recovers.
   def test_a_bucket_older_than_the_interval_is_not_counted
     server = FakeRedisServer.new
-    stale = (Time.now.to_i / 5) - (TranslationDiff::RedisRateLimiter::DEFAULT_INTERVAL / 5) - 1
+    stale = (Time.now.to_i / 5) - (TranslationDiff::RateLimiters::Redis::DEFAULT_INTERVAL / 5) - 1
     server.hashes["ratelimit:translation-diff:call"][stale.to_s] = 10_000
 
     limiter(server, threshold: 100).check(1)
@@ -144,9 +144,9 @@ class RedisRateLimiterTest < Minitest::Test
     config.rate_limiter = :redis
     config.instance_variable_set(:@redis_pool, FakeConnectionPool.new(server))
 
-    built = TranslationDiff::RedisRateLimiter.build(config)
+    built = TranslationDiff::RateLimiters::Redis.build(config)
 
-    assert_equal TranslationDiff::RedisRateLimiter::DEFAULT_THRESHOLD, built.send(:threshold)
+    assert_equal TranslationDiff::RateLimiters::Redis::DEFAULT_THRESHOLD, built.send(:threshold)
     built.check(1)
   end
 
@@ -167,10 +167,10 @@ class RedisRateLimiterTest < Minitest::Test
   private
 
   def limiter(server, **)
-    TranslationDiff::RedisRateLimiter.new(FakeConnectionPool.new(server), **)
+    TranslationDiff::RateLimiters::Redis.new(FakeConnectionPool.new(server), **)
   end
 
-  def rate_limit_exceeded_error = TranslationDiff::RedisRateLimiter::RateLimitExceeded
+  def rate_limit_exceeded_error = TranslationDiff::RateLimiters::Redis::RateLimitExceeded
 
   def build_limiter(threshold:, interval:)
     @contract_server ||= FakeRedisServer.new

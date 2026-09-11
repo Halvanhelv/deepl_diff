@@ -1,6 +1,6 @@
 # Throttles by counting characters into namespaced, time-bucketed rows in the application's own database.
-class TranslationDiff::ActiveRecordRateLimiter
-  include TranslationDiff::ActiveRecordSupport
+class TranslationDiff::RateLimiters::ActiveRecord
+  include TranslationDiff::ActiveRecord::Support
 
   class RateLimitExceeded < TranslationDiff::Error; end
 
@@ -91,4 +91,4 @@ class TranslationDiff::ActiveRecordRateLimiter
   def active_record_upsert_detail = "upsert_all takes unique_by there."
 end
 
-TranslationDiff::RateLimiters.register(:active_record, TranslationDiff::ActiveRecordRateLimiter)
+TranslationDiff::RateLimiters.register(:active_record, TranslationDiff::RateLimiters::ActiveRecord)
