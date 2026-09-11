@@ -550,6 +550,35 @@ class ConfigurationTest < Minitest::Test
     refute_same first, @config.provider_instance
   end
 
+  # A memoised HTTPProvider#connection is built from these three, so raising one from a settings screen must
+  # rebuild the provider instance -- otherwise the change takes effect only after the process restarts.
+  def test_changing_the_open_timeout_rebuilds_the_provider_instance
+    @config.provider = :null
+    first = @config.provider_instance
+
+    @config.open_timeout = 9
+
+    refute_same first, @config.provider_instance
+  end
+
+  def test_changing_the_timeout_rebuilds_the_provider_instance
+    @config.provider = :null
+    first = @config.provider_instance
+
+    @config.timeout = 45
+
+    refute_same first, @config.provider_instance
+  end
+
+  def test_changing_max_retries_rebuilds_the_provider_instance
+    @config.provider = :null
+    first = @config.provider_instance
+
+    @config.max_retries = 5
+
+    refute_same first, @config.provider_instance
+  end
+
   def test_changing_the_logger_leaves_the_redis_pool_in_place
     @config.redis_url = "redis://localhost:6379"
     pool = @config.redis_pool
@@ -624,7 +653,7 @@ class ConfigurationTest < Minitest::Test
     provider = @config.provider_instance
     store = @config.cache_store
 
-    @config.max_retries = 1
+    @config.validate_languages = false
 
     assert_same provider, @config.provider_instance
     assert_same store, @config.cache_store

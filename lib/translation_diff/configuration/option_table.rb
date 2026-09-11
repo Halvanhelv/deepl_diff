@@ -24,9 +24,11 @@ module TranslationDiff::Configuration::OptionTable
     [:opaque_elements, %i[script style pre code], nil],
     [:instrumenter, nil, nil],
     [:logger, nil, nil],
-    [:open_timeout, 5, nil],
-    [:timeout, 30, nil],
-    [:max_retries, 3, nil],
+    # HTTPProvider#connection memoises a Faraday connection built from these three, and the provider itself
+    # is memoised too, so a change here has to reach provider_instance or it never reaches the connection.
+    [:open_timeout, 5, :provider_instance],
+    [:timeout, 30, :provider_instance],
+    [:max_retries, 3, :provider_instance],
     [:validate_languages, true, nil]
   ].freeze
 
