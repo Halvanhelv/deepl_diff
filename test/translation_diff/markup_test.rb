@@ -20,6 +20,15 @@ class MarkupTest < Minitest::Test
     subject.render
   end
 
+  # What Google and DeepL do: html-escape whatever text they hand back, then what Response.build now undoes.
+  def vendor_escaped(source)
+    subject = passage(source)
+    subject.segments.reject(&:empty?).each do |s|
+      s.translation = TranslationDiff::Markup.decode_entities(CGI.escapeHTML(s.core))
+    end
+    subject.render
+  end
+
   def assert_round_trips(source)
     assert_equal source, passage(source).render, "render must return the source byte for byte"
   end
@@ -66,7 +75,7 @@ class MarkupTest < Minitest::Test
   # the same string also contains a bare <.
   def test_a_real_tag_beside_a_bare_less_than_is_still_markup
     assert_equal ["if a < b then", "stop."], cores("if a < b then <b>stop.</b>")
-    assert_equal "IF A < B THEN <b>STOP.</b>", translated("if a < b then <b>stop.</b>")
+    assert_equal "IF A &lt; B THEN <b>STOP.</b>", translated("if a < b then <b>stop.</b>")
   end
 
   def test_a_less_than_immediately_before_a_letter_is_a_tag
@@ -190,5 +199,29 @@ class MarkupTest < Minitest::Test
   def test_an_entity_inside_markup_is_left_for_the_browser
     assert_round_trips(%(<a href="/x?a=1&b=2" title='q'>Link text.</a> After.))
     assert_round_trips("Before.<![CDATA[raw & unparsed]]>After.")
+  end
+
+  # -- a vendor's own escaping -----------------------------------------------
+
+  # Reproduces the shipped bug: Google and DeepL html-escape every reply, apostrophes and quotes included.
+  def test_a_vendor_that_escapes_apostrophes_and_quotes_round_trips_clean
+    assert_equal "He didn't take the boat.", vendor_escaped("He didn't take the boat.")
+    assert_equal %(She said, "We're not ready."), vendor_escaped(%(She said, "We're not ready."))
+  end
+
+  # An ampersand a vendor escaped is undone once, then re-escaped once at render -- never doubled either way.
+  def test_a_vendor_escaped_ampersand_is_not_doubled
+    assert_equal "5 &amp; 7 are important.", vendor_escaped("5 & 7 are important.")
+  end
+
+  # The notranslate span's own text is sent and returned like any other sentence, entity and all.
+  def test_a_vendor_escaped_notranslate_span_keeps_its_ampersand_readable
+    assert_equal %(<span class="notranslate">R&amp;D</span> Fine.),
+                 vendor_escaped(%(<span class="notranslate">R&D</span> Fine.))
+  end
+
+  # One decode pass, never two: a reply already doubly-escaped loses only the level the wire itself added.
+  def test_decoding_a_double_encoded_reply_removes_only_one_level
+    assert_equal "&amp;", TranslationDiff::Markup.decode_entities("&amp;amp;")
   end
 end

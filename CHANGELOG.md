@@ -141,6 +141,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   each other -- see
   [The three write paths fail differently](docs/caching.md#the-three-write-paths-fail-differently).
 
+### Fixed
+
+- **Google and DeepL translations in HTML mode no longer come back
+  double-escaped.** Both vendors return entity-escaped text -- an
+  apostrophe as `&#39;`, a quote as `&quot;`, an ampersand as `&amp;` -- and
+  the pipeline decoded entities on the way in but never on the way out, so
+  the renderer escaped the vendor's own `&` a second time and a reader saw
+  `didn&#39;t` on the page. English is full of apostrophes, so in practice
+  every Google or DeepL translation into English was affected somewhere.
+  `TranslationDiff::Translation::Response.build` now decodes a provider's
+  reply the same way it already decoded the source, symmetrically, for
+  every provider -- named entities, and both the decimal (`&#39;`) and hex
+  (`&#x27;`) numeric forms, are decoded; an entity neither decoder
+  recognizes is left exactly as it arrived. See [How it
+  works](docs/how-it-works.md).
+- **Behaviour change: a literal `<` in a source sentence now renders as
+  `&lt;`.** Decoding the fix above exposed a second bug: a provider's own
+  `&lt;` now decoded to a bare `<`, and a bare `<` in front of a letter
+  reads as an opening tag -- a provider could inject markup into the
+  rendered document. A translated `<` that is not shaped like a tag is now
+  escaped on render instead. `if a < b then stop.` used to come back with
+  the bare `<` exactly as written; it now comes back
+  `if a &lt; b then stop.`, the correct HTML encoding of that character and
+  identical once a browser renders it -- but visible to anything comparing
+  output byte-for-byte against an earlier release. `>` is untouched: a
+  stray `>` never opens anything a parser would honour. See [How it
+  works](docs/how-it-works.md#html).
+- **A warm cache keeps serving the corrupted text after you upgrade.** A
+  cache entry's key is derived from the source sentence, not from the value
+  stored under it, so an entry written before this fix is served exactly as
+  it was written until it expires -- upgrading alone does not clear it.
+  Give the configuration a new `cache_namespace`, or let `cache_ttl` lapse,
+  to force every sentence to be retranslated under the fix. See
+  [Caching](docs/caching.md).
+
 ### Security
 
 - `Configuration#inspect` and `Provider#inspect` print `[FILTERED]` in place

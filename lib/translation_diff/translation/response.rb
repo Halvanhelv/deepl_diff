@@ -5,7 +5,13 @@ module TranslationDiff::Translation
       ensure_count!(request, texts)
       ensure_strings!(texts)
 
-      new(texts: texts, detected_source: detected_source, usage: usage)
+      # Every provider's text lands here, so it takes the same path @core did: escaped, then decoded once, so an
+      # entity a provider genuinely sent survives as the entity it is rather than the bare character it decodes to.
+      new(texts: texts.map { |text| decoded(text) }, detected_source: detected_source, usage: usage)
+    end
+
+    def self.decoded(text)
+      TranslationDiff::Markup.decode_entities(TranslationDiff::Markup.escape_bare_angles(text))
     end
 
     def self.ensure_count!(request, texts)

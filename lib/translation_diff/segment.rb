@@ -19,6 +19,14 @@ class TranslationDiff::Segment
 
   # Untranslated hands back the bytes it was cut from; a translation is text, so it is encoded as markup on the way out.
   def render
-    "#{@leading}#{translated? ? TranslationDiff::Markup.encode_entities(translation) : @body}#{@trailing}"
+    "#{@leading}#{translated? ? escaped_translation : @body}#{@trailing}"
+  end
+
+  private
+
+  # @body already carries this same escape from Passage; without it, Passage's one shared restore pass would
+  # read a translated `&lt;` as a source document's own bare `<` and hand back markup nobody asked for.
+  def escaped_translation
+    TranslationDiff::Markup.escape_bare_angles(TranslationDiff::Markup.encode_translation(translation))
   end
 end
