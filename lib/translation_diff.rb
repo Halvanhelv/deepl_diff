@@ -2,6 +2,7 @@ require "cgi/escape"
 require "digest/md5"
 require "digest/sha2"
 require "forwardable"
+require "securerandom"
 require "stringio"
 
 require "ox"

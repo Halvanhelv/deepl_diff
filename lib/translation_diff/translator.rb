@@ -65,12 +65,15 @@ class TranslationDiff::Translator
   # The `translate` event wraps everything a call that reaches a provider does, and nothing an early return does.
   def translated(document, passages, segments, provider, from)
     values = TranslationDiff::Leaves.count(@values)
-    payload = { from: from.to_s, to: @to.to_s, provider: provider.cache_key, values: values }
+    payload = { call_id: call_id, from: from.to_s, to: @to.to_s, provider: provider.cache_key, values: values }
     instrument("translate", payload) do
       fill(provider, segments, from)
       rebuild(document, passages)
     end
   end
+
+  # Opaque and short: a correlation key for this call's own events, generated once, never derived from the text.
+  def call_id = @call_id ||= SecureRandom.hex(6)
 
   # Resolved at first use, never in the constructor: a value with nothing to translate needs no provider at all.
   def resolve_provider
@@ -131,9 +134,11 @@ class TranslationDiff::Translator
     cache = TranslationDiff::SentenceCache.new(store: config.cache_store, provider: provider.cache_key,
                                                from: from, to: @to, options: @options)
     misses = cache.fill(segments)
-    instrument("cache", provider: provider.cache_key, hits: segments.size - misses.size, misses: misses.size)
+    id = call_id
+    instrument("cache", call_id: id, provider: provider.cache_key,
+                        hits: segments.size - misses.size, misses: misses.size)
     TranslationDiff::Dispatcher.new(provider: provider, from: from, to: @to, options: @options,
-                                    config: config).dispatch(misses)
+                                    config: config, call_id: id).dispatch(misses)
     store(cache, misses, provider)
   end
 
@@ -142,6 +147,6 @@ class TranslationDiff::Translator
     cache.store(misses)
   rescue StandardError => e
     warn_log("cache write failed (#{e.class}), the translation is returned uncached")
-    instrument("cache_error", provider: provider.cache_key, error: e.class.to_s)
+    instrument("cache_error", call_id: call_id, provider: provider.cache_key, error: e.class.to_s)
   end
 end

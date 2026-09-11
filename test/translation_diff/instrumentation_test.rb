@@ -51,6 +51,49 @@ class InstrumentationTest < ConfiguredTest
     assert_equal 2, payload[:values]
   end
 
+  def test_every_event_from_one_call_carries_the_same_call_id
+    TranslationDiff.translate("Hello there.", from: "en", to: "ru")
+
+    call_ids = @recorder.events.map { |_, payload| payload[:call_id] }
+
+    refute_nil call_ids.first
+    assert_equal [call_ids.first] * call_ids.size, call_ids
+  end
+
+  # A thread-safe stand-in for Recorder, so two concurrent calls can share one instrumenter without racing.
+  class ThreadSafeRecorder
+    def initialize
+      @events = []
+      @mutex = Mutex.new
+    end
+
+    def events = @mutex.synchronize { @events.dup }
+
+    def instrument(name, payload)
+      @mutex.synchronize { @events << [name, payload] }
+      yield if block_given?
+    end
+  end
+
+  def test_two_concurrent_calls_never_share_a_call_id
+    recorder = ThreadSafeRecorder.new
+    TranslationDiff.configure { |c| c.instrumenter = recorder }
+    run_concurrently(2) { TranslationDiff.translate("Hello there.", from: "en", to: "ru") }
+
+    call_ids = translate_call_ids(recorder)
+
+    assert_equal 2, call_ids.size
+    assert_equal 2, call_ids.uniq.size
+  end
+
+  def run_concurrently(count, &)
+    Array.new(count) { Thread.new(&) }.each(&:join)
+  end
+
+  def translate_call_ids(recorder)
+    recorder.events.filter_map { |event| event.last[:call_id] if event.first == "translate.translation_diff" }
+  end
+
   def test_the_cache_event_carries_hit_and_miss_counts
     TranslationDiff.translate("Hello there.", from: "en", to: "ru")
 
