@@ -364,7 +364,7 @@ class ConfigurationTest < Minitest::Test
     original = ENV.fetch("REDIS_URL", nil)
     ENV["REDIS_URL"] = nil
 
-    assert_instance_of TranslationDiff::MemoryCacheStore, @config.cache_store
+    assert_instance_of TranslationDiff::Stores::Memory, @config.cache_store
   ensure
     ENV["REDIS_URL"] = original
   end
@@ -372,7 +372,7 @@ class ConfigurationTest < Minitest::Test
   def test_cache_store_defaults_to_redis_when_a_redis_url_is_set
     @config.redis_url = "redis://localhost:6379"
 
-    assert_instance_of TranslationDiff::RedisCacheStore, @config.cache_store
+    assert_instance_of TranslationDiff::Stores::Redis, @config.cache_store
   end
 
   def test_an_assigned_cache_object_wins_over_every_value
@@ -395,21 +395,21 @@ class ConfigurationTest < Minitest::Test
     @config.rate_limit = 100
     @config.redis_url = "redis://localhost:6379"
 
-    assert_instance_of TranslationDiff::RedisRateLimiter, @config.rate_limiter_instance
+    assert_instance_of TranslationDiff::RateLimiters::Redis, @config.rate_limiter_instance
   end
 
   def test_a_symbol_rate_limiter_resolves_through_the_registry
     @config.rate_limit = 100
     @config.rate_limiter = :active_record
 
-    assert_instance_of TranslationDiff::ActiveRecordRateLimiter, @config.rate_limiter_instance
+    assert_instance_of TranslationDiff::RateLimiters::ActiveRecord, @config.rate_limiter_instance
   end
 
   def test_a_string_rate_limiter_resolves_through_the_registry
     @config.rate_limit = 100
     @config.rate_limiter = "active_record"
 
-    assert_instance_of TranslationDiff::ActiveRecordRateLimiter, @config.rate_limiter_instance
+    assert_instance_of TranslationDiff::RateLimiters::ActiveRecord, @config.rate_limiter_instance
   end
 
   def test_an_unknown_rate_limiter_name_raises_listing_what_is_registered
@@ -608,7 +608,7 @@ class ConfigurationTest < Minitest::Test
   end
 
   # The scenario the bug actually costs: a per-request `configure { |c| c.cache_namespace = tenant }` re-writing
-  # the same tenant on every request must never rebuild the store -- on MemoryCacheStore a rebuild is a brand
+  # the same tenant on every request must never rebuild the store -- on Stores::Memory a rebuild is a brand
   # new empty Hash, so the application would pay the provider again for its whole warm cache.
   def test_writing_the_same_cache_namespace_again_leaves_the_cache_store_in_place
     @config.cache_namespace = "tenant-1"

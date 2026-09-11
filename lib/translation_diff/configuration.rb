@@ -54,12 +54,14 @@ class TranslationDiff::Configuration
     def provider_option_owners = @provider_option_owners ||= ProviderOptionOwners.new
   end
 
-  # Required here, not centrally: the module it defines nests under this class, which must exist first.
+  # Required here, not centrally: the modules they define nest under this class, which must exist first.
   require "translation_diff/configuration/option_table"
   TranslationDiff::Configuration::OptionTable.declare_on(self)
 
-  prepend TranslationDiff::CacheTtlOption
-  prepend TranslationDiff::CacheGuardOptions
+  require "translation_diff/configuration/cache_ttl_option"
+  require "translation_diff/configuration/cache_guard_options"
+  prepend TranslationDiff::Configuration::CacheTtlOption
+  prepend TranslationDiff::Configuration::CacheGuardOptions
 
   # Credentials are filtered by name; everything else is shown, or an inspect is one nobody reads.
   def inspect = "#<#{self.class.name} #{TranslationDiff::Redaction.render(self).join(' ')}>"
