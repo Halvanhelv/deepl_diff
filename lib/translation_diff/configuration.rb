@@ -55,6 +55,7 @@ class TranslationDiff::Configuration
   option :rate_interval, 60
   option :rate_limiter, nil
   option :segmenter, :pragmatic
+  option :opaque_elements, %i[script style pre code]
   option :instrumenter, nil
   option :logger, nil
   option :open_timeout, 5

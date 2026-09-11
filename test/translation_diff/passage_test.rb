@@ -8,6 +8,13 @@ class PassageTest < Minitest::Test
   # What a provider would be asked to translate, in order.
   def cores(source) = passage(source).segments.reject(&:empty?).map(&:core)
 
+  # What the :null provider does: every sentence comes back upcased, so only markup handling shows.
+  def translated(source)
+    subject = passage(source)
+    subject.segments.reject(&:empty?).each { |s| s.translation = s.core.upcase }
+    subject.render
+  end
+
   def assert_round_trips(source)
     assert_equal source, passage(source).render, "render must return the source byte for byte"
   end
@@ -44,6 +51,59 @@ class PassageTest < Minitest::Test
 
   def test_script_and_style_contents_are_not_prose
     assert_equal %w[аль бра кил], cores("аль<span>бра</span>кил<script>js</script><style>b</style>")
+  end
+
+  # pre and code join script and style: their text is left alone, however much of it looks like prose.
+  def test_pre_and_code_contents_are_not_prose
+    source = %(<p>See:</p><pre><code>curl -s https://example.com/level | jq '.meters'</code></pre><p>after</p>)
+
+    assert_equal ["See:", "after"], cores(source)
+    assert_round_trips(source)
+  end
+
+  # The common case, not the block one: a code span mid-sentence must not split the sentence around it or eat a space.
+  def test_an_inline_code_span_leaves_the_sentence_around_it_intact
+    source = "Press <code>Ctrl+C</code> to stop."
+
+    assert_equal ["Press", "to stop."], cores(source)
+    assert_equal "PRESS <code>Ctrl+C</code> TO STOP.", translated(source)
+  end
+
+  def test_an_empty_code_element_round_trips
+    assert_round_trips("Before.<code></code>After.")
+  end
+
+  def test_a_code_element_holding_only_whitespace_round_trips
+    assert_round_trips("Before.<code>   </code>After.")
+  end
+
+  def test_a_pre_holding_markup_looking_text_round_trips
+    assert_round_trips("<pre>&lt;div&gt; not real markup</pre>After.")
+  end
+
+  # A notranslate span nested inside an opaque element used to leak: closing it left @opaque_depth one too high,
+  # so every sentence after the code block silently stopped being sent. This is the regression test for that.
+  def test_a_notranslate_span_inside_a_code_block_does_not_confuse_the_walker
+    source = %(<code><span class="notranslate">DO_NOT_TOUCH</span></code> After this all good.)
+
+    assert_equal [%(<span class="notranslate">DO_NOT_TOUCH</span>), "After this all good."], cores(source)
+    assert_equal %(<code><SPAN CLASS="NOTRANSLATE">DO_NOT_TOUCH</SPAN></code> AFTER THIS ALL GOOD.), translated(source)
+  end
+
+  # Protection beats opacity on purpose, same as it does for script: a code span inside notranslate stays one unit.
+  def test_a_code_span_inside_a_notranslate_element_stays_inside_the_protected_unit
+    source = %(<span class="notranslate"><code>x</code></span> After.)
+
+    assert_equal [source], cores(source)
+  end
+
+  # The set is configurable: an application can widen it, or shrink it back to script and style.
+  def test_opaque_elements_is_configurable_per_passage
+    source = "Before.<code>keep me</code>After."
+    subject = TranslationDiff::Passage.new(source, segmenter: TranslationDiff::Segmenters::Pragmatic.new,
+                                                   opaque_elements: %i[script style])
+
+    assert_equal ["Before.", "keep me", "After."], subject.segments.reject(&:empty?).map(&:core)
   end
 
   def test_a_comment_is_not_prose

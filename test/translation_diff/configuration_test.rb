@@ -498,6 +498,16 @@ class ConfigurationTest < Minitest::Test
     assert_includes error.message, "pragmatic"
   end
 
+  def test_opaque_elements_defaults_to_script_style_pre_and_code
+    assert_equal %i[script style pre code], @config.opaque_elements
+  end
+
+  def test_opaque_elements_is_a_plain_setting_an_application_can_replace
+    @config.opaque_elements = %i[script style kbd samp]
+
+    assert_equal %i[script style kbd samp], @config.opaque_elements
+  end
+
   def test_the_redis_pool_is_built_once_and_shared
     @config.redis_url = "redis://localhost:6379"
     @config.rate_limit = 100

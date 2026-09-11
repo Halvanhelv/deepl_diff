@@ -3,11 +3,13 @@ class TranslationDiff::Passage
   attr_reader :fragments
 
   # The source is scanned with every lone `<` escaped, so the offsets, the slices and the render all agree on it.
-  def initialize(source, segmenter:, language: nil)
+  # opaque_elements defaults to the live config, read here rather than memoised, so a runtime change takes effect
+  # without a caller that only ever passes segmenter and language having to be touched.
+  def initialize(source, segmenter:, language: nil, opaque_elements: TranslationDiff.config.opaque_elements)
     @source = TranslationDiff::Markup.escape_bare_angles(source)
     @segmenter = segmenter
     @language = language
-    @fragments = Scanner.new(@source).runs.map { |run| fragment(run) }
+    @fragments = Scanner.new(@source, opaque_elements: opaque_elements).runs.map { |run| fragment(run) }
   end
 
   # The translatable sentences, in document order; the empty ones are whitespace a provider has no use for.
@@ -31,9 +33,6 @@ class TranslationDiff::Passage
 
   # Ox reports a byte position for every construct it sees; recording those is what lets rendering slice the source.
   class Scanner < Ox::Sax
-    # Content nobody wants translated, however much of it looks like prose.
-    OPAQUE = %i[script style].freeze
-
     # Providers honour this class themselves under the HTML mode this gem sends, so the element must reach them whole.
     PROTECTED = "notranslate".freeze
 
@@ -43,13 +42,16 @@ class TranslationDiff::Passage
     Mark = Struct.new(:offset, :prose)
 
     # Ox reports positions only to a handler that already has the ivar, so @pos exists before parsing starts.
-    def initialize(source)
+    # opaque_elements is a caller-supplied set of element names, so it is normalised here rather than trusted as given.
+    def initialize(source, opaque_elements:)
       super()
       @source = source
+      @opaque = opaque_elements.map { |element| element.to_s.downcase.to_sym }
       @pos = 0
       @marks = []
       @protected_depth = 0
       @opaque_depth = 0
+      @opaque_bump = false
       @pending = nil
     end
 
@@ -60,18 +62,24 @@ class TranslationDiff::Passage
     end
 
     # Protection beats opacity on purpose: a caller wrapping a subtree asked for it to be passed through as it is.
+    # @opaque_bump remembers whether *this* element is the one that raised @opaque_depth, so attr can undo exactly
+    # that increment if the element turns out to be protected -- its own end_element never gets the chance to.
     def start_element(name)
       return @protected_depth += 1 if @protected_depth.positive?
 
-      @opaque_depth += 1 if @opaque_depth.positive? || OPAQUE.include?(name)
+      @opaque_bump = @opaque_depth.positive? || @opaque.include?(name)
+      @opaque_depth += 1 if @opaque_bump
       @pending = mark(prose: false)
     end
 
     # Attributes arrive straight after their own start element, so @pending is that element and never another.
+    # A protected element's own end_element takes the protected branch and never reaches the opaque decrement, so
+    # an opaque_depth this element raised has to be given back here or it would outlive the element that raised it.
     def attr(name, value)
       return unless @pending && protection?(name, value)
 
       @pending.prose = true
+      @opaque_depth -= 1 if @opaque_bump
       @protected_depth = 1
       @pending = nil
     end
