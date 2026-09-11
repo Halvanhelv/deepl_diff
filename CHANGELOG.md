@@ -29,7 +29,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **A runtime `cache_namespace` change now moves the rate limiter too.**
   `cache_namespace` names the limiter's own bookkeeping namespace as well
   as the cache store's; it used to move only the store, leaving the
-  limiter counting silently under the old namespace. See
+  limiter counting silently under the old namespace. `active_record_base`
+  behaves the same way and for the same reason -- the SQL-backed limiter
+  builds its model from that class just as the store does. See
   [Configuration](docs/configuration.md#changing-configuration-at-runtime).
 
 - **A provider with a blank `cache_key` now raises

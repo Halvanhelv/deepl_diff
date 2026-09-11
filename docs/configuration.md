@@ -122,7 +122,8 @@ actually feeds, not the whole configuration:
   connection pool and everything holding it -- the cache store and the rate
   limiter both.
 - The rate options (`rate_limit`, `rate_interval`, `rate_limiter`,
-  `rate_limit_table_name`) and `cache_namespace` rebuild the rate limiter.
+  `rate_limit_table_name`), `cache_namespace` and `active_record_base`
+  rebuild the rate limiter.
 - `segmenter` rebuilds the segmenter.
 - `logger` and `instrumenter` rebuild nothing -- both are read live, on
   every use, and nothing memoised reads either one.
@@ -132,11 +133,13 @@ Before this, nothing was ever rebuilt: an application wanting to switch
 and reconfiguring from scratch, which also threw away a Redis pool, and
 everything built from it, that had no reason to go.
 
-One behaviour is worth flagging on its own: `cache_namespace` names the rate
-limiter's own bookkeeping namespace as well as the cache store's, so
-changing it at runtime now moves the limiter too -- it counts under the new
-namespace from the next check on, rather than continuing silently under the
-old one.
+Two options carry further than their names suggest, and both rebuild the
+rate limiter as well as the store. `cache_namespace` names the limiter's own
+bookkeeping namespace, so changing it at runtime moves the limiter too --
+it counts under the new namespace from the next check on, rather than
+continuing silently under the old one. `active_record_base` is the class the
+SQL-backed limiter builds its model from just as the SQL-backed store does,
+so pointing it at another database moves both.
 
 **A write that leaves an option at the value it already holds rebuilds
 nothing.** Only a value that actually changes invalidates a memoised

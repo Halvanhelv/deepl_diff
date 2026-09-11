@@ -30,6 +30,9 @@ TranslationDiff::Error
 │                                                # provider -- see docs/languages.md
 ├── TranslationDiff::Translator::Error          # from: missing and the provider cannot
 │                                                # detect
+├── TranslationDiff::Previewer::Error           # the same, asked of a preview: detecting
+│                                                # a language is a paid request, and a
+│                                                # preview never makes one
 ├── TranslationDiff::SentenceCache::Error       # provider options have no stable
 │                                                # serialisation for the cache key
 ├── TranslationDiff::Batch::Error               # one sentence, once escaped, is larger
