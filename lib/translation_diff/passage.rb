@@ -67,7 +67,7 @@ class TranslationDiff::Passage
     def start_element(name)
       return @protected_depth += 1 if @protected_depth.positive?
 
-      @opaque_bump = @opaque_depth.positive? || @opaque.include?(name)
+      @opaque_bump = @opaque_depth.positive? || @opaque.include?(name.to_s.downcase.to_sym)
       @opaque_depth += 1 if @opaque_bump
       @pending = mark(prose: false)
     end
@@ -103,7 +103,7 @@ class TranslationDiff::Passage
 
     private
 
-    # Ox lowercases element names but not attribute names; the value stays exact because HTML class tokens are.
+    # Ox hands back names exactly as written, never lowercased, so both comparisons here are case-insensitive.
     def protection?(name, value)
       name.to_s.casecmp?("class") && value.split.include?(PROTECTED)
     end

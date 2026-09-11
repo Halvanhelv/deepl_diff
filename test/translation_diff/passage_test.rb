@@ -61,6 +61,30 @@ class PassageTest < Minitest::Test
     assert_round_trips(source)
   end
 
+  # Ox hands back element names exactly as written -- :PRE, :Pre, :STYLE -- never lowercased, so an opaque set
+  # compared case-sensitively misses every one of these and the markup still reaches the provider.
+  def test_uppercase_pre_and_code_contents_are_not_prose
+    source = %(<p>See:</p><PRE><CODE>curl -s https://example.com/level | jq '.meters'</CODE></PRE><p>after</p>)
+
+    assert_equal ["See:", "after"], cores(source)
+    assert_round_trips(source)
+  end
+
+  def test_mixed_case_pre_and_code_contents_are_not_prose
+    source = "<p>See:</p><Pre><Code>keep me</Code></Pre><p>after</p>"
+
+    assert_equal ["See:", "after"], cores(source)
+    assert_round_trips(source)
+  end
+
+  def test_uppercase_script_and_style_contents_are_not_prose
+    assert_equal %w[аль бра кил], cores("аль<span>бра</span>кил<SCRIPT>js</SCRIPT><STYLE>b</STYLE>")
+  end
+
+  def test_mixed_case_script_and_style_contents_are_not_prose
+    assert_equal %w[аль бра кил], cores("аль<span>бра</span>кил<Script>js</Script><Style>b</Style>")
+  end
+
   # The common case, not the block one: a code span mid-sentence must not split the sentence around it or eat a space.
   def test_an_inline_code_span_leaves_the_sentence_around_it_intact
     source = "Press <code>Ctrl+C</code> to stop."
@@ -133,7 +157,7 @@ class PassageTest < Minitest::Test
     assert_equal [%(<span class="notranslate">Bold Mountain</span> is a good place.)], cores(source)
   end
 
-  # Ox lowercases element names but not attribute names, and HTML attribute names are case-insensitive.
+  # Ox does not lowercase attribute names either, and HTML attribute names are case-insensitive.
   def test_an_uppercase_class_attribute_still_protects
     source = %(<span CLASS="notranslate">Bold Mountain</span> is a good place.)
 
