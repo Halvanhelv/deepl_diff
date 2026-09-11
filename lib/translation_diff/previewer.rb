@@ -5,7 +5,11 @@ class TranslationDiff::Previewer
   # Its own class, so rescuing a preview that cannot be answered cannot also swallow a cache or provider failure.
   class Error < TranslationDiff::Error; end
 
+  include TranslationDiff::CallPreparation
+
   EMPTY = TranslationDiff::Preview.new(sendable_sentences: 0, cached_sentences: 0, sendable_characters: 0).freeze
+
+  attr_reader :config
 
   # `provider:`, `config:` and `assume_supported:` are reserved, exactly as they are for Translator#initialize.
   def initialize(values, from: nil, to: nil, provider: nil, config: nil, assume_supported: false, **options)
@@ -38,18 +42,8 @@ class TranslationDiff::Previewer
     document.strings.flat_map { |string| passage(string).segments }.reject(&:empty?)
   end
 
-  # opaque_elements comes from the configuration this call is actually using -- a context's own setting must
-  # never fall back to Passage's global default.
-  def passage(string)
-    TranslationDiff::Passage.new(string, segmenter: @config.segmenter_instance, language: @from,
-                                         opaque_elements: @config.opaque_elements)
-  end
-
-  # A detected language arrives as a String while `to:` is usually a Symbol, so neither type nor case can be assumed.
-  def same_language?(from) = from.to_s.casecmp?(@to.to_s)
-
   # Same resolution Translator#call uses: a name to build, an object to use as it is, or the configured one.
-  def resolve_provider = TranslationDiff::Providers.resolve(@requested_provider, @config)
+  def resolve_provider = TranslationDiff::Providers.resolve(@requested_provider, config)
 
   # `from:` given means the pair is already known, so it is validated once; `from:` nil needs a detection this
   # method never pays for, so it stops here instead of guessing what a paid request would have answered.
@@ -60,30 +54,14 @@ class TranslationDiff::Previewer
     raise_undetectable!(provider)
   end
 
+  # A provider that cannot detect at all is refused with the same message translate uses; one that could but
+  # would cost a paid request is refused too -- preview never spends money to answer what it would send.
   def raise_undetectable!(provider)
-    unless provider.class.capabilities.detects_language?
-      raise Error, "Provider #{provider.cache_key} cannot detect the source language. Pass `from:` with the " \
-                   "source language code of the values you are previewing."
-    end
+    ensure_detects_language!(provider, Error, "previewing")
 
     raise Error, "TranslationDiff.preview cannot detect the source language for #{provider.cache_key} " \
                  "without a paid request: pass `from:` explicitly."
   end
-
-  # nil means we ship no data for this provider, and silence is not evidence of absence.
-  def ensure_supported!(provider, from)
-    return if @assume_supported || !@config.validate_languages
-
-    supported = TranslationDiff::Languages.supports?(provider.cache_key, from: from, to: @to)
-    return if supported.nil? || supported
-
-    raise TranslationDiff::UnsupportedLanguageError,
-          "Provider #{provider.cache_key} does not translate #{pair_description(from)}. If it does " \
-          "now, pass `assume_supported: true` for this call, or set " \
-          "`config.validate_languages = false`, and run `rake languages:refresh`."
-  end
-
-  def pair_description(from) = from.nil? ? "to #{@to}" : "#{from} to #{@to}"
 
   def preview_for(provider, from, segments)
     misses = fill(provider, from, segments)
@@ -92,9 +70,5 @@ class TranslationDiff::Previewer
   end
 
   # Reads the store through the same SentenceCache#fill translate uses; nothing here ever calls #store.
-  def fill(provider, from, segments)
-    cache = TranslationDiff::SentenceCache.new(store: @config.cache_store, provider: provider.cache_key,
-                                               from: from, to: @to, options: @options)
-    cache.fill(segments)
-  end
+  def fill(provider, from, segments) = cache_for(provider, from).fill(segments)
 end

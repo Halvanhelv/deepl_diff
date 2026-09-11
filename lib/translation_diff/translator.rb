@@ -4,6 +4,7 @@ class TranslationDiff::Translator
   class Error < TranslationDiff::Error; end
 
   include TranslationDiff::Instrumentation
+  include TranslationDiff::CallPreparation
 
   attr_reader :config
 
@@ -46,22 +47,6 @@ class TranslationDiff::Translator
     source_language(provider, segments).tap { |from| ensure_supported!(provider, from) }
   end
 
-  # nil means we ship no data for this provider, and silence is not evidence of absence.
-  # `from` nil (source not known yet) checks the target alone: a nil source is never itself refused.
-  def ensure_supported!(provider, from)
-    return if @assume_supported || !config.validate_languages
-
-    supported = TranslationDiff::Languages.supports?(provider.cache_key, from: from, to: @to)
-    return if supported.nil? || supported
-
-    raise TranslationDiff::UnsupportedLanguageError,
-          "Provider #{provider.cache_key} does not translate #{pair_description(from)}. If it does " \
-          "now, pass `assume_supported: true` for this call, or set " \
-          "`config.validate_languages = false`, and run `rake languages:refresh`."
-  end
-
-  def pair_description(from) = from.nil? ? "to #{@to}" : "#{from} to #{@to}"
-
   # The `translate` event wraps everything a call that reaches a provider does, and nothing an early return does.
   def translated(document, passages, segments, provider, from)
     values = TranslationDiff::Leaves.count(@values)
@@ -82,13 +67,6 @@ class TranslationDiff::Translator
     TranslationDiff::Providers.resolve(@requested_provider, config).tap { |provider| log("provider #{provider.class}") }
   end
 
-  # opaque_elements comes from the configuration this call is actually using -- a context's own setting must
-  # never fall back to Passage's global default.
-  def passage(string)
-    TranslationDiff::Passage.new(string, segmenter: config.segmenter_instance, language: @from,
-                                         opaque_elements: config.opaque_elements)
-  end
-
   # The strings walk and the map walk visit the same leaves in the same order, and the value itself was never touched.
   def rebuild(document, passages)
     rendered = passages.map(&:render)
@@ -99,25 +77,13 @@ class TranslationDiff::Translator
   def source_language(provider, segments)
     return @from unless @from.nil?
 
-    ensure_detects_language!(provider)
+    ensure_detects_language!(provider, Error, "translating")
     provider.detect(segments.first.core)
   end
 
-  def ensure_detects_language!(provider)
-    return if provider.class.capabilities.detects_language?
-
-    raise Error, "Provider #{provider.cache_key} cannot detect the source language. Pass " \
-                 "`from:` with the source language code of the values you are translating."
-  end
-
-  # A detected language arrives as a String while `to:` is usually a Symbol, so neither type nor case can be assumed.
-  # A `from:` the caller gave settles this before a provider is resolved; a nil one cannot, and never matches.
-  def same_language?(from) = from.to_s.casecmp?(@to.to_s)
-
   # The cache answers for what it has, the provider for the rest, and only what came back is written home.
   def fill(provider, segments, from)
-    cache = TranslationDiff::SentenceCache.new(store: config.cache_store, provider: provider.cache_key,
-                                               from: from, to: @to, options: @options)
+    cache = cache_for(provider, from)
     misses = cache.fill(segments)
     id = call_id
     instrument("cache", call_id: id, provider: provider.cache_key,
