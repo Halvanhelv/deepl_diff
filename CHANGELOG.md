@@ -42,6 +42,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Rescue `TranslationDiff::Error` to catch both. See
   [Errors](docs/errors.md).
 
+- **The cache stores, rate limiters and ActiveRecord plumbing moved under
+  their registry's own namespace; nothing was left behind at the old
+  name.** `TranslationDiff::MemoryCacheStore`, `RedisCacheStore` and
+  `ActiveRecordCacheStore` are now `TranslationDiff::Stores::Memory`,
+  `Stores::Redis` and `Stores::ActiveRecord`; `RedisRateLimiter` and
+  `ActiveRecordRateLimiter` are now `TranslationDiff::RateLimiters::Redis`
+  and `RateLimiters::ActiveRecord`; `TranslationDiff::ActiveRecordSupport`
+  is now `TranslationDiff::ActiveRecord::Support`. `config.cache = :redis`
+  and the rest of the symbol-keyed configuration are unaffected -- only
+  the constant a name resolves to changed. See
+  [Caching](docs/caching.md) and [SQL cache](docs/sql-cache.md).
+
 ### Added
 
 - **Every event from one `translate` call now shares a `call_id`.** Generated

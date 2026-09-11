@@ -55,13 +55,13 @@ at all, so an unset environment variable never has to be special-cased.
 | --- | --- | --- |
 | `provider` | `:deepl` | The translation provider: a registered name or a `TranslationDiff::Provider` of your own. See [Providers](providers.md). |
 | `cache` | `nil` | The cache store: a registered name or an object satisfying the [cache store contract](caching.md#the-cache-store-contract). `nil` means "choose for me" -- see below. |
-| `cache_ttl` | `604_800` (one week) | Seconds an entry is kept before it expires. Read by `RedisCacheStore` (a `SETEX`) and by `ActiveRecordCacheStore` (written into each row's `expires_at`); `MemoryCacheStore` evicts by size instead and ignores it. A non-positive value (`0` or less, or `nil`) means never expires. A String is coerced, so an environment variable works; a value that is not a number is refused at `configure` time rather than mid-translation. See [SQL cache](sql-cache.md#cache_ttl-becomes-expires_at). |
-| `cache_namespace` | `"translation-diff"` | Prefix applied to every Redis key this gem writes -- both cache entries and the rate limiter's own bookkeeping. Also the `namespace` column both SQL tables share and the unit `ActiveRecordCacheStore#prune` operates on. At most 64 characters -- longer is refused at `configure` time. See [SQL cache](sql-cache.md#the-tables). |
-| `cache_max_size` | `1_000` | Maximum number of entries `MemoryCacheStore` keeps before evicting the least recently used one. |
-| `cache_table_name` | `"translation_diff_translations"` | Table `ActiveRecordCacheStore` reads and writes. For a host with its own table-naming convention. See [SQL cache](sql-cache.md). |
-| `rate_limit_table_name` | `"translation_diff_rate_limits"` | Table `ActiveRecordRateLimiter` reads and writes. As above. |
-| `active_record_base` | `nil` (`::ActiveRecord::Base`) | The class `ActiveRecordCacheStore` and `ActiveRecordRateLimiter` build their model from -- point this at a second database. It does not exempt this store from a Rails application's own read-replica routing; see [Rails replica routing](sql-cache.md#rails-replica-routing). See [SQL cache](sql-cache.md#active_record_base-a-second-database). |
-| `cache_prune_probability` | `0.0` | Chance, per write, that `ActiveRecordCacheStore` prunes expired rows before returning. `0.0` is off, and a value outside `0.0..1.0` is refused at `configure` time; `rake translation_diff:prune` is the other way to prune. See [SQL cache](sql-cache.md#pruning-three-answers-none-imposed). |
+| `cache_ttl` | `604_800` (one week) | Seconds an entry is kept before it expires. Read by `Stores::Redis` (a `SETEX`) and by `Stores::ActiveRecord` (written into each row's `expires_at`); `Stores::Memory` evicts by size instead and ignores it. A non-positive value (`0` or less, or `nil`) means never expires. A String is coerced, so an environment variable works; a value that is not a number is refused at `configure` time rather than mid-translation. See [SQL cache](sql-cache.md#cache_ttl-becomes-expires_at). |
+| `cache_namespace` | `"translation-diff"` | Prefix applied to every Redis key this gem writes -- both cache entries and the rate limiter's own bookkeeping. Also the `namespace` column both SQL tables share and the unit `Stores::ActiveRecord#prune` operates on. At most 64 characters -- longer is refused at `configure` time. See [SQL cache](sql-cache.md#the-tables). |
+| `cache_max_size` | `1_000` | Maximum number of entries `Stores::Memory` keeps before evicting the least recently used one. |
+| `cache_table_name` | `"translation_diff_translations"` | Table `Stores::ActiveRecord` reads and writes. For a host with its own table-naming convention. See [SQL cache](sql-cache.md). |
+| `rate_limit_table_name` | `"translation_diff_rate_limits"` | Table `RateLimiters::ActiveRecord` reads and writes. As above. |
+| `active_record_base` | `nil` (`::ActiveRecord::Base`) | The class `Stores::ActiveRecord` and `RateLimiters::ActiveRecord` build their model from -- point this at a second database. It does not exempt this store from a Rails application's own read-replica routing; see [Rails replica routing](sql-cache.md#rails-replica-routing). See [SQL cache](sql-cache.md#active_record_base-a-second-database). |
+| `cache_prune_probability` | `0.0` | Chance, per write, that `Stores::ActiveRecord` prunes expired rows before returning. `0.0` is off, and a value outside `0.0..1.0` is refused at `configure` time; `rake translation_diff:prune` is the other way to prune. See [SQL cache](sql-cache.md#pruning-three-answers-none-imposed). |
 | `redis_url` | `ENV["REDIS_URL"]` | Where to connect for the Redis-backed cache store and rate limiter. Setting this is what makes `cache` default to `:redis` instead of `:memory`. |
 | `redis_pool_size` | `5` | Size of the connection pool built from `redis_url`. |
 | `redis_pool_timeout` | `5` | Seconds to wait for a connection from that pool before raising. |
@@ -148,7 +148,7 @@ makes a per-request `TranslationDiff.configure { |c| c.cache_namespace =
 current_tenant }` safe: writing the same tenant on every request no longer
 rebuilds the cache store on every request. Writing a genuinely *different*
 value still rebuilds the store exactly as before, though, and if that store
-is the default `MemoryCacheStore`, a rebuilt store is a fresh, empty Hash --
+is the default `Stores::Memory`, a rebuilt store is a fresh, empty Hash --
 its contents are gone, and whatever it held has to be paid for again at the
 provider.
 
@@ -159,8 +159,8 @@ from has already built.
 
 ## Choosing the cache store
 
-`cache` unset means "choose for me": `RedisCacheStore` when `redis_url` is
-configured, `MemoryCacheStore` otherwise, so the library works before any
+`cache` unset means "choose for me": `Stores::Redis` when `redis_url` is
+configured, `Stores::Memory` otherwise, so the library works before any
 infrastructure does. Set `cache` explicitly (`:redis`, `:memory`, or your own
 object) to override that choice.
 
@@ -190,7 +190,7 @@ option *values* over, but deliberately not the collaborators already built
 from them -- each context resolves its own provider, cache store, segmenter
 and rate limiter from its own values, independently of whatever the
 configuration it was copied from had already built. When `cache` is left
-unset, that resolves to `MemoryCacheStore`, an in-process store, so a freshly
+unset, that resolves to `Stores::Memory`, an in-process store, so a freshly
 built context's store starts empty every time -- a short-lived, per-request
 context therefore caches nothing across requests. Configure `redis_url` (or
 assign one shared cache object explicitly) if contexts need to share a

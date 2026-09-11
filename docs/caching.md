@@ -5,7 +5,7 @@
 One entry per sentence, keyed by the provider's `cache_key`, the lowercased
 source and target language codes, a digest of the provider options that call
 passed (`formality:`, a glossary id, ...), and a digest of the sentence
-itself. `RedisCacheStore` prefixes all of that with `cache_namespace`.
+itself. `Stores::Redis` prefixes all of that with `cache_namespace`.
 
 **No provider's `*_api_base` option is part of the key.** Two configurations
 pointing `deepl_api_base` (or any other provider's `_api_base`) at different
@@ -125,15 +125,15 @@ methods -- so a store that implements only those two still passes it.
 include `BatchingCacheStoreContract` too, alongside `CacheStoreContract`,
 once `#store` also implements `write_multi`.
 
-Three stores ship with this gem: `TranslationDiff::MemoryCacheStore`, the
+Three stores ship with this gem: `TranslationDiff::Stores::Memory`, the
 default -- a bounded, in-process LRU, not thread-safe by design, evicting by
-`cache_max_size` rather than by time; `TranslationDiff::RedisCacheStore`,
+`cache_max_size` rather than by time; `TranslationDiff::Stores::Redis`,
 built from `redis_url` when that is set, expiring entries after `cache_ttl`
 and namespacing every key under `cache_namespace`; and
-`TranslationDiff::ActiveRecordCacheStore`, opt-in, caching in the
+`TranslationDiff::Stores::ActiveRecord`, opt-in, caching in the
 application's own database -- see [SQL cache](sql-cache.md). Neither `redis`
 nor `connection_pool` nor `redis-namespace` is a dependency of this gem --
-`RedisCacheStore` takes anything answering to `#with` the way
+`Stores::Redis` takes anything answering to `#with` the way
 `ConnectionPool` does, and yields anything `Redis::Namespace` accepts.
 
 ## `write_multi` is optional
@@ -145,9 +145,9 @@ from the batch; a store that does not is called once per sentence through
 against the contract before `write_multi` existed keeps working unchanged
 -- that is what "optional" means here.
 
-All three shipped stores implement it: `MemoryCacheStore` loops over the
-pairs (there is no round trip to save in-process); `RedisCacheStore`
-pipelines the writes; `ActiveRecordCacheStore` upserts the whole batch in
+All three shipped stores implement it: `Stores::Memory` loops over the
+pairs (there is no round trip to save in-process); `Stores::Redis`
+pipelines the writes; `Stores::ActiveRecord` upserts the whole batch in
 one statement.
 
 ### The three write paths fail differently
@@ -155,15 +155,15 @@ one statement.
 Nobody had written this down before: what a partial failure leaves cached
 depends on which of these shapes wrote it.
 
-- **No `write_multi` (the per-key path), and `MemoryCacheStore`'s loop.**
+- **No `write_multi` (the per-key path), and `Stores::Memory`'s loop.**
   Sentences are written one at a time, in order. A failure at sentence N
   leaves 1..N-1 written, N failed, and N+1.. never attempted.
-- **`RedisCacheStore#write_multi`.** A Redis pipeline is not a
+- **`Stores::Redis#write_multi`.** A Redis pipeline is not a
   transaction: each `SETEX` in it runs independently of the others, so a
   failure in one does not stop its siblings from landing. Which of the
   batch actually landed does not follow the sentence order the way the
   per-key path's does.
-- **`ActiveRecordCacheStore#write_multi`.** One `upsert_all` statement for
+- **`Stores::ActiveRecord#write_multi`.** One `upsert_all` statement for
   the whole batch. It either lands as a whole or it does not -- there is no
   partial batch to reason about.
 
@@ -177,7 +177,7 @@ paid for at the provider: `Translator#fill` rescues whatever error surfaces
 here, logs it, fires a `cache_error` event (provider and error class only,
 never the text -- see [Instrumentation](instrumentation.md)), and returns
 the translation regardless. This holds for all three shapes and every
-store, not only `ActiveRecordCacheStore` -- a `MemoryCacheStore` bug, a
+store, not only `Stores::ActiveRecord` -- a `Stores::Memory` bug, a
 dropped Redis connection, a SQL write blocked by a read-only replica (see
 [Rails replica routing](sql-cache.md#rails-replica-routing)) all behave the
 same way from the caller's side. What differs between the three shapes

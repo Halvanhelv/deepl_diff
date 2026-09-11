@@ -41,9 +41,9 @@ caller -- see
 `error` is the exception's class name, never its message, which could echo
 the row it failed to write. Which class you see depends on the store: a
 store that redacts its own failures reports that redaction, so
-`ActiveRecordCacheStore` always gives `"TranslationDiff::Error"` -- the
+`Stores::ActiveRecord` always gives `"TranslationDiff::Error"` -- the
 adapter's own class is named inside that error's (content-free) message,
-not in this payload. `RedisCacheStore` does not wrap, so it gives the
+not in this payload. `Stores::Redis` does not wrap, so it gives the
 driver's class, `"Redis::CannotConnectError"` and the like. Alert on the
 event, not on a particular class name.
 

@@ -118,7 +118,7 @@ See [Providers](docs/providers.md) for configuring each one, the full capabiliti
 - **Six built-in providers** -- DeepL, Google Cloud Translation, Azure AI Translator, ModernMT, LibreTranslate, Amazon Translate -- or bring your own by subclassing a small base class
 - **HTML aware:** markup is preserved, and `class="notranslate"` can protect a span (provider support varies -- see the caveats below)
 - **Any shape:** strings, arrays, and deep hashes go in and come back translated in the same shape
-- **Three cache stores:** `MemoryCacheStore` out of the box, `RedisCacheStore` once you configure `redis_url`, `ActiveRecordCacheStore` to cache in your own database instead -- see [SQL cache](docs/sql-cache.md)
+- **Three cache stores:** `Stores::Memory` out of the box, `Stores::Redis` once you configure `redis_url`, `Stores::ActiveRecord` to cache in your own database instead -- see [SQL cache](docs/sql-cache.md)
 - **Isolated contexts:** `TranslationDiff.context` for multi-tenant apps and per-request provider overrides, without touching the global configuration
 - **Pluggable sentence segmenter:** `pragmatic_segmenter` by default, with a zero-dependency `Simple` alternative
 - **HTTP retries, timeouts, and backoff** on every REST-backed provider, via `faraday` and `faraday-retry`

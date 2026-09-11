@@ -41,14 +41,14 @@ TranslationDiff::Error
 │                                                # Pragmatic computed offsets that
 │                                                # violate its own postcondition --
 │                                                # not raised by ordinary use
-├── TranslationDiff::RedisRateLimiter::RateLimitExceeded
+├── TranslationDiff::RateLimiters::Redis::RateLimitExceeded
 │                                                # the configured rate_limit was exceeded,
 │                                                # raised by the Redis-backed limiter
-└── TranslationDiff::ActiveRecordRateLimiter::RateLimitExceeded
+└── TranslationDiff::RateLimiters::ActiveRecord::RateLimitExceeded
                                                  # the same condition, raised by the SQL-backed
                                                  # limiter -- a distinct class under its own
                                                  # namespace, not the class above. Rescuing
-                                                 # `RedisRateLimiter::RateLimitExceeded`
+                                                 # `RateLimiters::Redis::RateLimitExceeded`
                                                  # specifically and switching `rate_limiter` to
                                                  # `:active_record` stops catching it; rescue
                                                  # `TranslationDiff::Error` to catch both.
