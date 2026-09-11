@@ -522,4 +522,89 @@ class ConfigurationTest < Minitest::Test
 
     refute_same original_store, @config.copy.cache_store
   end
+
+  # A real registered provider, to prove invalidation reaches provider_instance through a declared option too.
+  class DoubleProvider < TranslationDiff::Provider
+    def self.configuration_options = %i[double_provider_key]
+
+    def translate(request) = TranslationDiff::Translation::Response.build(request: request, texts: request.texts)
+  end
+
+  def test_changing_the_provider_rebuilds_the_memoised_instance
+    @config.provider = :null
+    first = @config.provider_instance
+
+    @config.provider = :null
+
+    refute_same first, @config.provider_instance
+  end
+
+  def test_changing_an_option_a_provider_declared_rebuilds_the_provider_instance
+    TranslationDiff::Providers.register(:double_provider, DoubleProvider)
+    @config.provider = :double_provider
+    @config.double_provider_key = "first"
+    first = @config.provider_instance
+
+    @config.double_provider_key = "second"
+
+    refute_same first, @config.provider_instance
+  end
+
+  def test_changing_the_logger_leaves_the_redis_pool_in_place
+    @config.redis_url = "redis://localhost:6379"
+    pool = @config.redis_pool
+
+    @config.logger = Object.new
+
+    assert_same pool, @config.redis_pool
+  end
+
+  def test_changing_the_cache_namespace_rebuilds_the_cache_store
+    original = @config.cache_store
+
+    @config.cache_namespace = "a-different-namespace"
+
+    refute_same original, @config.cache_store
+  end
+
+  def test_changing_the_redis_url_rebuilds_the_pool_the_store_and_the_rate_limiter
+    @config.redis_url = "redis://localhost:6379"
+    @config.rate_limit = 100
+    pool = @config.redis_pool
+    store = @config.cache_store
+    limiter = @config.rate_limiter_instance
+
+    @config.redis_url = "redis://localhost:6380"
+
+    refute_same pool, @config.redis_pool
+    refute_same store, @config.cache_store
+    refute_same limiter, @config.rate_limiter_instance
+  end
+
+  def test_changing_the_rate_limit_leaves_the_cache_store_in_place
+    store = @config.cache_store
+
+    @config.rate_limit = 50
+
+    assert_same store, @config.cache_store
+  end
+
+  def test_changing_the_segmenter_rebuilds_the_memoised_instance
+    first = @config.segmenter_instance
+
+    @config.segmenter = :simple
+
+    refute_same first, @config.segmenter_instance
+  end
+
+  def test_an_unclassified_option_invalidates_nothing
+    @config.provider = :null
+    provider = @config.provider_instance
+    store = @config.cache_store
+
+    @config.max_retries = 1
+
+    assert_same provider, @config.provider_instance
+    assert_same store, @config.cache_store
+  end
 end

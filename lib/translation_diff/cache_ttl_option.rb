@@ -7,11 +7,12 @@ module TranslationDiff::CacheTtlOption
     super
   end
 
-  # A non-positive number folds into nil too -- a TTL of zero or less can never keep a row.
+  # A non-positive number folds into nil too -- a TTL of zero or less can never keep a row. Coerced here,
+  # then handed to super so the declared writer's cache_store invalidation still runs.
   def cache_ttl=(value)
     value = nil if value.is_a?(String) && value.strip.empty?
     value = coerce_ttl(value) if value.is_a?(String)
-    @cache_ttl = value.is_a?(Numeric) && value <= 0 ? nil : value
+    super(value.is_a?(Numeric) && value <= 0 ? nil : value)
   end
 
   def cache_ttl
