@@ -1,31 +1,46 @@
 # Every declared setting in one place; callable defaults are invoked on read, not at load time.
 class TranslationDiff::Configuration
   class << self
-    def option(key, default = nil)
+    # `invalidates:` names the memoised reader(s) this option feeds; a writer clears exactly those ivars.
+    # An option that names none -- logger, instrumenter, the timeouts -- clears nothing, which is also
+    # what an option nobody classifies does: invalidation is opt-in, never a guess from the option's name.
+    def option(key, default = nil, invalidates: nil)
       key = key.to_sym
       return if options.include?(key)
 
-      define_method(:"#{key}=") do |value|
-        value = nil if value.is_a?(String) && value.strip.empty?
-        instance_variable_set(:"@#{key}", value)
-      end
-      define_method(key) { read(key) }
-
+      define_option_accessors(key, Array(invalidates))
       defaults[key] = default
       options << key
     end
 
-    # See ProviderOptionOwners for the conflict rules and the all-or-nothing guarantee.
+    # See ProviderOptionOwners for the conflict rules and the all-or-nothing guarantee. Every provider
+    # option invalidates provider_instance, whatever it is named -- the registry, not a remembered list,
+    # is what makes the set known.
     def register_provider_options(declared, provider)
       declared = normalise_declarations(declared)
       provider_option_owners.claim(declared.keys, provider)
-      declared.each { |key, default| option(key, default) }
+      declared.each { |key, default| option(key, default, invalidates: :provider_instance) }
     end
 
     def options = @options ||= []
     def defaults = @defaults ||= {}
 
     private
+
+    # The writer clears exactly the memos this option was declared to invalidate; the reader defers to `read`.
+    # A write that leaves the raw value unchanged clears none of them -- a per-request write of the same
+    # tenant must not rebuild a cache store that was already warm.
+    def define_option_accessors(key, memos)
+      ivar = :"@#{key}"
+      define_method(:"#{key}=") do |value|
+        value = nil if value.is_a?(String) && value.strip.empty?
+        next if instance_variable_get(ivar) == value
+
+        instance_variable_set(ivar, value)
+        memos.each { |memo| instance_variable_set(:"@#{memo}", nil) }
+      end
+      define_method(key) { read(key) }
+    end
 
     # `:key` declares an option with no default; `{ key => default }` declares one, and a callable is read lazily.
     def normalise_declarations(declared)
@@ -39,28 +54,9 @@ class TranslationDiff::Configuration
     def provider_option_owners = @provider_option_owners ||= ProviderOptionOwners.new
   end
 
-  option :provider, :deepl
-  option :cache, nil
-  option :cache_ttl, 604_800
-  option :cache_namespace, "translation-diff"
-  option :cache_max_size, 1_000
-  option :cache_table_name, "translation_diff_translations"
-  option :rate_limit_table_name, "translation_diff_rate_limits"
-  option :active_record_base, nil
-  option :cache_prune_probability, 0.0
-  option :redis_url, -> { ENV.fetch("REDIS_URL", nil) }
-  option :redis_pool_size, 5
-  option :redis_pool_timeout, 5
-  option :rate_limit, nil
-  option :rate_interval, 60
-  option :rate_limiter, nil
-  option :segmenter, :pragmatic
-  option :instrumenter, nil
-  option :logger, nil
-  option :open_timeout, 5
-  option :timeout, 30
-  option :max_retries, 3
-  option :validate_languages, true
+  # Required here, not centrally: the module it defines nests under this class, which must exist first.
+  require "translation_diff/configuration/option_table"
+  TranslationDiff::Configuration::OptionTable.declare_on(self)
 
   prepend TranslationDiff::CacheTtlOption
   prepend TranslationDiff::CacheGuardOptions

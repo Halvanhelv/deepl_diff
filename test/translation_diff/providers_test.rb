@@ -76,6 +76,36 @@ class ProvidersTest < Minitest::Test
     assert_equal "null", TranslationDiff::Providers.build(:null, @config).cache_key
   end
 
+  # The one seam Translator and Previewer both resolve a provider through.
+  def test_resolve_with_nil_returns_the_configured_provider
+    @config.provider = :acme
+
+    assert_instance_of AcmeProvider, TranslationDiff::Providers.resolve(nil, @config)
+  end
+
+  def test_resolve_with_a_name_builds_that_provider
+    assert_instance_of AcmeProvider, TranslationDiff::Providers.resolve(:acme, @config)
+  end
+
+  def test_resolve_with_an_object_uses_it_as_is
+    instance = TranslationDiff::Providers.build(:acme, @config)
+
+    assert_same instance, TranslationDiff::Providers.resolve(instance, @config)
+  end
+
+  # A blank cache_key would file a provider's translations in every other provider's namespace.
+  class BlankCacheKeyProvider < TranslationDiff::Provider
+    def cache_key = "   "
+  end
+
+  def test_resolve_refuses_a_provider_whose_cache_key_is_blank
+    instance = BlankCacheKeyProvider.new(@config)
+
+    error = assert_raises(TranslationDiff::InvalidProviderError) { TranslationDiff::Providers.resolve(instance, @config) }
+
+    assert_match(/must define #cache_key/, error.message)
+  end
+
   # A defensive double `require` and a Rails reload both re-run registration; redeclaring must stay silent.
   def test_registering_the_same_provider_twice_is_not_a_conflict
     TranslationDiff::Providers.register(:acme, AcmeProvider)

@@ -68,6 +68,13 @@ formal.translate(contract, from: "en", to: "de", formality: :more)
 ```
 
 ```ruby
+# See what a call would send and find cached, without calling the provider or writing anything
+preview = TranslationDiff.preview(contract, from: "en", to: "de")
+preview.sendable_sentences # => sentences not yet cached
+preview.cached_sentences   # => sentences already cached
+```
+
+```ruby
 # Redis-backed cache, shared across processes
 TranslationDiff.configure { |config| config.redis_url = ENV["REDIS_URL"] }
 ```

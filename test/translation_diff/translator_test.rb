@@ -153,10 +153,11 @@ class TranslatorTest < ConfiguredTest
     assert_empty @provider.requests
   end
 
+  # Provider resolution, and this guard with it, now lives in TranslationDiff::Providers.
   def test_a_provider_whose_cache_key_is_blank_is_refused_rather_than_sharing_a_namespace
     @provider = NamelessProvider.new(TranslationDiff::Configuration.new)
 
-    error = assert_raises(TranslationDiff::Translator::Error) { translate("one.", from: "en", to: "ru") }
+    error = assert_raises(TranslationDiff::InvalidProviderError) { translate("one.", from: "en", to: "ru") }
 
     assert_match(/must define #cache_key/, error.message)
   end
@@ -201,6 +202,27 @@ class TranslatorTest < ConfiguredTest
     assert_equal 2, payload[:values]
   end
 
+  # `request`'s own `characters` is only what one batch sent; this is what the call considered, hit or miss.
+  def test_the_translate_event_carries_the_characters_this_call_considered
+    recorder = instrumented
+    instrumented_translate("Hello there.")
+
+    assert_equal "Hello there.".size, payload_for(recorder, "translate")[:characters]
+  end
+
+  # A call served entirely from cache still knows what it considered, even though no request event ever fires.
+  def test_the_translate_event_reports_characters_even_when_the_call_is_served_entirely_from_cache
+    recorder = instrumented
+    instrumented_translate("Hello there.")
+    instrumented_translate("Hello there.")
+
+    payload = recorder.events.reverse.find { |event| event.first == "translate.translation_diff" }.last
+    request_count = recorder.events.count { |event| event.first == "request.translation_diff" }
+
+    assert_equal "Hello there.".size, payload[:characters]
+    assert_equal 1, request_count
+  end
+
   def test_the_cache_event_carries_hit_and_miss_counts
     recorder = instrumented
     instrumented_translate("Hello there.")
@@ -210,6 +232,17 @@ class TranslatorTest < ConfiguredTest
     assert_equal 0, payload[:hits]
     assert_equal 1, payload[:misses]
     assert_equal "recording", payload[:provider]
+  end
+
+  # One `Translator`, one identifier, in every event that call emits -- a subscriber's only way to group them.
+  def test_every_event_from_one_call_carries_the_same_call_id
+    recorder = instrumented { |c| c.rate_limiter = FakeRateLimiter.new }
+    instrumented_translate("Hello there.")
+
+    call_ids = recorder.events.map { |_, payload| payload[:call_id] }
+
+    refute_nil call_ids.first
+    assert_equal [call_ids.first] * call_ids.size, call_ids
   end
 
   # The cache is an optimisation: a translation already paid for at the provider must reach the caller regardless.
@@ -227,6 +260,13 @@ class TranslatorTest < ConfiguredTest
 
     assert_equal "recording", payload[:provider]
     assert_equal "TranslatorTest::FailingCacheStore::BoomError", payload[:error]
+  end
+
+  def test_a_failing_cache_write_events_call_id_matches_the_translate_events
+    recorder = instrumented { |c| c.cache = FailingCacheStore.new }
+    instrumented_translate("Hello there.")
+
+    assert_equal payload_for(recorder, "translate")[:call_id], payload_for(recorder, "cache_error")[:call_id]
   end
 
   # The instrumentation payload carries the error's class, never the store's own message, which could quote the row.

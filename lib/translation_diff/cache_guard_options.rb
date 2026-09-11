@@ -2,10 +2,11 @@
 module TranslationDiff::CacheGuardOptions
   CACHE_NAMESPACE_LIMIT = 64
 
-  # An ENV var arrives as a String; coerced here so a translate call never meets a bare String's missing #positive?.
+  # An ENV var arrives as a String; coerced here so a translate call never meets a bare String's missing
+  # #positive?. Handed to super so the declared writer's cache_store invalidation still runs.
   def cache_prune_probability=(value)
     value = nil if value.is_a?(String) && value.strip.empty?
-    @cache_prune_probability = value.nil? ? nil : coerce_probability(value)
+    super(value.nil? ? nil : coerce_probability(value))
   end
 
   # Refused here, rather than at the first write's ActiveRecord::ValueTooLong.
@@ -13,7 +14,7 @@ module TranslationDiff::CacheGuardOptions
     value = nil if value.is_a?(String) && value.strip.empty?
     raise namespace_too_long(value) if value.is_a?(String) && value.length > CACHE_NAMESPACE_LIMIT
 
-    @cache_namespace = value
+    super
   end
 
   private

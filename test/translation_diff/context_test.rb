@@ -1,6 +1,23 @@
 require "test_helper"
 
 class ContextTest < Minitest::Test
+  # Records what each call actually sent, so a context's own opaque_elements can be proven to have reached it.
+  class RecordingProvider < TranslationDiff::Provider
+    attr_reader :requests
+
+    def initialize(config)
+      super
+      @requests = []
+    end
+
+    def translate(request)
+      @requests << request.texts
+      TranslationDiff::Translation::Response.build(request: request, texts: request.texts)
+    end
+
+    def cache_key = "recording"
+  end
+
   def setup
     TranslationDiff.reset!
     TranslationDiff.configure do |c|
@@ -46,11 +63,57 @@ class ContextTest < Minitest::Test
     assert_equal "Hello.", context.translate("Hello.", from: "en", to: "ru")
   end
 
+  # translate and preview are a matched pair at the top level; a context is the same entry point, so it
+  # must be able to preview a tenant's call too, not just carry it out.
+  def test_a_context_previews_through_its_own_configuration
+    context = TranslationDiff.context do |c|
+      c.provider = TranslationDiff::Providers::Null.new(TranslationDiff::Configuration.new)
+    end
+
+    preview = context.preview("Hello.", from: "en", to: "ru")
+
+    assert_equal 1, preview.sendable_sentences
+  end
+
+  # `to:` still defaults to nil here too, so a context refuses a missing target by naming the keyword.
+  def test_a_missing_target_language_is_refused_by_name_for_preview
+    context = TranslationDiff.context { |c| c.cache_namespace = "tenant" }
+    error = assert_raises(ArgumentError) { context.preview("Hello.", from: "en") }
+
+    assert_match(/to:/, error.message)
+  end
+
   # `to:` still defaults to nil here too, so a context refuses a missing target by naming the keyword.
   def test_a_missing_target_language_is_refused_by_name
     context = TranslationDiff.context { |c| c.cache_namespace = "tenant" }
     error = assert_raises(ArgumentError) { context.translate("Hello.", from: "en") }
 
     assert_match(/to:/, error.message)
+  end
+
+  # config.opaque_elements is the one mechanism the docs recommend for a per-tenant opaque set; a context
+  # that silently fell back to the global configuration would defeat it.
+  def test_a_contexts_opaque_elements_reaches_translate
+    provider = RecordingProvider.new(TranslationDiff::Configuration.new)
+    context = TranslationDiff.context do |c|
+      c.provider = provider
+      c.opaque_elements = %i[kbd]
+    end
+
+    context.translate("Before.<kbd>keep me</kbd>After.", from: "en", to: "ru")
+
+    assert_equal [["Before."], ["After."]], provider.requests
+  end
+
+  def test_a_contexts_opaque_elements_reaches_preview
+    provider = RecordingProvider.new(TranslationDiff::Configuration.new)
+    context = TranslationDiff.context do |c|
+      c.provider = provider
+      c.opaque_elements = %i[kbd]
+    end
+
+    preview = context.preview("Before.<kbd>keep me</kbd>After.", from: "en", to: "ru")
+
+    assert_equal 2, preview.sendable_sentences
   end
 end

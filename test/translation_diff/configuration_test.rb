@@ -498,6 +498,16 @@ class ConfigurationTest < Minitest::Test
     assert_includes error.message, "pragmatic"
   end
 
+  def test_opaque_elements_defaults_to_script_style_pre_and_code
+    assert_equal %i[script style pre code], @config.opaque_elements
+  end
+
+  def test_opaque_elements_is_a_plain_setting_an_application_can_replace
+    @config.opaque_elements = %i[script style kbd samp]
+
+    assert_equal %i[script style kbd samp], @config.opaque_elements
+  end
+
   def test_the_redis_pool_is_built_once_and_shared
     @config.redis_url = "redis://localhost:6379"
     @config.rate_limit = 100
@@ -511,5 +521,164 @@ class ConfigurationTest < Minitest::Test
     original_store = @config.cache_store
 
     refute_same original_store, @config.copy.cache_store
+  end
+
+  # A real registered provider, to prove invalidation reaches provider_instance through a declared option too.
+  class DoubleProvider < TranslationDiff::Provider
+    def self.configuration_options = %i[double_provider_key]
+
+    def translate(request) = TranslationDiff::Translation::Response.build(request: request, texts: request.texts)
+  end
+  TranslationDiff::Providers.register(:double_provider, DoubleProvider)
+
+  def test_changing_the_provider_rebuilds_the_memoised_instance
+    @config.provider = :null
+    first = @config.provider_instance
+
+    @config.provider = :double_provider
+
+    refute_same first, @config.provider_instance
+  end
+
+  # A write that leaves an option at the value it already held clears no memo -- a per-request
+  # `configure { |c| c.cache_namespace = tenant }` must not rebuild a store that was already warm.
+  def test_writing_the_same_provider_again_invalidates_nothing
+    @config.provider = :null
+    first = @config.provider_instance
+
+    @config.provider = :null
+
+    assert_same first, @config.provider_instance
+  end
+
+  def test_changing_an_option_a_provider_declared_rebuilds_the_provider_instance
+    @config.provider = :double_provider
+    @config.double_provider_key = "first"
+    first = @config.provider_instance
+
+    @config.double_provider_key = "second"
+
+    refute_same first, @config.provider_instance
+  end
+
+  # A memoised HTTPProvider#connection is built from these three, so raising one from a settings screen must
+  # rebuild the provider instance -- otherwise the change takes effect only after the process restarts.
+  def test_changing_the_open_timeout_rebuilds_the_provider_instance
+    @config.provider = :null
+    first = @config.provider_instance
+
+    @config.open_timeout = 9
+
+    refute_same first, @config.provider_instance
+  end
+
+  def test_changing_the_timeout_rebuilds_the_provider_instance
+    @config.provider = :null
+    first = @config.provider_instance
+
+    @config.timeout = 45
+
+    refute_same first, @config.provider_instance
+  end
+
+  def test_changing_max_retries_rebuilds_the_provider_instance
+    @config.provider = :null
+    first = @config.provider_instance
+
+    @config.max_retries = 5
+
+    refute_same first, @config.provider_instance
+  end
+
+  def test_changing_the_logger_leaves_the_redis_pool_in_place
+    @config.redis_url = "redis://localhost:6379"
+    pool = @config.redis_pool
+
+    @config.logger = Object.new
+
+    assert_same pool, @config.redis_pool
+  end
+
+  def test_changing_the_cache_namespace_rebuilds_the_cache_store
+    original = @config.cache_store
+
+    @config.cache_namespace = "a-different-namespace"
+
+    refute_same original, @config.cache_store
+  end
+
+  # The scenario the bug actually costs: a per-request `configure { |c| c.cache_namespace = tenant }` re-writing
+  # the same tenant on every request must never rebuild the store -- on MemoryCacheStore a rebuild is a brand
+  # new empty Hash, so the application would pay the provider again for its whole warm cache.
+  def test_writing_the_same_cache_namespace_again_leaves_the_cache_store_in_place
+    @config.cache_namespace = "tenant-1"
+    store = @config.cache_store
+
+    @config.cache_namespace = "tenant-1"
+
+    assert_same store, @config.cache_store
+  end
+
+  # cache_namespace also names the rate limiter's own namespace, so it must move that limiter too.
+  def test_changing_the_cache_namespace_rebuilds_the_rate_limiter
+    @config.rate_limit = 100
+    limiter = @config.rate_limiter_instance
+
+    @config.cache_namespace = "a-different-namespace"
+
+    refute_same limiter, @config.rate_limiter_instance
+  end
+
+  # The ActiveRecord limiter builds from it too, exactly as the store does, so one of them moving alone is a bug.
+  def test_changing_the_active_record_base_rebuilds_the_store_and_the_rate_limiter
+    @config.rate_limit = 100
+    store = @config.cache_store
+    limiter = @config.rate_limiter_instance
+
+    @config.active_record_base = Class.new
+
+    refute_same store, @config.cache_store
+    refute_same limiter, @config.rate_limiter_instance
+  end
+
+  def test_changing_the_redis_url_rebuilds_the_pool_the_store_and_the_rate_limiter
+    @config.redis_url = "redis://localhost:6379"
+    @config.rate_limit = 100
+    pool = @config.redis_pool
+    store = @config.cache_store
+    limiter = @config.rate_limiter_instance
+
+    @config.redis_url = "redis://localhost:6380"
+
+    refute_same pool, @config.redis_pool
+    refute_same store, @config.cache_store
+    refute_same limiter, @config.rate_limiter_instance
+  end
+
+  def test_changing_the_rate_limit_leaves_the_cache_store_in_place
+    store = @config.cache_store
+
+    @config.rate_limit = 50
+
+    assert_same store, @config.cache_store
+  end
+
+  def test_changing_the_segmenter_rebuilds_the_memoised_instance
+    first = @config.segmenter_instance
+
+    @config.segmenter = :simple
+
+    refute_same first, @config.segmenter_instance
+  end
+
+  def test_an_unclassified_option_invalidates_nothing
+    @config.provider = :null
+    provider = @config.provider_instance
+    store = @config.cache_store
+
+    @config.validate_languages = false
+
+    assert_same provider, @config.provider_instance
+    assert_same store, @config.cache_store
   end
 end

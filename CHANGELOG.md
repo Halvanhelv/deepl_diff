@@ -18,7 +18,75 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `config.validate_languages = false` globally. See
   [Languages](docs/languages.md).
 
+- **Cache keys change for any document containing a `pre` or `code`
+  element.** `pre` and `code` are now opaque (see Added, below), so what
+  gets sent to the provider changed, and what gets keyed changed with it;
+  an entry cached under the old behaviour keeps serving what the old
+  behaviour produced. Give the configuration a new `cache_namespace`, or
+  let `cache_ttl` lapse, to get every such document retranslated. See
+  [Caching](docs/caching.md#what-a-cache-key-is-made-of).
+
+- **A runtime `cache_namespace` change now moves the rate limiter too.**
+  `cache_namespace` names the limiter's own bookkeeping namespace as well
+  as the cache store's; it used to move only the store, leaving the
+  limiter counting silently under the old namespace. `active_record_base`
+  behaves the same way and for the same reason -- the SQL-backed limiter
+  builds its model from that class just as the store does. See
+  [Configuration](docs/configuration.md#changing-configuration-at-runtime).
+
+- **A provider with a blank `cache_key` now raises
+  `TranslationDiff::InvalidProviderError`, not
+  `TranslationDiff::Translator::Error`.** The two are siblings under
+  `TranslationDiff::Error`, not parent and child, so an application
+  rescuing the old class specifically stops catching this failure.
+  Rescue `TranslationDiff::Error` to catch both. See
+  [Errors](docs/errors.md).
+
 ### Added
+
+- **Every event from one `translate` call now shares a `call_id`.** Generated
+  once per call, opaque, and never derived from the text, it lands in
+  `translate`, `cache`, `request`, `rate_limit`, `usage` and `cache_error`
+  alike. Before it, a subscriber receiving `cache` or `request` events had no
+  way to tell which `translate` call they belonged to, short of tagging
+  `Thread.current` itself -- a workaround that breaks the moment two
+  translations share a thread. See
+  [Instrumentation](docs/instrumentation.md).
+
+- **`translate` now carries `characters`: the total this call considered,
+  hit or miss.** A call served entirely from cache never fires a `request`
+  event and used to report nothing about its size; it now reports a number
+  there instead. `request`'s own `characters` keeps its narrower meaning --
+  what one batch actually sent -- so the two fields share a name but not an
+  event: summing the wrong one produces a wrong bill. See
+  [Instrumentation](docs/instrumentation.md).
+
+- **`TranslationDiff.preview` predicts a `translate` call without making
+  it.** It answers how many sentences a call would send, how many the cache
+  already has, and how many characters that is -- without calling a
+  provider and without writing anything. A preview never pays for language
+  detection, so `from:` is required wherever there is anything to preview;
+  leaving it unset raises `TranslationDiff::Previewer::Error`. Built for an
+  editor that wants to show "this edit will send 1 sentence" before the
+  author saves. See
+  [Caching](docs/caching.md#asking-what-a-call-would-do-without-doing-it).
+
+- **`pre` and `code` are no longer sent for translation, and changing a
+  configuration option at runtime now rebuilds only what it actually
+  feeds.** `pre` and `code` join `script` and `style` in
+  `config.opaque_elements`, the set `TranslationDiff::Passage` never treats
+  as prose -- default `%i[script style pre code]`, widen or narrow it as
+  needed -- after a live `<pre><code>` block came back from Google with
+  `jq '.meters'` mangled into `jq '.metros'`, because nothing told the
+  pipeline that code holds language, not prose. Separately, `provider` and
+  the cache, pool, rate and segmenter options each rebuild only their own
+  collaborator now, instead of nothing: before this, switching `provider`
+  at runtime meant `TranslationDiff.reset!` and reconfiguring from scratch,
+  discarding a Redis pool that had no reason to go. See
+  [Configuration](docs/configuration.md#changing-configuration-at-runtime).
+  Two upgrade consequences of this are filed under Breaking, above:
+  cache keys changing for a document containing `pre` or `code`, and a
+  runtime `cache_namespace` change now moving the rate limiter too.
 
 - A `usage` instrumentation event, firing once per provider request, beside
   `translate`, `cache`, `request` and `rate_limit`. Its payload carries
@@ -143,6 +211,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **A `notranslate` span nested inside an opaque element (`pre`, `code`,
+  `script` or `style`) no longer silences every sentence after it.**
+  Closing the protected span used to leave the scanner's own opacity depth
+  one too high, so nothing past it was ever handed to the segmenter again.
+  Found while adding the `pre`/`code` opaque elements above, and fixed the
+  same way for all four. See [How it works](docs/how-it-works.md#html).
 - **Google and DeepL translations in HTML mode no longer come back
   double-escaped.** Both vendors return entity-escaped text -- an
   apostrophe as `&#39;`, a quote as `&quot;`, an ampersand as `&amp;` -- and

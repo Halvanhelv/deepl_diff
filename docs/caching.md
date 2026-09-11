@@ -58,6 +58,48 @@ you nothing.
 No options at all contributes no field to the key, which is the four-field
 key every already-warm cache is keyed on.
 
+## Asking what a call would do, without doing it
+
+`TranslationDiff.preview` answers what a `translate` call would send and
+find cached, without calling a provider and without writing anything: how
+many sentences it would send, how many the cache already has, and how many
+characters that is. It reads the same store, through the same
+`SentenceCache`, keyed the same way -- see [What a cache key is made
+of](#what-a-cache-key-is-made-of) above -- so a preview and the call it
+predicts always agree.
+
+```ruby
+preview = TranslationDiff.preview(article_body, from: "en", to: "es")
+preview.sendable_sentences   # => 1, not yet cached
+preview.cached_sentences     # => 4, already cached
+preview.sendable_characters  # => 23
+preview.characters           # => 412, the total this call would consider
+```
+
+`sendable_sentences` and `cached_sentences` are the same two counts the
+`cache` event reports as `misses` and `hits`; `characters` is the same total
+the `translate` event reports. A preview and the call it predicts are
+answering the same question through the same numbers, so "this edit will
+send 23 of 412 characters" and what the events for that call later report
+should agree.
+
+**`from:` is required wherever there is anything to preview.** `translate`
+can leave `from:` unset and pay for one `#detect` request to find it; a
+preview never calls the provider, so it cannot pay for that request either.
+Passing `to:` alone raises `TranslationDiff::Previewer::Error`, naming the
+provider and telling you to pass `from:` explicitly -- unless the document
+holds nothing translatable, or the source and target already match, in
+which case there is nothing to preview and an empty result comes back
+regardless of `from:`.
+
+This is the supported way to ask an editor's question before it becomes a
+bill -- show "this edit will send 1 sentence" before the author saves:
+
+```ruby
+preview = TranslationDiff.preview(edited_body, from: "en", to: "es")
+"This edit will send #{preview.sendable_sentences} sentence#{'s' unless preview.sendable_sentences == 1}."
+```
+
 ## The cache store contract
 
 `config.cache` accepts either a registered name (`:redis`, `:memory`,

@@ -22,13 +22,17 @@ TranslationDiff::Error
 │                                                # the wrong number of translations, or one
 │                                                # that returned no translation for an input
 ├── TranslationDiff::InvalidProviderError       # a class registered without inheriting
-│                                                # TranslationDiff::Provider
+│                                                # TranslationDiff::Provider, or any
+│                                                # provider -- registered or assigned --
+│                                                # whose cache_key is blank
 ├── TranslationDiff::UnsupportedLanguageError   # the shipped language data doesn't list
 │                                                # this source/target pair for this
 │                                                # provider -- see docs/languages.md
 ├── TranslationDiff::Translator::Error          # from: missing and the provider cannot
-│                                                # detect, cache_key missing on an
-│                                                # assigned provider object
+│                                                # detect
+├── TranslationDiff::Previewer::Error           # the same, asked of a preview: detecting
+│                                                # a language is a paid request, and a
+│                                                # preview never makes one
 ├── TranslationDiff::SentenceCache::Error       # provider options have no stable
 │                                                # serialisation for the cache key
 ├── TranslationDiff::Batch::Error               # one sentence, once escaped, is larger
@@ -82,9 +86,9 @@ even in a batch of its own. The message names a short prefix of the
 offending text and both numbers.
 
 `ArgumentError`, not a `TranslationDiff::Error`, is what
-`TranslationDiff.translate` and `Context#translate` raise when `to:` is
-missing or `nil`. It is a caller's mistake before it is a translation, and
-the message names the keyword.
+`TranslationDiff.translate`, `TranslationDiff.preview` and their `Context`
+counterparts raise when `to:` is missing or `nil`. It is a caller's mistake
+before it is a translation, and the message names the keyword.
 
 **Renamed in 3.1.0.** `TranslationDiff::Request::Error` is now
 `TranslationDiff::Translator::Error` and `TranslationDiff::Cache::Error` is

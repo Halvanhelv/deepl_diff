@@ -33,6 +33,7 @@ Metrics/ParameterLists:
   CountKeywordArgs: false
 
 Metrics/ClassLength:
+  Max: 100
   Exclude:
     # Test classes are mostly tables of cases.
     - test/**/*

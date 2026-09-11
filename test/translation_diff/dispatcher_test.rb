@@ -64,8 +64,8 @@ class DispatcherTest < ConfiguredTest
 
   def segments(*sources) = sources.map { |s| TranslationDiff::Segment.new(s) }
 
-  def dispatcher(provider, **)
-    TranslationDiff::Dispatcher.new(provider: provider, from: "en", to: "ru", **)
+  def dispatcher(provider, call_id: "call-1", **)
+    TranslationDiff::Dispatcher.new(provider: provider, from: "en", to: "ru", call_id: call_id, **)
   end
 
   def configured(**settings)
@@ -75,10 +75,10 @@ class DispatcherTest < ConfiguredTest
   end
 
   # Dispatches the given texts through the given provider, and hands back everything it instrumented.
-  def instrumented(provider, *sources, **settings)
+  def instrumented(provider, *sources, call_id: "call-1", **settings)
     recorder = Recorder.new
     config = configured(instrumenter: recorder, **settings)
-    dispatcher(provider, config: config).dispatch(segments(*sources))
+    dispatcher(provider, config: config, call_id: call_id).dispatch(segments(*sources))
     recorder
   end
 
@@ -146,6 +146,17 @@ class DispatcherTest < ConfiguredTest
     names = recorder.events.map(&:first).select { |name| name.start_with?("rate_limit", "request") }
     assert_equal %w[rate_limit.translation_diff request.translation_diff], names
     assert_equal ["one two".size], limiter.sizes
+  end
+
+  # Dispatcher emits three of the six events, so it is handed the call's identifier rather than inventing its own.
+  def test_the_call_id_it_is_given_appears_in_every_event_it_emits
+    limiter = FakeRateLimiter.new
+    provider = RecordingProvider.new(TranslationDiff::Configuration.new)
+    recorder = instrumented(provider, "one two", rate_limiter: limiter, call_id: "abc123")
+
+    assert_equal "abc123", payload_for(recorder, "request")[:call_id]
+    assert_equal "abc123", payload_for(recorder, "rate_limit")[:call_id]
+    assert_equal "abc123", payload_for(recorder, "usage")[:call_id]
   end
 
   def test_no_payload_ever_contains_the_text_being_translated

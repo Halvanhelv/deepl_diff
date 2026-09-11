@@ -150,6 +150,20 @@ class RedisRateLimiterTest < Minitest::Test
     built.check(1)
   end
 
+  # The settings screen that found this: changing cache_namespace must move the limiter, not just the cache.
+  def test_changing_the_cache_namespace_moves_the_limiter_to_the_new_redis_namespace
+    server = FakeRedisServer.new
+    config = TranslationDiff::Configuration.new
+    config.rate_limit = 100
+    config.instance_variable_set(:@redis_pool, FakeConnectionPool.new(server))
+
+    config.rate_limiter_instance.check(10)
+    config.cache_namespace = "tenant-42"
+    config.rate_limiter_instance.check(7)
+
+    assert_equal({ "ratelimit:translation-diff:call" => 10, "ratelimit:tenant-42:call" => 7 }, server.totals)
+  end
+
   private
 
   def limiter(server, **)

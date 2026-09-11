@@ -12,4 +12,12 @@ class TranslationDiff::Context
               assume_supported: assume_supported, **
     ).call
   end
+
+  # Answers what #translate would do to `values` under this context's own configuration, without calling it.
+  def preview(values, from: nil, to: nil, provider: nil, assume_supported: false, **)
+    TranslationDiff::Previewer.new(
+      values, from: from, to: to, provider: provider, config: config,
+              assume_supported: assume_supported, **
+    ).call
+  end
 end
