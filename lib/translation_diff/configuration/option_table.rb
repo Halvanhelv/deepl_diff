@@ -7,7 +7,8 @@ module TranslationDiff::Configuration::OptionTable
     [:provider, :deepl, :provider_instance], # rubocop:disable Style/SymbolArray -- stays [key, default, invalidates]
     [:cache, nil, :cache_store],
     [:cache_ttl, 604_800, :cache_store],
-    [:cache_namespace, "translation-diff", :cache_store],
+    # Also the rate limiter's own namespace (RedisRateLimiter, ActiveRecordRateLimiter both read it).
+    [:cache_namespace, "translation-diff", %i[cache_store rate_limiter_instance]],
     [:cache_max_size, 1_000, :cache_store],
     [:cache_table_name, "translation_diff_translations", :cache_store],
     [:rate_limit_table_name, "translation_diff_rate_limits", :rate_limiter_instance],

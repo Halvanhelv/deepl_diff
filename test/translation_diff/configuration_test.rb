@@ -567,6 +567,16 @@ class ConfigurationTest < Minitest::Test
     refute_same original, @config.cache_store
   end
 
+  # cache_namespace also names the rate limiter's own namespace, so it must move that limiter too.
+  def test_changing_the_cache_namespace_rebuilds_the_rate_limiter
+    @config.rate_limit = 100
+    limiter = @config.rate_limiter_instance
+
+    @config.cache_namespace = "a-different-namespace"
+
+    refute_same limiter, @config.rate_limiter_instance
+  end
+
   def test_changing_the_redis_url_rebuilds_the_pool_the_store_and_the_rate_limiter
     @config.redis_url = "redis://localhost:6379"
     @config.rate_limit = 100
