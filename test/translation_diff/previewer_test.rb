@@ -86,8 +86,11 @@ class PreviewerTest < ConfiguredTest
     assert_equal 2, result.sendable_sentences
     assert_equal 0, result.cached_sentences
     assert_equal "One.Two.".size, result.sendable_characters
+    assert_equal "One.Two.".size, result.characters
   end
 
+  # The denominator a fully-cached call still needs: sendable_characters alone would report 0 of nothing,
+  # leaving no way to say "this call would send 0 of 8 characters" rather than "there was nothing to send".
   def test_after_translating_nothing_is_left_to_send
     TranslationDiff.translate("One. Two.", from: "en", to: "ru", provider: @provider)
 
@@ -96,6 +99,7 @@ class PreviewerTest < ConfiguredTest
     assert_equal 0, result.sendable_sentences
     assert_equal 2, result.cached_sentences
     assert_equal 0, result.sendable_characters
+    assert_equal "One.Two.".size, result.characters
   end
 
   # This is the property the whole thing exists for: an edit to one sentence sends exactly that sentence.
@@ -121,6 +125,18 @@ class PreviewerTest < ConfiguredTest
 
     assert_equal predicted.sendable_sentences, payload[:misses]
     assert_equal predicted.cached_sentences, payload[:hits]
+  end
+
+  # The strongest available check that a preview's total and a translate call's own report of its size agree.
+  def test_the_previews_total_characters_equals_what_the_translate_event_reports
+    predicted = preview("One. Two.", from: "en", to: "ru")
+
+    recorder = Recorder.new
+    TranslationDiff.configure { |c| c.instrumenter = recorder }
+    TranslationDiff.translate("One. Two.", from: "en", to: "ru", provider: @provider)
+    payload = recorder.events.find { |name, _| name == "translate.translation_diff" }.last
+
+    assert_equal predicted.characters, payload[:characters]
   end
 
   def test_an_explicit_provider_and_the_configured_one_agree

@@ -7,7 +7,8 @@ class TranslationDiff::Previewer
 
   include TranslationDiff::CallPreparation
 
-  EMPTY = TranslationDiff::Preview.new(sendable_sentences: 0, cached_sentences: 0, sendable_characters: 0).freeze
+  EMPTY = TranslationDiff::Preview.new(sendable_sentences: 0, cached_sentences: 0, sendable_characters: 0,
+                                       characters: 0).freeze
 
   attr_reader :config
 
@@ -63,10 +64,13 @@ class TranslationDiff::Previewer
                  "without a paid request: pass `from:` explicitly."
   end
 
+  # characters is the denominator: the same total the translate event itself reports, present even when every
+  # segment is already cached and sendable_characters alone would leave nothing to divide by.
   def preview_for(provider, from, segments)
     misses = fill(provider, from, segments)
     TranslationDiff::Preview.new(sendable_sentences: misses.size, cached_sentences: segments.size - misses.size,
-                                 sendable_characters: misses.sum { |segment| segment.core.size })
+                                 sendable_characters: misses.sum { |segment| segment.core.size },
+                                 characters: segments.sum { |segment| segment.core.size })
   end
 
   # Reads the store through the same SentenceCache#fill translate uses; nothing here ever calls #store.
