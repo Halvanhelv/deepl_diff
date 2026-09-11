@@ -59,6 +59,8 @@ require "translation_diff/active_record_rate_limiter"
 require "translation_diff/instrumentation"
 require "translation_diff/dispatcher"
 require "translation_diff/translator"
+require "translation_diff/preview"
+require "translation_diff/previewer"
 require "translation_diff/context"
 
 # Only when a host application has already loaded Rails -- never required unconditionally, so a non-Rails
@@ -81,6 +83,12 @@ module TranslationDiff
     def translate(values, from: nil, to: nil, provider: nil, assume_supported: false, **)
       Translator.new(values, from: from, to: to, provider: provider, config: config,
                              assume_supported: assume_supported, **).call
+    end
+
+    # Answers what `translate` would do to `values`, without calling a provider or writing anything.
+    def preview(values, from: nil, to: nil, provider: nil, assume_supported: false, **)
+      Previewer.new(values, from: from, to: to, provider: provider, config: config,
+                            assume_supported: assume_supported, **).call
     end
   end
 end
