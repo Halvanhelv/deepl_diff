@@ -23,8 +23,9 @@ Everything below is a collaborator one of the two drives.
 2. **Each leaf becomes a passage of markup and prose.**
    `TranslationDiff::Passage` parses the string with `ox` and records where
    every construct begins, so each run of the source is either markup --
-   tags, comments, CDATA, doctypes, processing instructions, `<script>` and
-   `<style>` bodies, and anything inside `class="notranslate"` -- or prose.
+   tags, comments, CDATA, doctypes, processing instructions, the bodies of
+   `config.opaque_elements` (`script`, `style`, `pre` and `code` by
+   default), and anything inside `class="notranslate"` -- or prose.
    Each run becomes a `TranslationDiff::Fragment`, and a fragment is always a
    slice of the source, never a rebuilt string.
 
@@ -114,22 +115,28 @@ You can pass HTML as like as plain text:
 TranslationDiff.translate("<b>Black</b>", from: "en", to: "es")
 ```
 
-Nothing marks a `<pre>` or `<code>` block as code. The scanner's `OPAQUE`
-list (see [The steps](#the-steps) above) excludes only `<script>` and
-`<style>`, so a code sample sitting inside `<pre>`/`<code>` is ordinary
-prose to this gem -- cut into sentences and sent to the provider like any
-paragraph. Measured against the live Google API:
+A `<pre>` or `<code>` block is not prose to this gem, so it is left alone.
+`config.opaque_elements` names the set treated this way -- `script`,
+`style`, `pre` and `code` by default -- and an application can widen or
+narrow it. Measured against the live Google API:
 
 ```ruby
 TranslationDiff.translate(
   "<pre><code>curl -s https://example.com/level | jq '.meters'</code></pre>",
   from: "en", to: "es"
 )
-# => "<pre><code>curl -s https://example.com/level | jq '.metros'</code></pre>"
+# => "<pre><code>curl -s https://example.com/level | jq '.meters'</code></pre>"
 ```
 
-`meters` came back translated to `metros`, inside the quoted `jq` filter --
-the segmenter cut the block at the quote and handed `meters'` to the
-provider as a sentence of its own. Wrap a block you don't want touched in
-`class="notranslate"`; the providers that honour it (see
-[Providers](providers.md)) leave it exactly as written.
+Before `pre` and `code` joined the opaque set, nothing told the pipeline
+that code holds language, not prose: the segmenter cut the block above at
+the quote and handed `meters'` to the provider as a sentence of its own,
+and Google translated it -- `jq '.meters'` came back as `jq '.metros'`,
+inside the quoted filter. Wrap a block you don't want touched in
+`class="notranslate"` instead, for protection finer than an element, or for
+an element outside `config.opaque_elements`; the providers that honour it
+(see [Providers](providers.md)) leave it exactly as written.
+
+**Upgrading:** widening what counts as markup changes what gets sent to the
+provider, so it changes cache keys for any document containing a `pre` or
+`code` element -- see [Caching](caching.md#what-a-cache-key-is-made-of).

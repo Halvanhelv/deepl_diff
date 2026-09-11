@@ -10,12 +10,28 @@ A translation emits up to six events, each named `<name>.translation_diff`:
 
 | Event | Fired | Payload |
 | --- | --- | --- |
-| `translate` | Once per `translate` call that reaches the provider, wrapping the whole thing. A call whose source and target languages are the same, or whose values hold no translatable text at all, returns early and emits no events. | `from`, `to`, `provider`, `values` (number of texts) |
-| `cache` | Once per `translate` call that reaches the provider, after checking the cache for every sentence at once. | `provider`, `hits`, `misses` |
-| `request` | Once per batch actually sent to the provider (skipped entirely on a full cache hit). | `provider`, `batch` (values sent), `characters` |
-| `rate_limit` | Once per batch sent to the provider, only when a rate limiter is configured. | `provider`, `characters` |
-| `usage` | Once per batch actually sent to the provider, right after `request`. | `provider`, `characters`, `billed_characters`, `reported`, `model` |
-| `cache_error` | Only when writing the translation back to the cache fails -- after the provider has already answered. Never fires on a successful write, so it is not part of every call the way the other five are. | `provider`, `error` (the failed write's error class, as a string) |
+| `translate` | Once per `translate` call that reaches the provider, wrapping the whole thing. A call whose source and target languages are the same, or whose values hold no translatable text at all, returns early and emits no events. | `call_id`, `from`, `to`, `provider`, `values` (number of texts), `characters` (total considered by this call) |
+| `cache` | Once per `translate` call that reaches the provider, after checking the cache for every sentence at once. | `call_id`, `provider`, `hits`, `misses` |
+| `request` | Once per batch actually sent to the provider (skipped entirely on a full cache hit). | `call_id`, `provider`, `batch` (values sent), `characters` (sent by this batch) |
+| `rate_limit` | Once per batch sent to the provider, only when a rate limiter is configured. | `call_id`, `provider`, `characters` |
+| `usage` | Once per batch actually sent to the provider, right after `request`. | `call_id`, `provider`, `characters`, `billed_characters`, `reported`, `model` |
+| `cache_error` | Only when writing the translation back to the cache fails -- after the provider has already answered. Never fires on a successful write, so it is not part of every call the way the other five are. | `call_id`, `provider`, `error` (the failed write's error class, as a string) |
+
+**Every event above carries `call_id`.** It is generated once per
+`translate` call, opaque, and never derived from the text. Before it, a
+subscriber receiving `cache`, `request`, `rate_limit`, `usage` or
+`cache_error` events had no way to tell which `translate` call any of them
+belonged to, short of tagging `Thread.current` itself -- a workaround that
+breaks the moment two translations share a thread.
+
+**`translate`'s `characters` and `request`'s `characters` measure different
+things.** `translate`'s is the total this call considered -- every
+non-blank sentence, hit or miss, whether or not any of it was sent to the
+provider -- so a call served entirely from cache still reports a number
+instead of nothing, even though no `request` event fires for it at all.
+`request`'s keeps its narrower meaning: what this one batch actually sent.
+Same name, two events, different meaning -- a subscriber summing the wrong
+one gets a wrong bill.
 
 `cache_error` is what a failing cache write looks like from the outside:
 the write itself is rescued, not the translation, which still reaches the
