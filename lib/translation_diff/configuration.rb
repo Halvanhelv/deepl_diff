@@ -28,10 +28,15 @@ class TranslationDiff::Configuration
     private
 
     # The writer clears exactly the memos this option was declared to invalidate; the reader defers to `read`.
+    # A write that leaves the raw value unchanged clears none of them -- a per-request write of the same
+    # tenant must not rebuild a cache store that was already warm.
     def define_option_accessors(key, memos)
+      ivar = :"@#{key}"
       define_method(:"#{key}=") do |value|
         value = nil if value.is_a?(String) && value.strip.empty?
-        instance_variable_set(:"@#{key}", value)
+        next if instance_variable_get(ivar) == value
+
+        instance_variable_set(ivar, value)
         memos.each { |memo| instance_variable_set(:"@#{memo}", nil) }
       end
       define_method(key) { read(key) }

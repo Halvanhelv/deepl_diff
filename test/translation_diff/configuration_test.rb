@@ -529,18 +529,29 @@ class ConfigurationTest < Minitest::Test
 
     def translate(request) = TranslationDiff::Translation::Response.build(request: request, texts: request.texts)
   end
+  TranslationDiff::Providers.register(:double_provider, DoubleProvider)
 
   def test_changing_the_provider_rebuilds_the_memoised_instance
     @config.provider = :null
     first = @config.provider_instance
 
-    @config.provider = :null
+    @config.provider = :double_provider
 
     refute_same first, @config.provider_instance
   end
 
+  # A write that leaves an option at the value it already held clears no memo -- a per-request
+  # `configure { |c| c.cache_namespace = tenant }` must not rebuild a store that was already warm.
+  def test_writing_the_same_provider_again_invalidates_nothing
+    @config.provider = :null
+    first = @config.provider_instance
+
+    @config.provider = :null
+
+    assert_same first, @config.provider_instance
+  end
+
   def test_changing_an_option_a_provider_declared_rebuilds_the_provider_instance
-    TranslationDiff::Providers.register(:double_provider, DoubleProvider)
     @config.provider = :double_provider
     @config.double_provider_key = "first"
     first = @config.provider_instance
@@ -594,6 +605,18 @@ class ConfigurationTest < Minitest::Test
     @config.cache_namespace = "a-different-namespace"
 
     refute_same original, @config.cache_store
+  end
+
+  # The scenario the bug actually costs: a per-request `configure { |c| c.cache_namespace = tenant }` re-writing
+  # the same tenant on every request must never rebuild the store -- on MemoryCacheStore a rebuild is a brand
+  # new empty Hash, so the application would pay the provider again for its whole warm cache.
+  def test_writing_the_same_cache_namespace_again_leaves_the_cache_store_in_place
+    @config.cache_namespace = "tenant-1"
+    store = @config.cache_store
+
+    @config.cache_namespace = "tenant-1"
+
+    assert_same store, @config.cache_store
   end
 
   # cache_namespace also names the rate limiter's own namespace, so it must move that limiter too.
