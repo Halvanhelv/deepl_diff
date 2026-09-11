@@ -5,7 +5,7 @@ if ActiveRecordDatabase.postgres?
   ActiveRecordDatabase.connect!
 
   # PostgreSQL aborts the whole transaction on a statement error; only there can poisoning actually be measured.
-  class ActiveRecordCacheStoreTransactionTest < Minitest::Test
+  class ActiveRecordStoreTransactionTest < Minitest::Test
     def setup
       ActiveRecordDatabase.truncate
     end
@@ -28,8 +28,8 @@ if ActiveRecordDatabase.postgres?
     end
 
     def test_a_successful_write_still_lands
-      store = TranslationDiff::ActiveRecordCacheStore.new(namespace: "harness", ttl: 60,
-                                                          table_name: "translation_diff_translations")
+      store = TranslationDiff::Stores::ActiveRecord.new(namespace: "harness", ttl: 60,
+                                                        table_name: "translation_diff_translations")
 
       harness_model.transaction { store.write("a", "one") }
 
@@ -87,9 +87,9 @@ if ActiveRecordDatabase.postgres?
     end
 
     def pruning_store
-      TranslationDiff::ActiveRecordCacheStore.new(namespace: "translation-diff", ttl: 60,
-                                                  table_name: "translation_diff_translations",
-                                                  prune_probability: 1.0)
+      TranslationDiff::Stores::ActiveRecord.new(namespace: "translation-diff", ttl: 60,
+                                                table_name: "translation_diff_translations",
+                                                prune_probability: 1.0)
     end
 
     def expire(store, key)
@@ -122,18 +122,18 @@ if ActiveRecordDatabase.postgres?
     end
 
     def harness_model
-      TranslationDiff::ActiveRecordCacheStore.new(namespace: "harness", ttl: 60,
-                                                  table_name: "translation_diff_translations").model
+      TranslationDiff::Stores::ActiveRecord.new(namespace: "harness", ttl: 60,
+                                                table_name: "translation_diff_translations").model
     end
 
     # A namespace past the column's 64-character limit is a statement PostgreSQL always rejects.
     def failing_store
-      TranslationDiff::ActiveRecordCacheStore.new(namespace: "x" * 100, ttl: 60,
-                                                  table_name: "translation_diff_translations")
+      TranslationDiff::Stores::ActiveRecord.new(namespace: "x" * 100, ttl: 60,
+                                                table_name: "translation_diff_translations")
     end
   end
 else
-  class ActiveRecordCacheStoreTransactionTest < Minitest::Test
+  class ActiveRecordStoreTransactionTest < Minitest::Test
     def test_postgres_is_unavailable
       skip "TRANSLATION_DIFF_DATABASE_URL does not name a PostgreSQL database; " \
            "only PostgreSQL aborts a transaction on a statement error"

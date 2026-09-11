@@ -1,6 +1,6 @@
 # Caches translations in the application's own database; ActiveRecord is required on first use, never at load.
-class TranslationDiff::ActiveRecordCacheStore
-  include TranslationDiff::ActiveRecordSupport
+class TranslationDiff::Stores::ActiveRecord
+  include TranslationDiff::ActiveRecord::Support
 
   def self.build(config)
     new(namespace: config.cache_namespace, ttl: config.cache_ttl,
@@ -103,4 +103,4 @@ class TranslationDiff::ActiveRecordCacheStore
   def active_record_upsert_detail = "upsert_all takes unique_by and record_timestamps there."
 end
 
-TranslationDiff::Stores.register(:active_record, TranslationDiff::ActiveRecordCacheStore)
+TranslationDiff::Stores.register(:active_record, TranslationDiff::Stores::ActiveRecord)

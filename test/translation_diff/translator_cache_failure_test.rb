@@ -69,9 +69,9 @@ if ActiveRecordDatabase.postgres?
     end
 
     def pruning_store
-      TranslationDiff::ActiveRecordCacheStore.new(namespace: "translation-diff", ttl: 60,
-                                                  table_name: "translation_diff_translations",
-                                                  prune_probability: 1.0)
+      TranslationDiff::Stores::ActiveRecord.new(namespace: "translation-diff", ttl: 60,
+                                                table_name: "translation_diff_translations",
+                                                prune_probability: 1.0)
     end
 
     def expire(store, key)
@@ -97,8 +97,8 @@ if ActiveRecordDatabase.postgres?
     end
 
     def harness_model
-      TranslationDiff::ActiveRecordCacheStore.new(namespace: "harness", ttl: 60,
-                                                  table_name: "translation_diff_translations").model
+      TranslationDiff::Stores::ActiveRecord.new(namespace: "harness", ttl: 60,
+                                                table_name: "translation_diff_translations").model
     end
   end
 else

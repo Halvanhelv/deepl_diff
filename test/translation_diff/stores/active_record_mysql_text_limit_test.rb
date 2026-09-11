@@ -5,7 +5,7 @@ if ActiveRecordDatabase.mysql?
   ActiveRecordDatabase.connect!
 
   # MySQL's TEXT column tops out at 65,535 bytes; only a real MySQL server proves the migration raised that ceiling.
-  class ActiveRecordCacheStoreMysqlTextLimitTest < Minitest::Test
+  class ActiveRecordStoreMysqlTextLimitTest < Minitest::Test
     class RecordingProvider < TranslationDiff::Provider
       def self.capabilities
         TranslationDiff::Capabilities.new(max_request_size: 100_000_000, max_batch_size: 1_000,
@@ -64,12 +64,12 @@ if ActiveRecordDatabase.mysql?
     private
 
     def build_store
-      TranslationDiff::ActiveRecordCacheStore.new(namespace: "translation-diff", ttl: 60,
-                                                  table_name: "translation_diff_translations")
+      TranslationDiff::Stores::ActiveRecord.new(namespace: "translation-diff", ttl: 60,
+                                                table_name: "translation_diff_translations")
     end
   end
 else
-  class ActiveRecordCacheStoreMysqlTextLimitTest < Minitest::Test
+  class ActiveRecordStoreMysqlTextLimitTest < Minitest::Test
     def test_mysql_is_unavailable
       skip "TRANSLATION_DIFF_DATABASE_URL does not name a MySQL database; " \
            "only a real MySQL server enforces the TEXT column's byte ceiling"

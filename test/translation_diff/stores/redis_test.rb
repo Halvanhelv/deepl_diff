@@ -28,7 +28,7 @@ class Redis::Namespace
   end
 end
 
-class RedisCacheStoreTest < Minitest::Test
+class RedisStoreTest < Minitest::Test
   include CacheStoreContract
   include BatchingCacheStoreContract
 
@@ -152,6 +152,6 @@ class RedisCacheStoreTest < Minitest::Test
   private
 
   def build_store(redis, **)
-    TranslationDiff::RedisCacheStore.new(FakeConnectionPool.new(redis), **)
+    TranslationDiff::Stores::Redis.new(FakeConnectionPool.new(redis), **)
   end
 end
