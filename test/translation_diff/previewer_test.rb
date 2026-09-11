@@ -188,8 +188,7 @@ class PreviewerTest < ConfiguredTest
     assert_equal 0, same_options.sendable_sentences
   end
 
-  # Same guard Translator uses, shared through TranslationDiff::Providers.resolve: a preview that read the
-  # wrong namespace would lie about the cache, so a blank cache_key is refused here too, and as the same error.
+  # Same guard Translator uses, shared through TranslationDiff::Providers.resolve.
   def test_a_provider_whose_cache_key_is_blank_is_refused_rather_than_lying_about_the_cache
     @provider = NamelessProvider.new(TranslationDiff::Configuration.new)
 

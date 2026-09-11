@@ -34,9 +34,7 @@ module TranslationDiff::Providers
       registry.build(name, config).tap { |provider| provider.name = name.to_sym }
     end
 
-    # The one seam Translator and Previewer both need: a provider by name, by object, or -- given nothing --
-    # the configured one. The cache_key guard travels with it: a provider that skips it would file its
-    # translations in every other provider's namespace, which is the one failure this method exists to prevent.
+    # The one seam Translator and Previewer both resolve a provider through, cache_key guard included.
     def resolve(requested, config)
       provider = requested.nil? ? config.provider_instance : resolve_requested(requested, config)
       ensure_cache_key!(provider)

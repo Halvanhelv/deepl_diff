@@ -153,8 +153,7 @@ class TranslatorTest < ConfiguredTest
     assert_empty @provider.requests
   end
 
-  # Provider resolution, and this guard with it, now lives in TranslationDiff::Providers: Translator and
-  # Previewer share it, so a blank cache_key is refused the same way -- and as the same error -- for both.
+  # Provider resolution, and this guard with it, now lives in TranslationDiff::Providers.
   def test_a_provider_whose_cache_key_is_blank_is_refused_rather_than_sharing_a_namespace
     @provider = NamelessProvider.new(TranslationDiff::Configuration.new)
 
