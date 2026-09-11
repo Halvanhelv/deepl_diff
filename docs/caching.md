@@ -17,6 +17,15 @@ its own Redis database). The key format is left alone here on purpose:
 changing its shape invalidates every entry already cached, everywhere, at
 once.
 
+**A cache entry written before a bug fix keeps serving what the bug
+produced.** The key above is built from the source sentence, never from the
+value stored under it, so fixing what a provider's reply decodes to does not
+invalidate what is already cached -- an entry written under the HTML-entity
+double-escaping fixed in the Unreleased CHANGELOG entry is served exactly as
+it was written until it expires. Give the configuration a new
+`cache_namespace`, or let `cache_ttl` lapse, to force every sentence to be
+retranslated under the fix.
+
 Both read and write the same cache, keyed per provider, so switching one
 never serves you the other's translations.
 

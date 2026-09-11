@@ -59,9 +59,29 @@ Everything below is a collaborator one of the two drives.
    shape.
 
 `TranslationDiff::Markup` is the small module underneath steps 2, 3 and 6: it
-decodes entity references on the way to a provider, encodes `&` and `<` again
-on the way out, and escapes a `<` that opens no tag so `ox` cannot read the
-rest of the sentence as markup.
+decodes entity references on the way to a provider and, in
+`TranslationDiff::Translation::Response.build`, on the way back too, for
+every provider -- Google and DeepL both return HTML-escaped text, and
+without the second decode a vendor's own `&` was escaped a second time, so
+`didn't` came back as `didn&#39;t`. Named entities, and both the decimal
+(`&#39;`) and hex (`&#x27;`) numeric forms, are decoded; an entity neither
+decoder recognizes, or one that would decode to invalid UTF-8, is left
+exactly as it arrived.
+
+Decoding a reply raw would make `&lt;` a bare `<`, and `ox` reads a bare `<`
+in front of a letter as an opening tag -- a provider's own `&lt;b attack`
+would become a real `<b attack>` element. So a reply is escaped the same way
+a source document's own bare angles already are, before it is decoded, and
+`Segment#render` re-encodes a translated sentence with
+`Markup.encode_translation`: `&` is always escaped, and so is a `<` that is
+not shaped like a tag -- a source document's own bare `<` is untouched by
+this. **This is a behaviour change:** `if a < b then stop.` used to come
+back with the bare `<` exactly as written; it now comes back
+`if a &lt; b then stop.`, the correct HTML encoding of that character,
+rendering identically in a browser but visible to anything comparing output
+byte-for-byte against an earlier release. `>` is left alone -- a stray `>`
+never opens anything a parser would honour, so there is nothing to protect
+it from.
 
 *NOTE:* if `:from` is not specified or equal to nil, then the provider's `#detect` will be called once with a sample of text up to 100 characters long to determine the language, and `#translate` will be called separately with the entire text.
         Try to specify `:from` explicitly to save the extra call -- it also improves segmentation, since the segmenter only sees a language when `:from` is given (see [The segmenter contract](contracts.md#the-segmenter-contract)).
@@ -93,3 +113,23 @@ You can pass HTML as like as plain text:
 ```ruby
 TranslationDiff.translate("<b>Black</b>", from: "en", to: "es")
 ```
+
+Nothing marks a `<pre>` or `<code>` block as code. The scanner's `OPAQUE`
+list (see [The steps](#the-steps) above) excludes only `<script>` and
+`<style>`, so a code sample sitting inside `<pre>`/`<code>` is ordinary
+prose to this gem -- cut into sentences and sent to the provider like any
+paragraph. Measured against the live Google API:
+
+```ruby
+TranslationDiff.translate(
+  "<pre><code>curl -s https://example.com/level | jq '.meters'</code></pre>",
+  from: "en", to: "es"
+)
+# => "<pre><code>curl -s https://example.com/level | jq '.metros'</code></pre>"
+```
+
+`meters` came back translated to `metros`, inside the quoted `jq` filter --
+the segmenter cut the block at the quote and handed `meters'` to the
+provider as a sentence of its own. Wrap a block you don't want touched in
+`class="notranslate"`; the providers that honour it (see
+[Providers](providers.md)) leave it exactly as written.
