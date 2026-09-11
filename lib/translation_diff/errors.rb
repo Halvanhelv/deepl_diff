@@ -5,6 +5,9 @@ module TranslationDiff
 
   class ConfigurationError < Error; end
 
+  # Raised by whichever limiter is configured, so a caller rescues one class rather than the one it happens to use.
+  class RateLimitExceeded < Error; end
+
   # Raised before any request: the pair is checked against data captured from the vendor, not by asking it.
   class UnsupportedLanguageError < Error; end
 

@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Breaking
 
+- **One `TranslationDiff::RateLimitExceeded`, whichever limiter noticed it.**
+  The two limiters used to raise two same-named classes under their own
+  namespaces, so an application that rescued one and then switched
+  `rate_limiter` from `:redis` to `:active_record` quietly stopped catching
+  it. See [Errors](docs/errors.md).
+
 - **Language validation is on by default.** `TranslationDiff.translate` now
   refuses, before making a request, any source/target pair the shipped data
   doesn't list for that provider -- raising
@@ -191,8 +197,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `rate_limit` now falls back to the limiter's own default -- 8,000
   characters per `rate_interval`, the same for both shipped limiters. See
   [Configuration options](docs/configuration.md#configuration-options).
-- **A refused request now says what it hit.** Both `RateLimitExceeded`
-  classes raise with a message naming the namespace, the threshold and the
+- **A refused request now says what it hit.** `RateLimitExceeded`
+  carries a message naming the namespace, the threshold and the
   interval (`"rate limit reached for translation-diff: 8000 characters per
   60 seconds"`) -- never the content that tripped it. See
   [Errors](docs/errors.md).

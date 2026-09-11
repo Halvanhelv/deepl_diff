@@ -2,8 +2,6 @@
 class TranslationDiff::RateLimiters::ActiveRecord
   include TranslationDiff::ActiveRecord::Support
 
-  class RateLimitExceeded < TranslationDiff::Error; end
-
   DEFAULT_THRESHOLD = 8000
   DEFAULT_INTERVAL = 60
 
@@ -32,7 +30,7 @@ class TranslationDiff::RateLimiters::ActiveRecord
 
   # A sliding window: every bucket covering the last `interval` seconds is summed, not just the current one.
   def check(size)
-    raise RateLimitExceeded, exceeded_message if current_total >= @threshold
+    raise TranslationDiff::RateLimitExceeded, exceeded_message if current_total >= @threshold
 
     add(size)
   rescue StandardError => e

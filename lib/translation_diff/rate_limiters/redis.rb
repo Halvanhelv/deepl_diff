@@ -1,6 +1,4 @@
 class TranslationDiff::RateLimiters::Redis
-  class RateLimitExceeded < TranslationDiff::Error; end
-
   DEFAULT_THRESHOLD = 8000
   DEFAULT_INTERVAL = 60
   DEFAULT_NAMESPACE = "translation-diff".freeze
@@ -32,7 +30,7 @@ class TranslationDiff::RateLimiters::Redis
     connection_pool.with do |redis|
       rate_limit = limiter_class.new(namespace, redis: redis)
       exceeded = rate_limit.exceeded?(SUBJECT, threshold: threshold, interval: interval)
-      raise RateLimitExceeded, exceeded_message if exceeded
+      raise TranslationDiff::RateLimitExceeded, exceeded_message if exceeded
 
       rate_limit.add(SUBJECT, size)
     end

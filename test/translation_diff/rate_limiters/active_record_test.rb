@@ -215,7 +215,7 @@ if ActiveRecordDatabase.available?
 
     private
 
-    def rate_limit_exceeded_error = TranslationDiff::RateLimiters::ActiveRecord::RateLimitExceeded
+    def rate_limit_exceeded_error = TranslationDiff::RateLimitExceeded
 
     # Held still, so a five-second bucket boundary cannot fall between two reads of the clock.
     def frozen_clock = MutableClock.new(Time.at(1_700_000_000))

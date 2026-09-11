@@ -86,7 +86,7 @@ class RedisRateLimiterTest < Minitest::Test
 
     limiter(server, threshold: 100).check(100)
 
-    assert_raises(TranslationDiff::RateLimiters::Redis::RateLimitExceeded) do
+    assert_raises(TranslationDiff::RateLimitExceeded) do
       limiter(server, threshold: 100).check(1)
     end
     assert_equal({ "ratelimit:translation-diff:call" => 100 }, server.totals)
@@ -97,7 +97,7 @@ class RedisRateLimiterTest < Minitest::Test
 
     limiter(server).check(TranslationDiff::RateLimiters::Redis::DEFAULT_THRESHOLD)
 
-    assert_raises(TranslationDiff::RateLimiters::Redis::RateLimitExceeded) { limiter(server).check(1) }
+    assert_raises(TranslationDiff::RateLimitExceeded) { limiter(server).check(1) }
   end
 
   # Ratelimit buckets five seconds at a time, so buckets swept is the interval divided by five.
@@ -170,7 +170,7 @@ class RedisRateLimiterTest < Minitest::Test
     TranslationDiff::RateLimiters::Redis.new(FakeConnectionPool.new(server), **)
   end
 
-  def rate_limit_exceeded_error = TranslationDiff::RateLimiters::Redis::RateLimitExceeded
+  def rate_limit_exceeded_error = TranslationDiff::RateLimitExceeded
 
   def build_limiter(threshold:, interval:)
     @contract_server ||= FakeRedisServer.new

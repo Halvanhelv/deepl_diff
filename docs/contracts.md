@@ -29,11 +29,10 @@ An object assigned to `rate_limiter` must implement:
 def check(size); end
 ```
 
-`TranslationDiff::RateLimiters::Redis` raises
-`TranslationDiff::RateLimiters::Redis::RateLimitExceeded` when its threshold is
-exceeded within its interval;
-`TranslationDiff::RateLimiters::ActiveRecord` raises its own
-`RateLimitExceeded`, a distinct class under the same name. Both raise with a
+Both shipped limiters raise `TranslationDiff::RateLimitExceeded` when the
+threshold is exceeded within the interval -- one class whichever limiter is
+configured, so switching from `:redis` to `:active_record` does not quietly
+stop a `rescue` from matching. They raise with a
 message naming the namespace, the threshold and the interval that were hit
 (`"rate limit reached for translation-diff: 8000 characters per 60
 seconds"`) -- never the text that tripped it. Neither `redis`
