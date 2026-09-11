@@ -25,7 +25,8 @@ Everything below is a collaborator one of the two drives.
    every construct begins, so each run of the source is either markup --
    tags, comments, CDATA, doctypes, processing instructions, the bodies of
    `config.opaque_elements` (`script`, `style`, `pre` and `code` by
-   default), and anything inside `class="notranslate"` -- or prose.
+   default, matched case-insensitively), and anything inside
+   `class="notranslate"` -- or prose.
    Each run becomes a `TranslationDiff::Fragment`, and a fragment is always a
    slice of the source, never a rebuilt string.
 
@@ -117,8 +118,10 @@ TranslationDiff.translate("<b>Black</b>", from: "en", to: "es")
 
 A `<pre>` or `<code>` block is not prose to this gem, so it is left alone.
 `config.opaque_elements` names the set treated this way -- `script`,
-`style`, `pre` and `code` by default -- and an application can widen or
-narrow it. Measured against the live Google API:
+`style`, `pre` and `code` by default -- matched case-insensitively, so
+`<PRE><CODE>` and `<STYLE>` (the shape Word, Outlook and older CMSes emit)
+are opaque too. An application can widen or narrow the set. Measured
+against the live Google API:
 
 ```ruby
 TranslationDiff.translate(

@@ -73,7 +73,15 @@ preview = TranslationDiff.preview(article_body, from: "en", to: "es")
 preview.sendable_sentences   # => 1, not yet cached
 preview.cached_sentences     # => 4, already cached
 preview.sendable_characters  # => 23
+preview.characters           # => 412, the total this call would consider
 ```
+
+`sendable_sentences` and `cached_sentences` are the same two counts the
+`cache` event reports as `misses` and `hits`; `characters` is the same total
+the `translate` event reports. A preview and the call it predicts are
+answering the same question through the same numbers, so "this edit will
+send 23 of 412 characters" and what the events for that call later report
+should agree.
 
 **`from:` is required wherever there is anything to preview.** `translate`
 can leave `from:` unset and pay for one `#detect` request to find it; a

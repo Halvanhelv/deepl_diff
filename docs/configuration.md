@@ -69,7 +69,7 @@ at all, so an unset environment variable never has to be special-cased.
 | `rate_interval` | `60` | Seconds over which `rate_limit` (or a limiter's own default threshold) is measured. **Actually enforced over roughly 5-600 seconds** -- see [The rate limiter contract](contracts.md#the-rate-limiter-contract). |
 | `rate_limiter` | `nil` | A registered name (`:redis`, `:active_record`) or an object satisfying the [rate limiter contract](contracts.md#the-rate-limiter-contract). `nil` with `rate_limit` also `nil` means no rate limiting; `nil` with `rate_limit` set resolves to `:redis`. Setting `rate_limiter` alone -- with `rate_limit` left unset -- is enough to turn rate limiting on, at the limiter's own default threshold; it no longer needs `rate_limit` set to avoid crashing. |
 | `segmenter` | `:pragmatic` | The sentence segmenter: a registered name or an object satisfying the [segmenter contract](contracts.md#the-segmenter-contract). |
-| `opaque_elements` | `%i[script style pre code]` | Element names `TranslationDiff::Passage` never treats as prose, whatever they contain. Read fresh on every passage rather than memoised, so a runtime change applies immediately, to the next translation. See [How it works](how-it-works.md#html). |
+| `opaque_elements` | `%i[script style pre code]` | Element names `TranslationDiff::Passage` never treats as prose, whatever they contain, matched case-insensitively so `<PRE>` and `<STYLE>` count too. Read fresh on every passage rather than memoised, so a runtime change applies immediately, to the next translation -- and, since a call reads this from the configuration it is actually using, a context's own `opaque_elements` is honoured too, not the global value it was copied from. See [How it works](how-it-works.md#html). |
 | `instrumenter` | `nil` | Anything satisfying `ActiveSupport::Notifications`' `#instrument(name, payload) { }` interface. See [Instrumentation and logging](instrumentation.md). |
 | `logger` | `nil` | A standard `Logger` -- anything answering to `debug` and `warn` with a block. Receives one `debug` line per provider resolution, naming the provider class, and a `warn` line when a cache write fails; never content and never a credential. Note that `warn` must be a public method: a bare object inherits a private `Kernel#warn` and would raise instead of logging. See [Instrumentation and logging](instrumentation.md). |
 | `open_timeout` | `5` | Seconds an HTTP-backed provider waits to open a connection before raising `TranslationDiff::TransportError`. |
@@ -110,8 +110,11 @@ collaborator on first use, and that collaborator is memoised. Writing an
 option afterwards rebuilds only the memoised collaborator(s) that option
 actually feeds, not the whole configuration:
 
-- `provider`, and any option a provider declares for itself (`deepl_api_key`
-  and the like), rebuild the provider.
+- `provider`, any option a provider declares for itself (`deepl_api_key`
+  and the like), and the timeouts (`open_timeout`, `timeout`,
+  `max_retries`) rebuild the provider. An HTTP-backed provider memoises a
+  Faraday connection built from the three timeouts, so a change to any of
+  them has to reach the provider or it never reaches the connection.
 - The cache options (`cache`, `cache_ttl`, `cache_max_size`,
   `cache_table_name`, `active_record_base`, `cache_prune_probability`,
   `cache_namespace`) rebuild the cache store.
@@ -121,8 +124,8 @@ actually feeds, not the whole configuration:
 - The rate options (`rate_limit`, `rate_interval`, `rate_limiter`,
   `rate_limit_table_name`) and `cache_namespace` rebuild the rate limiter.
 - `segmenter` rebuilds the segmenter.
-- `logger`, `instrumenter` and the timeouts (`open_timeout`, `timeout`,
-  `max_retries`) rebuild nothing -- nothing memoised reads them.
+- `logger` and `instrumenter` rebuild nothing -- both are read live, on
+  every use, and nothing memoised reads either one.
 
 Before this, nothing was ever rebuilt: an application wanting to switch
 `provider` at runtime had no way to do it short of `TranslationDiff.reset!`
@@ -134,6 +137,17 @@ limiter's own bookkeeping namespace as well as the cache store's, so
 changing it at runtime now moves the limiter too -- it counts under the new
 namespace from the next check on, rather than continuing silently under the
 old one.
+
+**A write that leaves an option at the value it already holds rebuilds
+nothing.** Only a value that actually changes invalidates a memoised
+collaborator, even one the option is declared to invalidate. This is what
+makes a per-request `TranslationDiff.configure { |c| c.cache_namespace =
+current_tenant }` safe: writing the same tenant on every request no longer
+rebuilds the cache store on every request. Writing a genuinely *different*
+value still rebuilds the store exactly as before, though, and if that store
+is the default `MemoryCacheStore`, a rebuilt store is a fresh, empty Hash --
+its contents are gone, and whatever it held has to be paid for again at the
+provider.
 
 `TranslationDiff.context` -- or `config.copy`, which it is built on -- is
 still the way to get a configuration that resolves everything afresh from
@@ -150,8 +164,8 @@ object) to override that choice.
 ## Contexts
 
 `TranslationDiff.context` returns a `TranslationDiff::Context`: an isolated
-configuration scope with the same `#translate` entry point as the
-`TranslationDiff` module itself, for multi-tenant applications and
+configuration scope with the same `#translate` and `#preview` entry points
+as the `TranslationDiff` module itself, for multi-tenant applications and
 per-request overrides. It starts from a copy of the global configuration, so
 it inherits every value already set, and changes made inside it never touch
 the global configuration:

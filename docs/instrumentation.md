@@ -10,8 +10,8 @@ A translation emits up to six events, each named `<name>.translation_diff`:
 
 | Event | Fired | Payload |
 | --- | --- | --- |
-| `translate` | Once per `translate` call that reaches the provider, wrapping the whole thing. A call whose source and target languages are the same, or whose values hold no translatable text at all, returns early and emits no events. | `call_id`, `from`, `to`, `provider`, `values` (number of texts), `characters` (total considered by this call) |
-| `cache` | Once per `translate` call that reaches the provider, after checking the cache for every sentence at once. | `call_id`, `provider`, `hits`, `misses` |
+| `translate` | Once per `translate` call that has something to translate, wrapping the whole thing -- including a call served entirely from cache, which never reaches the provider. A call whose source and target languages are the same, or whose values hold no translatable text at all, returns early and emits no events. | `call_id`, `from`, `to`, `provider`, `values` (number of texts), `characters` (total considered by this call) |
+| `cache` | Once per such call, after checking the cache for every sentence at once -- whether or not anything is left to send the provider. | `call_id`, `provider`, `hits`, `misses` |
 | `request` | Once per batch actually sent to the provider (skipped entirely on a full cache hit). | `call_id`, `provider`, `batch` (values sent), `characters` (sent by this batch) |
 | `rate_limit` | Once per batch sent to the provider, only when a rate limiter is configured. | `call_id`, `provider`, `characters` |
 | `usage` | Once per batch actually sent to the provider, right after `request`. | `call_id`, `provider`, `characters`, `billed_characters`, `reported`, `model` |
@@ -30,8 +30,9 @@ non-blank sentence, hit or miss, whether or not any of it was sent to the
 provider -- so a call served entirely from cache still reports a number
 instead of nothing, even though no `request` event fires for it at all.
 `request`'s keeps its narrower meaning: what this one batch actually sent.
-Same name, two events, different meaning -- a subscriber summing the wrong
-one gets a wrong bill.
+`usage`'s `characters` carries that same narrower meaning too, per batch,
+like `request`'s. Same name, three events, two meanings -- a subscriber
+summing the wrong one gets a wrong bill.
 
 `cache_error` is what a failing cache write looks like from the outside:
 the write itself is rescued, not the translation, which still reaches the

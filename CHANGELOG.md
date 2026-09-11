@@ -18,6 +18,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `config.validate_languages = false` globally. See
   [Languages](docs/languages.md).
 
+- **Cache keys change for any document containing a `pre` or `code`
+  element.** `pre` and `code` are now opaque (see Added, below), so what
+  gets sent to the provider changed, and what gets keyed changed with it;
+  an entry cached under the old behaviour keeps serving what the old
+  behaviour produced. Give the configuration a new `cache_namespace`, or
+  let `cache_ttl` lapse, to get every such document retranslated. See
+  [Caching](docs/caching.md#what-a-cache-key-is-made-of).
+
+- **A runtime `cache_namespace` change now moves the rate limiter too.**
+  `cache_namespace` names the limiter's own bookkeeping namespace as well
+  as the cache store's; it used to move only the store, leaving the
+  limiter counting silently under the old namespace. See
+  [Configuration](docs/configuration.md#changing-configuration-at-runtime).
+
+- **A provider with a blank `cache_key` now raises
+  `TranslationDiff::InvalidProviderError`, not
+  `TranslationDiff::Translator::Error`.** The two are siblings under
+  `TranslationDiff::Error`, not parent and child, so an application
+  rescuing the old class specifically stops catching this failure.
+  Rescue `TranslationDiff::Error` to catch both. See
+  [Errors](docs/errors.md).
+
 ### Added
 
 - **Every event from one `translate` call now shares a `call_id`.** Generated
@@ -60,19 +82,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   at runtime meant `TranslationDiff.reset!` and reconfiguring from scratch,
   discarding a Redis pool that had no reason to go. See
   [Configuration](docs/configuration.md#changing-configuration-at-runtime).
-  Two consequences to check before you upgrade:
-  - **Cache keys change for any document containing a `pre` or `code`
-    element.** What gets sent to the provider changed, so what gets keyed
-    changed too; an entry cached under the old behaviour keeps serving what
-    the old behaviour produced. Give the configuration a new
-    `cache_namespace`, or let `cache_ttl` lapse, to get every such document
-    retranslated. See
-    [Caching](docs/caching.md#what-a-cache-key-is-made-of).
-  - **A runtime `cache_namespace` change now moves the rate limiter too.**
-    `cache_namespace` names the limiter's own bookkeeping namespace as well
-    as the cache store's; it used to move only the store, leaving the
-    limiter counting silently under the old namespace. See
-    [Configuration](docs/configuration.md#changing-configuration-at-runtime).
+  Two upgrade consequences of this are filed under Breaking, above:
+  cache keys changing for a document containing `pre` or `code`, and a
+  runtime `cache_namespace` change now moving the rate limiter too.
 
 - A `usage` instrumentation event, firing once per provider request, beside
   `translate`, `cache`, `request` and `rate_limit`. Its payload carries
