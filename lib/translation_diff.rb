@@ -8,7 +8,6 @@ require "stringio"
 require "ox"
 
 require "translation_diff/version"
-require "translation_diff/error"
 require "translation_diff/errors"
 require "translation_diff/redaction"
 require "translation_diff/capabilities"
